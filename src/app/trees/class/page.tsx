@@ -2,8 +2,25 @@
 
 import { Container } from '@/components/container';
 import { useSearchParams } from 'next/navigation';
+import { Suspense } from 'react';
 
 export default function ClassTreePage() {
+  return (
+    <Suspense
+      fallback={
+        <Container>
+          <div className="animate-pulse">
+            <div className="h-8 w-48 bg-muted rounded"></div>
+          </div>
+        </Container>
+      }
+    >
+      <ClassTreeContent />
+    </Suspense>
+  );
+}
+
+function ClassTreeContent() {
   const searchParams = useSearchParams();
   const type = searchParams.get('type');
 

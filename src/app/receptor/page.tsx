@@ -1,7 +1,7 @@
 'use client';
 
 import { useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import receptors from '@/data/receptors.json';
 import Link from 'next/link';
 import { ChevronLeft } from 'lucide-react';
@@ -21,6 +21,26 @@ interface Receptor {
 }
 
 export default function ReceptorPage() {
+  return (
+    <Suspense
+      fallback={
+        <Container>
+          <div className="animate-pulse">
+            <div className="h-8 w-48 bg-muted rounded mb-4"></div>
+            <div className="space-y-4">
+              <div className="h-4 w-32 bg-muted rounded"></div>
+              <div className="h-4 w-64 bg-muted rounded"></div>
+            </div>
+          </div>
+        </Container>
+      }
+    >
+      <ReceptorContent />
+    </Suspense>
+  );
+}
+
+function ReceptorContent() {
   const searchParams = useSearchParams();
   const gene = searchParams.get('gene');
   const [receptor, setReceptor] = useState<Receptor | null>(null);
