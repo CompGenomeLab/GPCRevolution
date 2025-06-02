@@ -8,6 +8,6 @@ interface Props {
   className?: string;
 }
 
-export function Container({ children, className }: Props) {
-  return <div className={cn('max-w-4xl mx-auto space-y-8 py-4', className)}>{children}</div>;
+export default function Container({ children, className }: Props) {
+  return <div className={cn('max-w-7xl mx-auto space-y-8 py-4', className)}>{children}</div>;
 }

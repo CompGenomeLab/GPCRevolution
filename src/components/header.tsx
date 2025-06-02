@@ -7,8 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Moon, Sun } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState, useEffect } from 'react';
-import { DesktopNavigation } from './desktop-navigation';
-import { MobileNavigation } from './mobile-navigation';
+import DesktopNavigation from './DesktopNavigation';
+import MobileNavigation from './MobileNavigation';
 
 interface Props {
   className?: string;
@@ -99,7 +99,7 @@ export function Header({ className }: Props) {
 
   return (
     <header className={cn('bg-background border-b border-border', className)}>
-      <div className="max-w-4xl mx-auto px-4">
+      <div className="max-w-7xl mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center gap-12">
             <Link href="/" className="flex items-center gap-2">

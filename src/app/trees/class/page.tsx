@@ -1,6 +1,6 @@
 'use client';
 
-import { Container } from '@/components/container';
+import Container from '@/components/Container';
 import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 

@@ -21,12 +21,31 @@ import {
   CommandItem,
   CommandList,
 } from '@/components/ui/command';
-import { useState } from 'react';
-import receptors from '@/data/receptors.json';
+import { useState, useRef } from 'react';
+import receptors from '../../../../public/receptors.json';
+import {
+  useReactTable,
+  getCoreRowModel,
+  getSortedRowModel,
+  flexRender,
+  createColumnHelper,
+  SortingState,
+  getPaginationRowModel,
+} from '@tanstack/react-table';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+import React from 'react';
 
 const formSchema = z.object({
   receptorClass: z.string().min(1, 'Required'),
-  minOrthologs: z.string().min(1, 'Required'),
+  minOrthologs: z.array(z.string()).min(1, 'Required'),
   maxOrthologs: z.string().min(1, 'Required'),
   includeInactive: z.boolean().default(false),
 });
@@ -39,18 +58,46 @@ interface Receptor {
   gpcrdbId: string;
 }
 
+interface ConservationData {
+  conservation: number;
+  conservedAA: string;
+  aa: string;
+  region: string;
+  gpcrdb: string;
+}
+
+interface ResidueMapping {
+  [key: string]: string;
+}
+
+interface ColumnMeta {
+  parentColumn?: string;
+}
+
+const columnHelper = createColumnHelper<ResidueMapping>();
+
 export default function ReceptorTablePage() {
   const [referenceResults, setReferenceResults] = useState<Receptor[]>([]);
   const [hasSearchedReference, setHasSearchedReference] = useState(false);
   const [targetResults, setTargetResults] = useState<Receptor[]>([]);
   const [hasSearchedTarget, setHasSearchedTarget] = useState(false);
   const [searchValue, setSearchValue] = useState('');
+  const [selectedTargets, setSelectedTargets] = useState<Receptor[]>([]);
+
+  const [resultData, setResultData] = useState<ResidueMapping[]>([]);
+  const [resultColumns, setResultColumns] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const resultRef = useRef<HTMLDivElement>(null);
+  const [sorting, setSorting] = useState<SortingState>([]);
+  const [pageIndex, setPageIndex] = useState(0);
+  const [pageSize, setPageSize] = useState(10);
 
   const form = useForm({
     resolver: zodResolver(formSchema),
     defaultValues: {
       receptorClass: '',
-      minOrthologs: '',
+      minOrthologs: [],
       maxOrthologs: '',
       includeInactive: false,
     },
@@ -81,25 +128,396 @@ export default function ReceptorTablePage() {
 
     setHasSearchedTarget(true);
     const results = receptors
-      .filter((receptor: Receptor) => receptor.geneName.toLowerCase().includes(value.toLowerCase()))
+      .filter(
+        (receptor: Receptor) =>
+          receptor.geneName.toLowerCase().includes(value.toLowerCase()) &&
+          !selectedTargets.some(t => t.geneName === receptor.geneName)
+      )
       .slice(0, 10);
 
     setTargetResults(results);
   };
 
   const handleTargetSelect = (receptor: Receptor) => {
-    const currentValue = form.getValues('minOrthologs');
-    const newValue = currentValue ? `${currentValue}, ${receptor.geneName}` : receptor.geneName;
-
-    form.setValue('minOrthologs', newValue);
+    const newSelectedTargets = [...selectedTargets, receptor];
+    setSelectedTargets(newSelectedTargets);
+    form.setValue(
+      'minOrthologs',
+      newSelectedTargets.map(t => t.geneName)
+    );
     setSearchValue('');
     setTargetResults([]);
     setHasSearchedTarget(false);
   };
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
-    console.log(values);
+  const removeTarget = (receptor: Receptor) => {
+    const newSelectedTargets = selectedTargets.filter(t => t.geneName !== receptor.geneName);
+    setSelectedTargets(newSelectedTargets);
+    form.setValue(
+      'minOrthologs',
+      newSelectedTargets.map(t => t.geneName)
+    );
+  };
+
+  /**
+   * FASTA dosyasını okuyup dizileri alır
+   */
+  async function readFastaFile(fastaFilePath: string) {
+    try {
+      const response = await fetch(fastaFilePath);
+      if (!response.ok) throw new Error(`FASTA dosyası yüklenemedi: ${fastaFilePath}`);
+      const fastaData = await response.text();
+
+      const sequences: { [key: string]: string } = {};
+      let currentHeader: string | null = null;
+
+      fastaData.split('\n').forEach(line => {
+        if (line.startsWith('>')) {
+          const parts = line.slice(1).trim().split('|');
+          if (parts.length >= 3) {
+            const genePart = parts[2].split('_')[0];
+            currentHeader = genePart;
+            sequences[currentHeader] = '';
+          } else {
+            console.warn(`Unexpected FASTA header format: ${line}`);
+            currentHeader = null;
+          }
+        } else if (currentHeader) {
+          sequences[currentHeader] += line.trim();
+        }
+      });
+
+      return sequences;
+    } catch (error) {
+      console.error('FASTA dosyası okuma hatası:', error);
+      throw error;
+    }
   }
+
+  /**
+   * Conservation dosyasını okuyup verileri alır
+   */
+  async function readConservationData(conservationFilePath: string) {
+    try {
+      const response = await fetch(conservationFilePath);
+      if (!response.ok) return {};
+
+      const data = await response.text();
+      const conservationData: { [key: string]: ConservationData } = {};
+
+      data.split('\n').forEach(line => {
+        const parts = line.split('\t');
+        if (parts[0] && parts[0].trim().toLowerCase() === 'residue_number') return;
+
+        if (parts.length >= 6) {
+          const resNum = parts[0].trim();
+          conservationData[resNum] = {
+            conservation: parseFloat(parts[1].trim()),
+            conservedAA: parts[2],
+            aa: parts[3].trim(),
+            region: parts[4].trim(),
+            gpcrdb: parts[5].trim(),
+          };
+        }
+      });
+
+      return conservationData;
+    } catch (error) {
+      console.error('Conservation veri okuma hatası:', error);
+      return {};
+    }
+  }
+
+  /**
+   * Tüm reseptörler için residue-amino asit mapping yapar
+   */
+  function mapResiduesAllReceptors(
+    receptorSequences: { geneName: string; sequence: string }[],
+    conservationDataMap: { [key: string]: { [key: string]: ConservationData } } = {}
+  ) {
+    const sequenceLength = receptorSequences[0].sequence.length;
+    const residueCounters: { [key: string]: number } = {};
+
+    receptorSequences.forEach(receptor => {
+      residueCounters[receptor.geneName] = 0;
+    });
+
+    const accumulatedMappings: ResidueMapping[] = [];
+    const referenceGeneName = receptorSequences[0].geneName;
+
+    for (let i = 0; i < sequenceLength; i++) {
+      const mapping: ResidueMapping = {};
+
+      receptorSequences.forEach(receptor => {
+        const aa = receptor.sequence[i];
+        if (aa !== '-') {
+          residueCounters[receptor.geneName] += 1;
+          mapping[`${receptor.geneName}_resNum`] = residueCounters[receptor.geneName].toString();
+          mapping[`${receptor.geneName}_AA`] = aa;
+
+          if (
+            conservationDataMap[receptor.geneName] &&
+            conservationDataMap[receptor.geneName][residueCounters[receptor.geneName].toString()]
+          ) {
+            const conservationData =
+              conservationDataMap[receptor.geneName][residueCounters[receptor.geneName].toString()];
+            mapping[`${receptor.geneName}_Conservation`] =
+              conservationData.conservation.toFixed(2) + '%';
+            mapping[`${receptor.geneName}_Conserved_AA`] = conservationData.conservedAA;
+
+            if (receptor.geneName === referenceGeneName) {
+              mapping[`${receptor.geneName}_region`] = conservationData.region;
+              mapping[`${receptor.geneName}_gpcrdb`] = conservationData.gpcrdb;
+            }
+          } else {
+            mapping[`${receptor.geneName}_Conservation`] = '-';
+            mapping[`${receptor.geneName}_Conserved_AA`] = '-';
+
+            if (receptor.geneName === referenceGeneName) {
+              mapping[`${receptor.geneName}_region`] = '-';
+              mapping[`${receptor.geneName}_gpcrdb`] = '-';
+            }
+          }
+        } else {
+          mapping[`${receptor.geneName}_resNum`] = '-';
+          mapping[`${receptor.geneName}_AA`] = '-';
+          mapping[`${receptor.geneName}_Conservation`] = '-';
+          mapping[`${receptor.geneName}_Conserved_AA`] = '-';
+
+          if (receptor.geneName === referenceGeneName) {
+            mapping[`${receptor.geneName}_region`] = '-';
+            mapping[`${receptor.geneName}_gpcrdb`] = '-';
+          }
+        }
+      });
+
+      if (mapping[`${referenceGeneName}_resNum`] !== '-') {
+        accumulatedMappings.push(mapping);
+      }
+    }
+
+    return accumulatedMappings;
+  }
+
+  /**
+   * Residue numaralarını filtrelemek için
+   */
+  function filterByResidueNumbers(
+    data: ResidueMapping[],
+    referenceGeneName: string,
+    residueNumbers: number[]
+  ) {
+    if (residueNumbers.length === 0) return data;
+
+    return data.filter(row => {
+      const refResNum = parseInt(row[`${referenceGeneName}_resNum`], 10);
+      return residueNumbers.includes(refResNum);
+    });
+  }
+
+  /**
+   * Form submit işleyicisi
+   */
+  async function onSubmit(values: z.infer<typeof formSchema>) {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const referenceGene = values.receptorClass.trim();
+      const targetGenes = values.minOrthologs;
+
+      const residueNumbersInput = values.maxOrthologs.trim();
+      const includeConservation = values.includeInactive;
+
+      let residueNumbers: number[] = [];
+      if (residueNumbersInput) {
+        residueNumbers = residueNumbersInput
+          .split(',')
+          .map(num => num.trim())
+          .filter(Boolean)
+          .map(num => parseInt(num, 10))
+          .filter(num => !isNaN(num) && num > 0);
+      }
+
+      if (!referenceGene) {
+        throw new Error('Lütfen bir referans reseptör seçin');
+      }
+      if (targetGenes.length === 0) {
+        throw new Error('Lütfen en az bir hedef reseptör seçin');
+      }
+      if (targetGenes.includes(referenceGene)) {
+        throw new Error('Hedef reseptörler referans reseptörden farklı olmalıdır');
+      }
+
+      const referenceReceptor = receptors.find(
+        (r: Receptor) => r.geneName.toLowerCase() === referenceGene.toLowerCase()
+      );
+      const targetReceptors = targetGenes.map(name =>
+        receptors.find((r: Receptor) => r.geneName.toLowerCase() === name.toLowerCase())
+      );
+
+      if (!referenceReceptor) {
+        throw new Error('Referans reseptör bulunamadı');
+      }
+      if (targetReceptors.includes(undefined)) {
+        throw new Error('Bir veya birden fazla hedef reseptör bulunamadı');
+      }
+
+      const receptorClass = referenceReceptor.class;
+      const allSameClass = targetReceptors.every(
+        (r: Receptor | undefined) => r && r.class === receptorClass
+      );
+
+      if (!allSameClass) {
+        throw new Error('Tüm reseptörler referans reseptör ile aynı sınıfta olmalıdır');
+      }
+
+      const fastaFilePath = `/alignments/class${receptorClass}_humans_MSA.fasta`;
+      const sequences = await readFastaFile(fastaFilePath);
+
+      const allReceptors = [referenceReceptor, ...(targetReceptors as Receptor[])];
+      const receptorSequences = allReceptors.map(r => {
+        const seq = sequences[r.geneName];
+        if (!seq) {
+          throw new Error(`${r.geneName} için FASTA dosyasında dizi bulunamadı.`);
+        }
+        return {
+          geneName: r.geneName,
+          sequence: seq,
+        };
+      });
+
+      const conservationDataMap: { [key: string]: { [key: string]: ConservationData } } = {};
+      if (includeConservation) {
+        const conservationPromises = allReceptors.map(receptor => {
+          if (!receptor.gpcrdbId) return Promise.resolve(null);
+
+          const conservationFilePath = `/conservation_files/${receptor.gpcrdbId}.txt`;
+          return readConservationData(conservationFilePath)
+            .then(data => ({ geneName: receptor.geneName, data }))
+            .catch(() => ({ geneName: receptor.geneName, data: {} }));
+        });
+
+        const conservationResults = await Promise.all(conservationPromises);
+        conservationResults.forEach(result => {
+          if (result) conservationDataMap[result.geneName] = result.data;
+        });
+      }
+
+      const receptorNames = allReceptors.map(r => r.geneName);
+      let mappingData = mapResiduesAllReceptors(receptorSequences, conservationDataMap);
+
+      if (residueNumbers.length > 0) {
+        mappingData = filterByResidueNumbers(mappingData, referenceGene, residueNumbers);
+      }
+
+      const columns: string[] = [];
+
+      if (includeConservation) {
+        columns.push(`${referenceGene}_region`);
+        columns.push(`${referenceGene}_gpcrdb`);
+      }
+
+      receptorNames.forEach(receptor => {
+        columns.push(`${receptor}_resNum`);
+        columns.push(`${receptor}_AA`);
+
+        if (includeConservation) {
+          columns.push(`${receptor}_Conservation`);
+          columns.push(`${receptor}_Conserved_AA`);
+        }
+      });
+
+      setResultData(mappingData);
+      setResultColumns(columns);
+
+      if (resultRef.current) {
+        resultRef.current.scrollIntoView({ behavior: 'smooth' });
+      }
+    } catch (err) {
+      console.error('Mapping hatası:', err);
+      setError(err instanceof Error ? err.message : 'Bilinmeyen bir hata oluştu');
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  const columns = React.useMemo(() => {
+    if (!resultColumns.length) return [];
+
+    return resultColumns.map(col => {
+      const [receptorName, colType] = col.split('_');
+      const isReference = receptorName === form.getValues('receptorClass');
+
+      return columnHelper.accessor(col, {
+        id: col,
+        header: () => (
+          <div className="flex flex-col items-center gap-1">
+            {isReference && colType === 'region' && (
+              <div className="text-xs text-muted-foreground">Region</div>
+            )}
+            {isReference && colType === 'gpcrdb' && (
+              <div className="text-xs text-muted-foreground">GPCRdb</div>
+            )}
+            {colType === 'resNum' && (
+              <div className="text-xs text-muted-foreground">{receptorName}</div>
+            )}
+            <div className="text-center font-medium">
+              {colType === 'resNum'
+                ? 'Residue'
+                : colType === 'AA'
+                  ? 'Amino Acid'
+                  : colType === 'Conservation'
+                    ? 'Conservation %'
+                    : colType === 'Conserved_AA'
+                      ? 'Conserved AA'
+                      : colType === 'region'
+                        ? 'Region'
+                        : colType === 'gpcrdb'
+                          ? 'GPCRdb'
+                          : colType}
+            </div>
+          </div>
+        ),
+        cell: info => {
+          const value = info.getValue();
+          if (colType === 'Conservation' && value !== '-') {
+            return <div className="text-right">{value}</div>;
+          }
+          return <div className="text-center font-mono">{value}</div>;
+        },
+        meta: {
+          parentColumn: receptorName,
+        } as ColumnMeta,
+      });
+    });
+  }, [resultColumns, form]);
+
+  const table = useReactTable({
+    data: resultData,
+    columns,
+    state: {
+      sorting,
+      pagination: {
+        pageIndex,
+        pageSize,
+      },
+    },
+    onSortingChange: setSorting,
+    onPaginationChange: updater => {
+      if (typeof updater === 'function') {
+        const newState = updater({
+          pageIndex,
+          pageSize,
+        });
+        setPageIndex(newState.pageIndex);
+        setPageSize(newState.pageSize);
+      }
+    },
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+  });
 
   return (
     <div className="max-w-4xl mx-auto space-y-8 py-4">
@@ -111,6 +529,25 @@ export default function ReceptorTablePage() {
         per‐position conservation %, conserved amino acid(s), receptor region and GPCRdb numbering
         for your reference GPCR.
       </p>
+
+      {error && (
+        <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-red-500" viewBox="0 0 20 20" fill="currentColor">
+                <path
+                  fillRule="evenodd"
+                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="bg-card text-card-foreground rounded-lg p-6 shadow-md">
         <Form {...form}>
@@ -175,51 +612,69 @@ export default function ReceptorTablePage() {
             <FormField
               control={form.control}
               name="minOrthologs"
-              render={({ field }) => (
+              render={() => (
                 <FormItem>
                   <FormLabel>Target Receptor(s)</FormLabel>
                   <FormControl>
-                    <Command className="rounded-lg border shadow-md">
-                      <CommandInput
-                        placeholder="Search for target receptor..."
-                        onValueChange={handleTargetSearch}
-                        value={searchValue}
-                      />
-                      {hasSearchedTarget && (
-                        <CommandList
-                          className={
-                            targetResults.length > 5 ? 'max-h-[300px] overflow-y-auto' : ''
-                          }
-                        >
-                          {targetResults.length === 0 ? (
-                            <CommandEmpty>No results found.</CommandEmpty>
-                          ) : (
-                            <CommandGroup>
-                              {targetResults.map((receptor, index) => (
-                                <CommandItem
-                                  key={index}
-                                  value={receptor.geneName}
-                                  className="cursor-pointer"
-                                  onSelect={() => handleTargetSelect(receptor)}
+                    <div className="space-y-2">
+                      <Command className="rounded-lg border shadow-md">
+                        {selectedTargets.length > 0 && (
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            {selectedTargets.map(receptor => (
+                              <div
+                                key={receptor.geneName}
+                                className="flex items-center gap-1 bg-muted px-2 py-1 rounded-md text-sm"
+                              >
+                                <span>{receptor.geneName}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => removeTarget(receptor)}
+                                  className="text-muted-foreground hover:text-foreground"
                                 >
-                                  <div className="flex flex-col">
-                                    <span className="font-medium">{receptor.geneName}</span>
-                                    <span className="text-sm text-muted-foreground">
-                                      Class: {receptor.class} | Orthologs: {receptor.numOrthologs} |
-                                      LCA: {receptor.lca}
-                                    </span>
-                                  </div>
-                                </CommandItem>
-                              ))}
-                            </CommandGroup>
-                          )}
-                        </CommandList>
-                      )}
-                    </Command>
+                                  ×
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <CommandInput
+                          placeholder="Search for target receptor..."
+                          onValueChange={handleTargetSearch}
+                          value={searchValue}
+                        />
+                        {hasSearchedTarget && (
+                          <CommandList
+                            className={
+                              targetResults.length > 5 ? 'max-h-[300px] overflow-y-auto' : ''
+                            }
+                          >
+                            {targetResults.length === 0 ? (
+                              <CommandEmpty>No results found.</CommandEmpty>
+                            ) : (
+                              <CommandGroup>
+                                {targetResults.map((receptor, index) => (
+                                  <CommandItem
+                                    key={index}
+                                    value={receptor.geneName}
+                                    className="cursor-pointer"
+                                    onSelect={() => handleTargetSelect(receptor)}
+                                  >
+                                    <div className="flex flex-col">
+                                      <span className="font-medium">{receptor.geneName}</span>
+                                      <span className="text-sm text-muted-foreground">
+                                        Class: {receptor.class} | Orthologs: {receptor.numOrthologs}{' '}
+                                        | LCA: {receptor.lca}
+                                      </span>
+                                    </div>
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            )}
+                          </CommandList>
+                        )}
+                      </Command>
+                    </div>
                   </FormControl>
-                  <div className="text-sm text-muted-foreground">
-                    Selected: {field.value || 'None'}
-                  </div>
                   <FormMessage />
                 </FormItem>
               )}
@@ -262,12 +717,111 @@ export default function ReceptorTablePage() {
               )}
             />
 
-            <Button type="submit" className="w-full">
-              Map Residues
+            <Button type="submit" className="w-full" disabled={isLoading}>
+              {isLoading ? 'İşleniyor...' : 'Map Residues'}
             </Button>
           </form>
         </Form>
       </div>
+
+      {resultData.length > 0 && (
+        <div ref={resultRef} className="mt-8 space-y-4">
+          <h2 className="text-2xl font-bold">Mapping Results</h2>
+
+          <div className="flex justify-between">
+            <div>
+              <span className="text-sm text-muted-foreground">
+                Showing{' '}
+                {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1}{' '}
+                to{' '}
+                {Math.min(
+                  (table.getState().pagination.pageIndex + 1) *
+                    table.getState().pagination.pageSize,
+                  table.getFilteredRowModel().rows.length
+                )}{' '}
+                of {table.getFilteredRowModel().rows.length} entries
+              </span>
+            </div>
+            <Button
+              onClick={() => {
+                const headers = resultColumns.join('\t');
+                const rows = resultData.map(row =>
+                  resultColumns.map(col => row[col] || '-').join('\t')
+                );
+                const tsvContent = [headers, ...rows].join('\n');
+                const blob = new Blob([tsvContent], { type: 'text/tab-separated-values' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'residue_mapping.tsv';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+              }}
+              variant="outline"
+              size="sm"
+            >
+              Download TSV
+            </Button>
+          </div>
+
+          <div className="border rounded-lg overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  {table.getHeaderGroups()[0].headers.map(header => (
+                    <TableHead
+                      key={header.id}
+                      className={header.column.getCanSort() ? 'cursor-pointer select-none' : ''}
+                      onClick={header.column.getToggleSortingHandler()}
+                    >
+                      {flexRender(header.column.columnDef.header, header.getContext())}
+                      {{
+                        asc: ' 🔼',
+                        desc: ' 🔽',
+                      }[header.column.getIsSorted() as string] ?? null}
+                    </TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {table.getRowModel().rows.map((row, index) => (
+                  <TableRow key={row.id} className={index % 2 === 0 ? 'bg-muted/50' : ''}>
+                    {row.getVisibleCells().map(cell => (
+                      <TableCell key={cell.id}>
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+
+          {/* Pagination Controls */}
+          <div className="flex items-center justify-end space-x-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => table.previousPage()}
+              disabled={!table.getCanPreviousPage()}
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => table.nextPage()}
+              disabled={!table.getCanNextPage()}
+            >
+              Next
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

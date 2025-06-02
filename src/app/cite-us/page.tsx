@@ -1,4 +1,4 @@
-import { Container } from '@/components/container';
+import Container from '@/components/Container';
 
 export default function CiteUsPage() {
   return (
