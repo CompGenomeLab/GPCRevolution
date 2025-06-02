@@ -5,7 +5,7 @@ import { useEffect, useState, Suspense } from 'react';
 import receptors from '../../../public/receptors.json';
 import Link from 'next/link';
 import { ChevronLeft } from 'lucide-react';
-import Container from '@/components/Container';
+import Container from '../../components/Container';
 import type { ConservationDatum } from '@/components/ConservationChart';
 import ConservationChart from '@/components/ConservationChart';
 import SnakePlot from '@/components/SnakePlot';

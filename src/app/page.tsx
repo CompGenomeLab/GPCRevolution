@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/command';
 import receptors from '../../public/receptors.json';
 import { useRouter } from 'next/navigation';
-import Container from '@/components/Container';
+import Container from '../components/Container';
 
 interface Receptor {
   geneName: string;
