@@ -281,7 +281,6 @@ const ResultsTable = memo(function ResultsTable({ initialResult }: ResultsTableP
         </Table>
       </div>
 
-      {/* Pagination Controls */}
       <div className="flex items-center justify-between mt-4">
         <div className="text-sm text-muted-foreground">
           Showing {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1}{' '}
@@ -608,7 +607,6 @@ export default function ReceptorComparisonPage() {
       {initialResult && (
         <div className="space-y-6">
           <ResultsTable fetchData={fetchData} initialResult={initialResult} />
-          {/* TODO: Add snake plot visualization */}
         </div>
       )}
     </div>

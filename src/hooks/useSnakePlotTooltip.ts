@@ -1,14 +1,9 @@
-// SVG node'larına tooltip eklemek için custom hook
 import { useEffect, useRef } from 'react';
 
 export function useSnakePlotTooltip() {
   const tooltipRef = useRef<HTMLDivElement | null>(null);
-
-  // SVG içindeki node'lara tooltip eklemek için yardımcı fonksiyon - optimized for performance
   function initSnakeplotTooltips(svg: SVGElement | null) {
     if (!svg) return;
-
-    // Tooltip <div> elementini oluştur veya mevcut olanı kullan
     let tooltip = document.getElementById('snake-tooltip') as HTMLDivElement;
     if (!tooltip) {
       tooltip = document.createElement('div');
@@ -16,8 +11,6 @@ export function useSnakePlotTooltip() {
       tooltip.classList.add('snake-tooltip');
       document.body.appendChild(tooltip);
       tooltipRef.current = tooltip;
-
-      // Tooltip stili - CSS olarak bir kerede ayarlanıyor
       const tooltipStyle = `
         position: absolute;
         background-color: white;
@@ -34,17 +27,9 @@ export function useSnakePlotTooltip() {
       `;
       tooltip.style.cssText = tooltipStyle;
     }
-
-    // Performans için etkinlik temsilcisi (event delegation) kullanımı
-    // Bu, her elemana ayrı listener eklemek yerine,
-    // SVG'ye tek bir listener ekler ve hangi elemanın üzerinde olduğunu kontrol eder
-
-    // Daha önce eklenmiş event listener'ları kaldır (çoklu init'i önlemek için)
     svg.removeEventListener('mouseover', handleMouseOver);
     svg.removeEventListener('mousemove', handleMouseMove);
     svg.removeEventListener('mouseout', handleMouseOut);
-
-    // Tooltip işleyişi için event delegation elemanları
     function handleMouseOver(e: Event) {
       const target = e.target as Element;
       const tooltipText =
@@ -55,7 +40,6 @@ export function useSnakePlotTooltip() {
       if (tooltipText) {
         tooltip.innerHTML = tooltipText;
         tooltip.style.display = 'block';
-        // Gecikmeli opacity değişimini kaldırarak performans artırılıyor
         tooltip.style.opacity = '1';
       }
     }
@@ -69,7 +53,6 @@ export function useSnakePlotTooltip() {
         target.getAttribute('data-snake-tooltip') ||
         target.getAttribute('data-original-title')
       ) {
-        // Tooltip pozisyonunu güncelle - transform kullanımı daha performanslı
         const x = mouseEvent.pageX + 12;
         const y = mouseEvent.pageY + 12;
         tooltip.style.transform = `translate3d(${x}px, ${y}px, 0)`;
@@ -79,27 +62,20 @@ export function useSnakePlotTooltip() {
     function handleMouseOut(e: Event) {
       const target = e.target as Element;
       const relatedTarget = (e as MouseEvent).relatedTarget as Element;
-
-      // Çıkış yapılan eleman tooltip içeriyorsa ve girilen eleman tooltip değilse
       if (
         (target.getAttribute('title') ||
           target.getAttribute('data-snake-tooltip') ||
           target.getAttribute('data-original-title')) &&
         (!relatedTarget || !relatedTarget.getAttribute('title'))
       ) {
-        // Tooltip'i gizle - display:none daha etkili
         tooltip.style.opacity = '0';
         tooltip.style.display = 'none';
       }
     }
-
-    // Event listener'ları bir kez ekle
     svg.addEventListener('mouseover', handleMouseOver);
     svg.addEventListener('mousemove', handleMouseMove);
     svg.addEventListener('mouseout', handleMouseOut);
   }
-
-  // Conservation verilerini alıp SVG'yi güncellemek için fonksiyon
   async function updateSnakeplotConservation(conservationFilePath: string) {
     if (!conservationFilePath) {
       console.warn('No conservation file specified.');
@@ -107,11 +83,8 @@ export function useSnakePlotTooltip() {
     }
 
     try {
-      // Conservation verisini al
       const response = await fetch(conservationFilePath);
       const text = await response.text();
-
-      // Conservation verisini işle
       const lines = text
         .split(/\\r?\\n/)
         .filter(line => line.trim() !== '' && !line.toLowerCase().startsWith('residue'));
@@ -146,7 +119,6 @@ export function useSnakePlotTooltip() {
 
       console.log('Conservation Map:', conservationMap);
 
-      // SVG elementini bul
       const elem = document.getElementById('snakeplot');
       if (!(elem instanceof SVGElement)) {
         console.error('Snakeplot SVG not found or is not an SVGElement.');
@@ -154,7 +126,6 @@ export function useSnakePlotTooltip() {
       }
       const svg = elem;
 
-      // defs elementini hazırla
       let defs = svg.querySelector('defs');
       if (!defs) {
         defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
@@ -165,11 +136,9 @@ export function useSnakePlotTooltip() {
         }
       }
 
-      // Renkleri al (varsayılan veya kullanıcı tarafından seçilen)
-      const userFillColor = '#B7B7EB'; // Lavender varsayılan
-      const userTextColor = '#000000'; // Siyah varsayılan
+      const userFillColor = '#B7B7EB';
+      const userTextColor = '#000000';
 
-      // Non-lineer gradient offset hesabı için fonksiyon
       function getGradientOffset(consValue: number) {
         const p = consValue / 100;
         const A_target = p * Math.PI;
@@ -196,7 +165,6 @@ export function useSnakePlotTooltip() {
         return offset + '%';
       }
 
-      // Daire elementlerini güncelle
       const circles = svg.querySelectorAll('circle.rcircle');
       circles.forEach(circle => {
         const residueId = circle.getAttribute('id');
@@ -209,7 +177,6 @@ export function useSnakePlotTooltip() {
         const boundary = getGradientOffset(consValue);
         const gradId = 'grad-' + residueId;
 
-        // Gradient oluştur
         const linearGradient = document.createElementNS(
           'http://www.w3.org/2000/svg',
           'linearGradient'
@@ -242,7 +209,6 @@ export function useSnakePlotTooltip() {
 
         defs.appendChild(linearGradient);
 
-        // Daire özelliklerini güncelle
         circle.setAttribute('fill', 'url(#' + gradId + ')');
         circle.setAttribute('data-conservation', String(consValue));
 
@@ -261,7 +227,6 @@ export function useSnakePlotTooltip() {
         circle.setAttribute('title', tooltipHTML);
       });
 
-      // Text elementlerini güncelle - performans optimizasyonu
       const textElements = svg.querySelectorAll('text.rtext');
 
       textElements.forEach(txt => {
@@ -287,48 +252,40 @@ export function useSnakePlotTooltip() {
           </div>
         `;
 
-        // data attribute olarak daha minimal bilgi saklama
         txt.setAttribute('data-snake-tooltip', tooltipHTML);
         txt.setAttribute('data-conservation', String(consValue));
         txt.setAttribute('style', 'fill: ' + userTextColor + ';');
       });
 
-      // Tooltip'leri başlat - sadece bir kez
       initSnakeplotTooltips(svg);
     } catch (error) {
       console.error('Conservation verilerini işlerken hata:', error);
     }
   }
 
-  // SVG yüklendiğinde tooltip'leri eklemek için useEffect - optimize edilmiş
   useEffect(() => {
-    // SVG'nin yüklendiğini kontrol etmek için değişken
     let isMounted = true;
     let timeout: NodeJS.Timeout | null = null;
 
-    // Bu şekilde, sürekli kontrol etmek yerine MutationObserver kullanabilirsiniz
     const observer = new MutationObserver(mutations => {
       mutations.forEach(() => {
         const elem = document.getElementById('snakeplot');
         if (elem instanceof SVGElement && isMounted) {
-          observer.disconnect(); // Gözlemlemeyi durdur
+          observer.disconnect();
           initSnakeplotTooltips(elem);
         }
       });
     });
 
-    // İlk yüklemenin kontrolü
     const elem = document.getElementById('snakeplot');
     if (elem instanceof SVGElement) {
       initSnakeplotTooltips(elem);
     } else {
-      // SVG henüz yüklenmemişse, DOM'daki değişiklikleri gözlemle
       observer.observe(document.body, {
         childList: true,
         subtree: true,
       });
 
-      // Yedek olarak 1 saniye sonra tekrar kontrol et
       timeout = setTimeout(() => {
         const elem = document.getElementById('snakeplot');
         if (elem instanceof SVGElement && isMounted) {
@@ -338,7 +295,6 @@ export function useSnakePlotTooltip() {
       }, 1000);
     }
 
-    // Temizlik fonksiyonu
     return () => {
       isMounted = false;
       observer.disconnect();

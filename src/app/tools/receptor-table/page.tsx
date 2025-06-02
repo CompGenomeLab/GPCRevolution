@@ -116,11 +116,6 @@ export default function ReceptorTablePage() {
     setReferenceResults(results);
   };
 
-  // These functions have been replaced by the MultiSelect component
-
-  /**
-   * FASTA dosyasını okuyup dizileri alır
-   */
   async function readFastaFile(fastaFilePath: string) {
     try {
       const response = await fetch(fastaFilePath);
@@ -153,9 +148,6 @@ export default function ReceptorTablePage() {
     }
   }
 
-  /**
-   * Conservation dosyasını okuyup verileri alır
-   */
   async function readConservationData(conservationFilePath: string) {
     try {
       const response = await fetch(conservationFilePath);
@@ -187,9 +179,6 @@ export default function ReceptorTablePage() {
     }
   }
 
-  /**
-   * Tüm reseptörler için residue-amino asit mapping yapar
-   */
   function mapResiduesAllReceptors(
     receptorSequences: { geneName: string; sequence: string }[],
     conservationDataMap: { [key: string]: { [key: string]: ConservationData } } = {}
@@ -258,9 +247,6 @@ export default function ReceptorTablePage() {
     return accumulatedMappings;
   }
 
-  /**
-   * Residue numaralarını filtrelemek için
-   */
   function filterByResidueNumbers(
     data: ResidueMapping[],
     referenceGeneName: string,
@@ -274,9 +260,6 @@ export default function ReceptorTablePage() {
     });
   }
 
-  /**
-   * Form submit işleyicisi
-   */
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
     setError(null);
@@ -585,7 +568,6 @@ export default function ReceptorTablePage() {
                         onValueChange={values => {
                           field.onChange(values);
 
-                          // Update selectedTargets for compatibility with existing code
                           const selectedReceptorObjects = values
                             .map(value => receptors.find((r: Receptor) => r.geneName === value))
                             .filter(r => r !== undefined) as Receptor[];
@@ -721,7 +703,6 @@ export default function ReceptorTablePage() {
             </Table>
           </div>
 
-          {/* Pagination Controls */}
           <div className="flex items-center justify-end space-x-2">
             <Button
               variant="outline"
