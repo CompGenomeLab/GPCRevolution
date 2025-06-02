@@ -6,7 +6,18 @@ import {
   getCoreRowModel,
   flexRender,
   createColumnHelper,
+  getPaginationRowModel,
 } from '@tanstack/react-table';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 
 interface Sequence {
   header: string;
@@ -73,65 +84,104 @@ export default function MSAVisualization({ sequences, className }: MSAVisualizat
     data: sequences,
     columns,
     getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    initialState: {
+      pagination: {
+        pageSize: 10,
+      },
+    },
   });
-
-  const [scrollTop, setScrollTop] = React.useState(0);
-  const containerRef = React.useRef<HTMLDivElement>(null);
-  const rowHeight = 32;
-  const visibleRows = Math.ceil(600 / rowHeight);
-  const startIndex = Math.floor(scrollTop / rowHeight);
-  const endIndex = Math.min(startIndex + visibleRows + 1, sequences.length);
-
-  const handleScroll = React.useCallback((e: React.UIEvent<HTMLDivElement>) => {
-    setScrollTop(e.currentTarget.scrollTop);
-  }, []);
 
   return (
     <div className={`w-full rounded-md border ${className}`}>
-      <div ref={containerRef} className="max-h-[600px] overflow-auto" onScroll={handleScroll}>
-        <table className="w-full border-collapse font-mono text-sm">
-          <thead>
+      <div className="max-h-[600px] overflow-auto">
+        <Table>
+          <TableHeader>
             {table.getHeaderGroups().map(headerGroup => (
-              <tr key={headerGroup.id}>
+              <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map(header => (
-                  <th
+                  <TableHead
                     key={header.id}
-                    className={`border-b border-border px-1 py-2 text-center ${
+                    className={
                       header.column.id === 'header'
-                        ? 'sticky left-0 top-0 z-30 bg-muted border-r border-border'
+                        ? 'sticky left-0 top-0 z-30 bg-muted border-r'
                         : 'sticky top-0 z-20 bg-muted'
-                    }`}
+                    }
                   >
                     {header.isPlaceholder
                       ? null
                       : flexRender(header.column.columnDef.header, header.getContext())}
-                  </th>
+                  </TableHead>
                 ))}
-              </tr>
+              </TableRow>
             ))}
-          </thead>
-          <tbody>
-            {table
-              .getRowModel()
-              .rows.slice(startIndex, endIndex)
-              .map(row => (
-                <tr key={row.id} className="hover:bg-muted/50">
-                  {row.getVisibleCells().map(cell => (
-                    <td
-                      key={cell.id}
-                      className={`border-b border-border px-1 py-0.5 ${
-                        cell.column.id === 'header'
-                          ? 'sticky left-0 z-30 bg-background border-r border-border'
-                          : ''
-                      }`}
-                    >
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-          </tbody>
-        </table>
+          </TableHeader>
+          <TableBody>
+            {table.getRowModel().rows.map(row => (
+              <TableRow key={row.id}>
+                {row.getVisibleCells().map(cell => (
+                  <TableCell
+                    key={cell.id}
+                    className={
+                      cell.column.id === 'header' ? 'sticky left-0 z-10 bg-background border-r' : ''
+                    }
+                  >
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+
+      <div className="flex items-center justify-between space-x-2 py-4 px-4 border-t">
+        <div className="flex-1 text-sm text-muted-foreground">
+          Showing {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1}{' '}
+          to{' '}
+          {Math.min(
+            (table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize,
+            sequences.length
+          )}{' '}
+          of {sequences.length} sequences
+        </div>
+        <div className="flex items-center space-x-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => table.setPageIndex(0)}
+            disabled={!table.getCanPreviousPage()}
+          >
+            <ChevronsLeft className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => table.previousPage()}
+            disabled={!table.getCanPreviousPage()}
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <div className="text-sm font-medium">
+            Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => table.nextPage()}
+            disabled={!table.getCanNextPage()}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => table.setPageIndex(table.getPageCount() - 1)}
+            disabled={!table.getCanNextPage()}
+          >
+            <ChevronsRight className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
     </div>
   );

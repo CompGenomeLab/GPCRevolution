@@ -333,8 +333,8 @@ export async function POST(request: Request) {
     );
 
     return NextResponse.json({
-      gene1: receptor1.geneName,
-      gene2: receptor2.geneName,
+      receptor1,
+      receptor2,
       categorizedResidues,
     });
   } catch (error) {

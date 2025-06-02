@@ -41,8 +41,8 @@ export function MSAViewer({ alignmentPath }: { alignmentPath: string | null }) {
   if (!alignmentPath) return null;
 
   return (
-    <div className="text-card-foreground rounded-lg p-4 shadow-md">
-      <h2 className="text-xl font-semibold text-foreground mb-4">Multiple Sequence Alignment</h2>
+    <div className="space-y-4">
+      <h3 className="text-lg font-medium">Combined Alignment Preview</h3>
       {isLoading ? (
         <div className="flex items-center justify-center p-8">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-foreground"></div>
@@ -50,10 +50,9 @@ export function MSAViewer({ alignmentPath }: { alignmentPath: string | null }) {
       ) : sequences.length === 0 ? (
         <div className="text-center text-muted-foreground p-4">No alignment data available</div>
       ) : (
-        <div className="w-full overflow-x-auto" style={{ maxWidth: '100vw' }}>
-          <div style={{ minWidth: 'max-content' }}>
-            <MSAVisualization sequences={sequences} />
-          </div>
+        <div className="border rounded-lg p-4">
+          <p className="text-sm text-muted-foreground mb-2">Showing {sequences.length} sequences</p>
+          <MSAVisualization sequences={sequences} className="border-0" />
         </div>
       )}
     </div>

@@ -12,20 +12,13 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from '@/components/ui/command';
 import { useState } from 'react';
 import receptors from '../../../../public/receptors.json';
 import { useFastaSequences } from '@/hooks/useFastaSequences';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Download } from 'lucide-react';
 import MSAVisualization from '@/components/MSAVisualization';
+import { MultiSelect } from '@/components/MultiSelect';
 
 const formSchema = z.object({
   receptorNames: z.array(z.string()).min(1, 'At least one receptor is required'),
@@ -61,8 +54,6 @@ interface FastaSequences {
 }
 
 export default function CombineOrthologsPage() {
-  const [searchResults, setSearchResults] = useState<Receptor[]>([]);
-  const [hasSearched, setHasSearched] = useState(false);
   const [selectedReceptors, setSelectedReceptors] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
@@ -85,39 +76,6 @@ export default function CombineOrthologsPage() {
     },
   }) as UseFormReturn<FormValues>;
 
-  const handleSearch = (value: string) => {
-    if (!value.trim()) {
-      setSearchResults([]);
-      setHasSearched(false);
-      return;
-    }
-
-    setHasSearched(true);
-    const results = receptors
-      .filter(
-        (receptor: Receptor) =>
-          receptor.geneName.toLowerCase().includes(value.toLowerCase()) &&
-          !selectedReceptors.includes(receptor.geneName)
-      )
-      .slice(0, 10);
-
-    setSearchResults(results);
-  };
-
-  const handleSelect = (receptorName: string) => {
-    const newSelected = [...selectedReceptors, receptorName];
-    setSelectedReceptors(newSelected);
-    form.setValue('receptorNames', newSelected);
-    setSearchResults([]);
-    setHasSearched(false);
-  };
-
-  const removeReceptor = (receptorName: string) => {
-    const newSelected = selectedReceptors.filter(name => name !== receptorName);
-    setSelectedReceptors(newSelected);
-    form.setValue('receptorNames', newSelected);
-  };
-
   async function onSubmit(values: FormValues) {
     try {
       setIsLoading(true);
@@ -126,8 +84,12 @@ export default function CombineOrthologsPage() {
       setDownloadFilename(null);
       setVisualizationSequences([]);
 
+      if (values.receptorNames.length === 0) {
+        throw new Error('Please select at least one receptor.');
+      }
+
       const selectedReceptorData = values.receptorNames.map(name =>
-        receptors.find(r => r.geneName.toLowerCase() === name.toLowerCase())
+        receptors.find((r: Receptor) => r.geneName === name)
       );
 
       if (selectedReceptorData.includes(undefined)) {
@@ -228,7 +190,7 @@ export default function CombineOrthologsPage() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-8 py-4">
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center max-w-2xl mx-auto">
         <h1 className="text-3xl font-bold text-left">Combine Orthologs</h1>
         {downloadUrl && downloadFilename && (
           <Button
@@ -248,7 +210,7 @@ export default function CombineOrthologsPage() {
           </Button>
         )}
       </div>
-      <p className="text-lg text-muted-foreground text-left">
+      <p className="text-lg text-muted-foreground text-left max-w-2xl mx-auto">
         Select one or more receptor gene names from the same class to fetch and merge their
         orthologous alignments. Columns that human sequences contain gaps are not included. You can
         preview the combined alignment and download as a FASTA file.
@@ -260,66 +222,26 @@ export default function CombineOrthologsPage() {
             <FormField
               control={form.control}
               name="receptorNames"
-              render={() => (
+              render={({ field }) => (
                 <FormItem>
                   <FormLabel>Select Receptors</FormLabel>
                   <FormControl>
-                    <div className="relative">
-                      <div className="flex flex-col flex-wrap gap-1.5 p-2 rounded-lg shadow-none bg-background">
-                        <div className="flex flex-row gap-2 flex-wrap">
-                          {selectedReceptors.map(name => (
-                            <div
-                              key={name}
-                              className="flex flex-row items-center gap-1 bg-secondary px-2 py-0.5 rounded-md text-sm w-fit"
-                            >
-                              <span>{name}</span>
-                              <button
-                                type="button"
-                                onClick={() => removeReceptor(name)}
-                                className="text-muted-foreground hover:text-foreground text-sm"
-                              >
-                                ×
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                        <Command className="flex-1 min-w-[200px] border-border border-2">
-                          <CommandInput
-                            placeholder={
-                              selectedReceptors.length === 0 ? 'Search for receptor...' : ''
-                            }
-                            onValueChange={handleSearch}
-                            className="h-8"
-                          />
-                          {hasSearched && (
-                            <CommandList className="absolute top-full left-0 right-0  rounded-lg shadow-none bg-background">
-                              {searchResults.length === 0 ? (
-                                <CommandEmpty>No results found.</CommandEmpty>
-                              ) : (
-                                <CommandGroup>
-                                  {searchResults.map((receptor, index) => (
-                                    <CommandItem
-                                      key={index}
-                                      value={receptor.geneName}
-                                      className="cursor-pointer"
-                                      onSelect={() => handleSelect(receptor.geneName)}
-                                    >
-                                      <div className="flex flex-col">
-                                        <span className="font-medium">{receptor.geneName}</span>
-                                        <span className="text-sm text-muted-foreground">
-                                          Class: {receptor.class} | Orthologs:{' '}
-                                          {receptor.numOrthologs} | LCA: {receptor.lca}
-                                        </span>
-                                      </div>
-                                    </CommandItem>
-                                  ))}
-                                </CommandGroup>
-                              )}
-                            </CommandList>
-                          )}
-                        </Command>
-                      </div>
-                    </div>
+                    <MultiSelect
+                      placeholder="Search for receptors..."
+                      options={receptors.map((receptor: Receptor) => ({
+                        label: `${receptor.geneName} (Class: ${receptor.class}, Orthologs: ${receptor.numOrthologs})`,
+                        value: receptor.geneName,
+                      }))}
+                      onValueChange={values => {
+                        field.onChange(values);
+                        setSelectedReceptors(values);
+                      }}
+                      defaultValue={selectedReceptors}
+                      variant="secondary"
+                      animation={0.3}
+                      maxCount={5}
+                      className="w-full"
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -348,7 +270,6 @@ export default function CombineOrthologsPage() {
 
       {visualizationSequences.length > 0 && (
         <div className="space-y-4">
-          <h3 className="text-lg font-medium">Combined Alignment Preview</h3>
           <div className="border rounded-lg p-4">
             <p className="text-sm text-muted-foreground mb-2">
               Showing {visualizationSequences.length} sequences

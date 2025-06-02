@@ -41,12 +41,13 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { MultiSelect } from '@/components/MultiSelect';
 import React from 'react';
 
 const formSchema = z.object({
   receptorClass: z.string().min(1, 'Required'),
   minOrthologs: z.array(z.string()).min(1, 'Required'),
-  maxOrthologs: z.string().min(1, 'Required'),
+  maxOrthologs: z.string().optional(),
   includeInactive: z.boolean().default(false),
 });
 
@@ -79,9 +80,6 @@ const columnHelper = createColumnHelper<ResidueMapping>();
 export default function ReceptorTablePage() {
   const [referenceResults, setReferenceResults] = useState<Receptor[]>([]);
   const [hasSearchedReference, setHasSearchedReference] = useState(false);
-  const [targetResults, setTargetResults] = useState<Receptor[]>([]);
-  const [hasSearchedTarget, setHasSearchedTarget] = useState(false);
-  const [searchValue, setSearchValue] = useState('');
   const [selectedTargets, setSelectedTargets] = useState<Receptor[]>([]);
 
   const [resultData, setResultData] = useState<ResidueMapping[]>([]);
@@ -118,46 +116,7 @@ export default function ReceptorTablePage() {
     setReferenceResults(results);
   };
 
-  const handleTargetSearch = (value: string) => {
-    setSearchValue(value);
-    if (!value.trim()) {
-      setTargetResults([]);
-      setHasSearchedTarget(false);
-      return;
-    }
-
-    setHasSearchedTarget(true);
-    const results = receptors
-      .filter(
-        (receptor: Receptor) =>
-          receptor.geneName.toLowerCase().includes(value.toLowerCase()) &&
-          !selectedTargets.some(t => t.geneName === receptor.geneName)
-      )
-      .slice(0, 10);
-
-    setTargetResults(results);
-  };
-
-  const handleTargetSelect = (receptor: Receptor) => {
-    const newSelectedTargets = [...selectedTargets, receptor];
-    setSelectedTargets(newSelectedTargets);
-    form.setValue(
-      'minOrthologs',
-      newSelectedTargets.map(t => t.geneName)
-    );
-    setSearchValue('');
-    setTargetResults([]);
-    setHasSearchedTarget(false);
-  };
-
-  const removeTarget = (receptor: Receptor) => {
-    const newSelectedTargets = selectedTargets.filter(t => t.geneName !== receptor.geneName);
-    setSelectedTargets(newSelectedTargets);
-    form.setValue(
-      'minOrthologs',
-      newSelectedTargets.map(t => t.geneName)
-    );
-  };
+  // These functions have been replaced by the MultiSelect component
 
   /**
    * FASTA dosyasını okuyup dizileri alır
@@ -326,7 +285,7 @@ export default function ReceptorTablePage() {
       const referenceGene = values.receptorClass.trim();
       const targetGenes = values.minOrthologs;
 
-      const residueNumbersInput = values.maxOrthologs.trim();
+      const residueNumbersInput = values.maxOrthologs?.trim() || '';
       const includeConservation = values.includeInactive;
 
       let residueNumbers: number[] = [];
@@ -520,144 +479,75 @@ export default function ReceptorTablePage() {
   });
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8 py-4">
-      <h1 className="text-3xl font-bold text-left">Receptor Table Generator</h1>
-      <p className="text-lg text-muted-foreground text-left">
-        Enter a reference receptor and one or more target receptors from the same class to generate
-        a residue‐by‐residue alignment table. Optionally specify a comma‐separated list of residue
-        numbers to filter the results. Check &quot;Include Conservation Data&quot; to pull in
-        per‐position conservation %, conserved amino acid(s), receptor region and GPCRdb numbering
-        for your reference GPCR.
-      </p>
+    <div className="max-w-7xl mx-auto space-y-8 py-4">
+      <div className="max-w-2xl mx-auto space-y-4">
+        <h1 className="text-3xl font-bold text-left">Receptor Table Generator</h1>
+        <p className="text-lg text-muted-foreground text-left">
+          Enter a reference receptor and one or more target receptors from the same class to
+          generate a residue‐by‐residue alignment table. Optionally specify a comma‐separated list
+          of residue numbers to filter the results. Check &quot;Include Conservation Data&quot; to
+          pull in per‐position conservation %, conserved amino acid(s), receptor region and GPCRdb
+          numbering for your reference GPCR.
+        </p>
 
-      {error && (
-        <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6">
-          <div className="flex">
-            <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-red-500" viewBox="0 0 20 20" fill="currentColor">
-                <path
-                  fillRule="evenodd"
-                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            </div>
-            <div className="ml-3">
-              <p className="text-sm text-red-700">{error}</p>
+        {error && (
+          <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-red-500" viewBox="0 0 20 20" fill="currentColor">
+                  <path
+                    fillRule="evenodd"
+                    d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm text-red-700">{error}</p>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      <div className="bg-card text-card-foreground rounded-lg p-6 shadow-md">
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <FormField
-              control={form.control}
-              name="receptorClass"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Reference Receptor</FormLabel>
-                  <FormControl>
-                    <Command className="rounded-lg border shadow-md">
-                      <CommandInput
-                        placeholder="Search for receptor..."
-                        onValueChange={value => {
-                          handleReferenceSearch(value);
-                          field.onChange(value);
-                        }}
-                        value={field.value}
-                      />
-                      {hasSearchedReference && (
-                        <CommandList
-                          className={
-                            referenceResults.length > 5 ? 'max-h-[300px] overflow-y-auto' : ''
-                          }
-                        >
-                          {referenceResults.length === 0 ? (
-                            <CommandEmpty>No results found.</CommandEmpty>
-                          ) : (
-                            <CommandGroup>
-                              {referenceResults.map((receptor, index) => (
-                                <CommandItem
-                                  key={index}
-                                  value={receptor.geneName}
-                                  className="cursor-pointer"
-                                  onSelect={() => {
-                                    field.onChange(receptor.geneName);
-                                    setReferenceResults([]);
-                                    setHasSearchedReference(false);
-                                  }}
-                                >
-                                  <div className="flex flex-col">
-                                    <span className="font-medium">{receptor.geneName}</span>
-                                    <span className="text-sm text-muted-foreground">
-                                      Class: {receptor.class} | Orthologs: {receptor.numOrthologs} |
-                                      LCA: {receptor.lca}
-                                    </span>
-                                  </div>
-                                </CommandItem>
-                              ))}
-                            </CommandGroup>
-                          )}
-                        </CommandList>
-                      )}
-                    </Command>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="minOrthologs"
-              render={() => (
-                <FormItem>
-                  <FormLabel>Target Receptor(s)</FormLabel>
-                  <FormControl>
-                    <div className="space-y-2">
+        <div className="bg-card text-card-foreground rounded-lg p-6 shadow-md">
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+              <FormField
+                control={form.control}
+                name="receptorClass"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Reference Receptor</FormLabel>
+                    <FormControl>
                       <Command className="rounded-lg border shadow-md">
-                        {selectedTargets.length > 0 && (
-                          <div className="flex flex-wrap gap-2 mt-2">
-                            {selectedTargets.map(receptor => (
-                              <div
-                                key={receptor.geneName}
-                                className="flex items-center gap-1 bg-muted px-2 py-1 rounded-md text-sm"
-                              >
-                                <span>{receptor.geneName}</span>
-                                <button
-                                  type="button"
-                                  onClick={() => removeTarget(receptor)}
-                                  className="text-muted-foreground hover:text-foreground"
-                                >
-                                  ×
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        )}
                         <CommandInput
-                          placeholder="Search for target receptor..."
-                          onValueChange={handleTargetSearch}
-                          value={searchValue}
+                          placeholder="Search for receptor..."
+                          onValueChange={value => {
+                            handleReferenceSearch(value);
+                            field.onChange(value);
+                          }}
+                          value={field.value}
                         />
-                        {hasSearchedTarget && (
+                        {hasSearchedReference && (
                           <CommandList
                             className={
-                              targetResults.length > 5 ? 'max-h-[300px] overflow-y-auto' : ''
+                              referenceResults.length > 5 ? 'max-h-[300px] overflow-y-auto' : ''
                             }
                           >
-                            {targetResults.length === 0 ? (
+                            {referenceResults.length === 0 ? (
                               <CommandEmpty>No results found.</CommandEmpty>
                             ) : (
                               <CommandGroup>
-                                {targetResults.map((receptor, index) => (
+                                {referenceResults.map((receptor, index) => (
                                   <CommandItem
                                     key={index}
                                     value={receptor.geneName}
                                     className="cursor-pointer"
-                                    onSelect={() => handleTargetSelect(receptor)}
+                                    onSelect={() => {
+                                      field.onChange(receptor.geneName);
+                                      setReferenceResults([]);
+                                      setHasSearchedReference(false);
+                                    }}
                                   >
                                     <div className="flex flex-col">
                                       <span className="font-medium">{receptor.geneName}</span>
@@ -673,55 +563,87 @@ export default function ReceptorTablePage() {
                           </CommandList>
                         )}
                       </Command>
-                    </div>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-            <FormField
-              control={form.control}
-              name="maxOrthologs"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Residue Numbers (comma-separated)</FormLabel>
-                  <FormControl>
-                    <Command className="rounded-lg border shadow-md">
-                      <CommandInput
-                        placeholder="Enter residue numbers..."
-                        onValueChange={value => {
-                          field.onChange(value);
+              <FormField
+                control={form.control}
+                name="minOrthologs"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Target Receptor(s)</FormLabel>
+                    <FormControl>
+                      <MultiSelect
+                        placeholder="Search for target receptors..."
+                        options={receptors.map((receptor: Receptor) => ({
+                          label: `${receptor.geneName} (Class: ${receptor.class}, Orthologs: ${receptor.numOrthologs})`,
+                          value: receptor.geneName,
+                        }))}
+                        onValueChange={values => {
+                          field.onChange(values);
+
+                          // Update selectedTargets for compatibility with existing code
+                          const selectedReceptorObjects = values
+                            .map(value => receptors.find((r: Receptor) => r.geneName === value))
+                            .filter(r => r !== undefined) as Receptor[];
+
+                          setSelectedTargets(selectedReceptorObjects);
                         }}
-                        value={field.value}
+                        defaultValue={selectedTargets.map(r => r.geneName)}
+                        variant="secondary"
                       />
-                    </Command>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-            <FormField
-              control={form.control}
-              name="includeInactive"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-start space-x-1 space-y-0">
-                  <FormControl>
-                    <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-                  </FormControl>
-                  <div className="space-y-1 leading-none">
-                    <FormLabel>Include Conservation Data</FormLabel>
-                  </div>
-                </FormItem>
-              )}
-            />
+              <FormField
+                control={form.control}
+                name="maxOrthologs"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Residue Numbers (comma-separated, optional)</FormLabel>
+                    <FormControl>
+                      <Command className="rounded-lg border shadow-md">
+                        <CommandInput
+                          placeholder="Enter residue numbers..."
+                          onValueChange={value => {
+                            field.onChange(value);
+                          }}
+                          value={field.value}
+                        />
+                      </Command>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? 'İşleniyor...' : 'Map Residues'}
-            </Button>
-          </form>
-        </Form>
+              <FormField
+                control={form.control}
+                name="includeInactive"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-start space-x-1 space-y-0">
+                    <FormControl>
+                      <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                    </FormControl>
+                    <div className="space-y-1 leading-none">
+                      <FormLabel>Include Conservation Data</FormLabel>
+                    </div>
+                  </FormItem>
+                )}
+              />
+
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading ? 'İşleniyor...' : 'Map Residues'}
+              </Button>
+            </form>
+          </Form>
+        </div>
       </div>
 
       {resultData.length > 0 && (

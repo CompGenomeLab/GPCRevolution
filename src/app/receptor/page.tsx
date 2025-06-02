@@ -11,6 +11,7 @@ import ConservationChart from '@/components/ConservationChart';
 import SnakePlot from '@/components/SnakePlot';
 import { MSAViewer } from '@/components/MSAViewer';
 import SVGTree from '@/components/SVGTree';
+import DownloadableFiles from '@/components/DownloadableFiles';
 
 interface Receptor {
   geneName: string;
@@ -158,6 +159,12 @@ function ReceptorContent() {
         <SVGTree svgPath={receptor?.svgTree || null} />
 
         <MSAViewer alignmentPath={receptor?.alignment || null} />
+
+        <DownloadableFiles
+          tree={receptor.tree}
+          alignment={receptor.alignment}
+          conservationFile={receptor.conservationFile}
+        />
       </Container>
     </>
   );

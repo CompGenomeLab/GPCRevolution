@@ -46,7 +46,7 @@ export default function Home() {
   };
 
   return (
-    <Container>
+    <Container className="max-w-2xl">
       <h1 className="text-3xl font-bold text-left">Welcome to the GPCR Evolution Database</h1>
       <p className="text-lg text-muted-foreground text-left">
         GPCR Evolution Database (GPCREVOdb) is a comprehensive resource for exploring the
