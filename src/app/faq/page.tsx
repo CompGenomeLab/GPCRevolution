@@ -1,8 +1,8 @@
-import Container from '../../components/Container';
+import RootContainer from '@/components/RootContainer';
 
 export default function FAQPage() {
   return (
-    <Container>
+    <RootContainer>
       <h1 className="text-3xl font-bold text-foreground">Frequently Asked Questions</h1>
       <div className="bg-card text-card-foreground rounded-lg p-8 shadow-md space-y-4">
         <h2 className="text-xl font-semibold text-foreground">How can I access to the data?</h2>
@@ -30,6 +30,6 @@ export default function FAQPage() {
           sp: Swiss-Prot / tr: TrEMBL|Uniprot Protein ID|Gene Name _ Species Name|Tax ID
         </p>
       </div>
-    </Container>
+    </RootContainer>
   );
 }

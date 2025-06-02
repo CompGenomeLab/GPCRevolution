@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/command';
 import receptors from '../../public/receptors.json';
 import { useRouter } from 'next/navigation';
-import Container from '../components/Container';
+import RootContainer from '@/components/RootContainer';
 
 interface Receptor {
   geneName: string;
@@ -46,7 +46,7 @@ export default function Home() {
   };
 
   return (
-    <Container className="max-w-2xl">
+    <RootContainer className="max-w-2xl">
       <h1 className="text-3xl font-bold text-left">Welcome to the GPCR Evolution Database</h1>
       <p className="text-lg text-muted-foreground text-left">
         GPCR Evolution Database (GPCREVOdb) is a comprehensive resource for exploring the
@@ -81,6 +81,6 @@ export default function Home() {
           </CommandList>
         )}
       </Command>
-    </Container>
+    </RootContainer>
   );
 }

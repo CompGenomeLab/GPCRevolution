@@ -1,8 +1,8 @@
-import Container from '../../components/Container';
+import RootContainer from '@/components/RootContainer';
 
 export default function ContactPage() {
   return (
-    <Container>
+    <RootContainer>
       <h1 className="text-3xl font-bold text-foreground text-left">Contact Us</h1>
       <div className="bg-card text-card-foreground rounded-lg p-8 shadow-md text-left space-y-4">
         <p className="text-lg text-muted-foreground">
@@ -15,6 +15,6 @@ export default function ContactPage() {
           selcuk.1@osu.edu
         </a>
       </div>
-    </Container>
+    </RootContainer>
   );
 }

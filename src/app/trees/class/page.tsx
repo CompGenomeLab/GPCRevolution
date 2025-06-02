@@ -1,6 +1,6 @@
 'use client';
 
-import Container from '../../../components/Container';
+import RootContainer from '@/components/RootContainer';
 import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 
@@ -8,11 +8,11 @@ export default function ClassTreePage() {
   return (
     <Suspense
       fallback={
-        <Container>
+        <RootContainer>
           <div className="animate-pulse">
             <div className="h-8 w-48 bg-muted rounded"></div>
           </div>
-        </Container>
+        </RootContainer>
       }
     >
       <ClassTreeContent />
@@ -44,8 +44,8 @@ function ClassTreeContent() {
   };
 
   return (
-    <Container>
+    <RootContainer>
       <h1 className="text-3xl font-bold text-foreground">{getTitle()}</h1>
-    </Container>
+    </RootContainer>
   );
 }

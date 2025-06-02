@@ -5,7 +5,7 @@ import { useEffect, useState, Suspense } from 'react';
 import receptors from '../../../public/receptors.json';
 import Link from 'next/link';
 import { ChevronLeft } from 'lucide-react';
-import Container from '../../components/Container';
+import RootContainer from '@/components/RootContainer';
 import type { ConservationDatum } from '@/components/ConservationChart';
 import ConservationChart from '@/components/ConservationChart';
 import SnakePlot from '@/components/SnakePlot';
@@ -30,7 +30,7 @@ export default function ReceptorPage() {
   return (
     <Suspense
       fallback={
-        <Container>
+        <RootContainer>
           <div className="animate-pulse">
             <div className="h-8 w-48 bg-muted rounded mb-4"></div>
             <div className="space-y-4">
@@ -38,7 +38,7 @@ export default function ReceptorPage() {
               <div className="h-4 w-64 bg-muted rounded"></div>
             </div>
           </div>
-        </Container>
+        </RootContainer>
       }
     >
       <ReceptorContent />
@@ -90,7 +90,7 @@ function ReceptorContent() {
 
   if (!gene) {
     return (
-      <Container>
+      <RootContainer>
         <h1 className="text-3xl font-bold text-foreground">Receptor Details</h1>
         <p className="text-lg text-muted-foreground">
           Please select a receptor from the{' '}
@@ -99,23 +99,23 @@ function ReceptorContent() {
           </Link>
           .
         </p>
-      </Container>
+      </RootContainer>
     );
   }
 
   if (!receptor) {
     return (
-      <Container>
+      <RootContainer>
         <div className="flex items-center justify-center p-8">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-foreground"></div>
         </div>
-      </Container>
+      </RootContainer>
     );
   }
 
   return (
     <>
-      <Container>
+      <RootContainer>
         <div className="flex flex-col items-start justify-start">
           <Link
             href="/"
@@ -165,7 +165,7 @@ function ReceptorContent() {
           alignment={receptor.alignment}
           conservationFile={receptor.conservationFile}
         />
-      </Container>
+      </RootContainer>
     </>
   );
 }

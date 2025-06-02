@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { Open_Sans } from 'next/font/google';
 import { ThemeProvider } from 'next-themes';
 import './globals.css';
-import { Header } from '@/components/Header';
+import { TheHeader } from '@/components/TheHeader';
 import { Toaster } from '@/components/ui/sonner';
 
 const openSans = Open_Sans({
@@ -31,7 +31,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <Header className="flex-none sticky top-0 z-10" />
+          <TheHeader className="flex-none sticky top-0 z-10" />
           <main className="p-4 grow">{children}</main>
         </ThemeProvider>
         <Toaster />

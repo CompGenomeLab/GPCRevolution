@@ -89,7 +89,7 @@ export const navigationItems = [
   },
 ];
 
-export function Header({ className }: Props) {
+export function TheHeader({ className }: Props) {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 

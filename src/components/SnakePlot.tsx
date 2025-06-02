@@ -48,7 +48,7 @@ export default function SnakePlot({
 
           if (container) {
             // HTML'i React elementi olarak dönüştür
-            // Container'a style ekle (arkaplan için)
+            // RootContainer'a style ekle (arkaplan için)
             container.style.backgroundColor = '#FDFBF7';
 
             // container içindeki SVG'ye de arkaplan ekleyelim
