@@ -2,7 +2,7 @@ import RootContainer from '@/components/RootContainer';
 
 export default function ContactPage() {
   return (
-    <RootContainer>
+    <RootContainer className="max-w-2xl">
       <h1 className="text-3xl font-bold text-foreground text-left">Contact Us</h1>
       <div className="bg-card text-card-foreground rounded-lg p-8 shadow-md text-left space-y-4">
         <p className="text-lg text-muted-foreground">

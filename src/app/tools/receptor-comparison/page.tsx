@@ -430,14 +430,13 @@ export default function ReceptorComparisonPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8 py-4">
+    <div className="max-w-2xl mx-auto space-y-8 py-4">
       <h1 className="text-3xl font-bold text-left">Differential Residue Conservation</h1>
       <p className="text-lg text-muted-foreground text-left">
         Enter two GPCR gene names from the same class and set a conservation threshold (0–100%).
         This tool will identify residues that are commonly and specifically conserved in each
         receptor, and render both an interactive results table and a snake plot visualization.
       </p>
-
       <div className="bg-card text-card-foreground rounded-lg p-6 shadow-md">
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
@@ -597,13 +596,11 @@ export default function ReceptorComparisonPage() {
           </form>
         </Form>
       </div>
-
       {error && (
         <Alert variant="destructive">
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
-
       {initialResult && (
         <div className="space-y-6">
           <ResultsTable fetchData={fetchData} initialResult={initialResult} />
