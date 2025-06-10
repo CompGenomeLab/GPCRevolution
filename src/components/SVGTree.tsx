@@ -33,7 +33,10 @@ export default function SVGTree({ svgPath }: { svgPath: string | null }) {
       ) : !svgContent ? (
         <div className="text-center text-muted-foreground p-4">No tree data available</div>
       ) : (
-        <div className="w-full overflow-auto" dangerouslySetInnerHTML={{ __html: svgContent }} />
+        <div
+          className="w-full overflow-scroll h-96"
+          dangerouslySetInnerHTML={{ __html: svgContent }}
+        />
       )}
     </div>
   );

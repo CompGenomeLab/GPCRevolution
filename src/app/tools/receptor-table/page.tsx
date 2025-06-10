@@ -119,7 +119,7 @@ export default function ReceptorTablePage() {
   async function readFastaFile(fastaFilePath: string) {
     try {
       const response = await fetch(fastaFilePath);
-      if (!response.ok) throw new Error(`FASTA dosyası yüklenemedi: ${fastaFilePath}`);
+      if (!response.ok) throw new Error(`Failed to load FASTA file: ${fastaFilePath}`);
       const fastaData = await response.text();
 
       const sequences: { [key: string]: string } = {};
@@ -143,7 +143,7 @@ export default function ReceptorTablePage() {
 
       return sequences;
     } catch (error) {
-      console.error('FASTA dosyası okuma hatası:', error);
+      console.error('FASTA file reading error:', error);
       throw error;
     }
   }
@@ -174,7 +174,7 @@ export default function ReceptorTablePage() {
 
       return conservationData;
     } catch (error) {
-      console.error('Conservation veri okuma hatası:', error);
+      console.error('Conservation data reading error:', error);
       return {};
     }
   }
@@ -282,13 +282,13 @@ export default function ReceptorTablePage() {
       }
 
       if (!referenceGene) {
-        throw new Error('Lütfen bir referans reseptör seçin');
+        throw new Error('Please select a reference receptor');
       }
       if (targetGenes.length === 0) {
-        throw new Error('Lütfen en az bir hedef reseptör seçin');
+        throw new Error('Please select at least one target receptor');
       }
       if (targetGenes.includes(referenceGene)) {
-        throw new Error('Hedef reseptörler referans reseptörden farklı olmalıdır');
+        throw new Error('Target receptors must be different from the reference receptor');
       }
 
       const referenceReceptor = receptors.find(
@@ -299,10 +299,10 @@ export default function ReceptorTablePage() {
       );
 
       if (!referenceReceptor) {
-        throw new Error('Referans reseptör bulunamadı');
+        throw new Error('Reference receptor not found');
       }
       if (targetReceptors.includes(undefined)) {
-        throw new Error('Bir veya birden fazla hedef reseptör bulunamadı');
+        throw new Error('One or more target receptors not found');
       }
 
       const receptorClass = referenceReceptor.class;
@@ -311,7 +311,7 @@ export default function ReceptorTablePage() {
       );
 
       if (!allSameClass) {
-        throw new Error('Tüm reseptörler referans reseptör ile aynı sınıfta olmalıdır');
+        throw new Error('All receptors must be in the same class as the reference receptor');
       }
 
       const fastaFilePath = `/alignments/class${receptorClass}_humans_MSA.fasta`;
@@ -321,7 +321,7 @@ export default function ReceptorTablePage() {
       const receptorSequences = allReceptors.map(r => {
         const seq = sequences[r.geneName];
         if (!seq) {
-          throw new Error(`${r.geneName} için FASTA dosyasında dizi bulunamadı.`);
+          throw new Error(`Sequence not found in FASTA file for ${r.geneName}.`);
         }
         return {
           geneName: r.geneName,
@@ -377,8 +377,8 @@ export default function ReceptorTablePage() {
         resultRef.current.scrollIntoView({ behavior: 'smooth' });
       }
     } catch (err) {
-      console.error('Mapping hatası:', err);
-      setError(err instanceof Error ? err.message : 'Bilinmeyen bir hata oluştu');
+      console.error('Mapping error:', err);
+      setError(err instanceof Error ? err.message : 'An unknown error occurred');
     } finally {
       setIsLoading(false);
     }
@@ -621,7 +621,7 @@ export default function ReceptorTablePage() {
               />
 
               <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? 'İşleniyor...' : 'Map Residues'}
+                {isLoading ? 'Processing...' : 'Map Residues'}
               </Button>
             </form>
           </Form>

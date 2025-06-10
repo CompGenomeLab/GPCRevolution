@@ -6,7 +6,17 @@ import { useTheme } from 'next-themes';
 import { Button } from '@/components/ui/button';
 import { Moon, Sun } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import receptors from '../../public/receptors.json';
 import DesktopNavigation from './DesktopNavigation';
 import MobileNavigation from './MobileNavigation';
 
@@ -14,47 +24,15 @@ interface Props {
   className?: string;
 }
 
+interface Receptor {
+  geneName: string;
+  class: string;
+  numOrthologs: number;
+  lca: string;
+  gpcrdbId: string;
+}
+
 export const navigationItems = [
-  {
-    title: 'Trees',
-    items: [
-      {
-        title: 'Super Family',
-        href: '/trees/super-family',
-        description: 'View the complete Super Family tree',
-      },
-      {
-        title: 'Olfactory Receptors',
-        href: '/trees/class?type=olfactory',
-        description: 'Explore Olfactory Receptor class trees',
-      },
-      {
-        title: 'Class A',
-        href: '/trees/class?type=a',
-        description: 'View Class A class trees',
-      },
-      {
-        title: 'Class B',
-        href: '/trees/class?type=b',
-        description: 'View Class B class trees',
-      },
-      {
-        title: 'Class C',
-        href: '/trees/class?type=c',
-        description: 'View Class C class trees',
-      },
-      {
-        title: 'Class F',
-        href: '/trees/class?type=f',
-        description: 'View Class F class trees',
-      },
-      {
-        title: 'Class T',
-        href: '/trees/class?type=t',
-        description: 'View Class T class trees',
-      },
-    ],
-  },
   {
     title: 'Tools',
     items: [
@@ -92,10 +70,49 @@ export const navigationItems = [
 export function TheHeader({ className }: Props) {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
+  const [searchResults, setSearchResults] = useState<Receptor[]>([]);
+  const [hasSearched, setHasSearched] = useState(false);
+  const router = useRouter();
+  const searchRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+        setHasSearched(false);
+        setSearchResults([]);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  const handleSearch = (value: string) => {
+    if (!value.trim()) {
+      setSearchResults([]);
+      setHasSearched(false);
+      return;
+    }
+
+    setHasSearched(true);
+    const results = receptors
+      .filter((receptor: Receptor) => receptor.geneName.toLowerCase().includes(value.toLowerCase()))
+      .slice(0, 10);
+
+    setSearchResults(results);
+  };
+
+  const handleSelect = (geneName: string) => {
+    setHasSearched(false);
+    setSearchResults([]);
+    router.push(`/receptor?gene=${encodeURIComponent(geneName)}`);
+  };
 
   return (
     <header className={cn('bg-background border-b border-border', className)}>
@@ -117,7 +134,43 @@ export function TheHeader({ className }: Props) {
             <DesktopNavigation items={navigationItems} />
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-4">
+            <div className="relative w-36 sm:w-72" ref={searchRef}>
+              <Command className="rounded-lg border shadow-none">
+                <CommandInput
+                  placeholder="Search for a receptor..."
+                  onValueChange={handleSearch}
+                  className="h-9"
+                />
+                {hasSearched && (
+                  <CommandList className="absolute top-full left-0 right-0 z-50 bg-background border rounded-lg shadow-lg max-h-[300px] overflow-y-auto">
+                    {searchResults.length === 0 ? (
+                      <CommandEmpty>No results found.</CommandEmpty>
+                    ) : (
+                      <CommandGroup>
+                        {searchResults.map((receptor, index) => (
+                          <CommandItem
+                            key={index}
+                            value={receptor.geneName}
+                            className="cursor-pointer"
+                            onSelect={() => handleSelect(receptor.geneName)}
+                          >
+                            <div className="flex flex-col">
+                              <span className="font-medium">{receptor.geneName}</span>
+                              <span className="text-sm text-muted-foreground">
+                                Class: {receptor.class} | Orthologs: {receptor.numOrthologs} | LCA:{' '}
+                                {receptor.lca}
+                              </span>
+                            </div>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    )}
+                  </CommandList>
+                )}
+              </Command>
+            </div>
+
             <Button
               variant="ghost"
               size="icon"
