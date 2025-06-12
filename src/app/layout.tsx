@@ -23,7 +23,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${openSans.className} bg-background text-foreground flex flex-col h-screen relative`}
+        className={`${openSans.className} bg-background text-foreground flex flex-col min-h-screen relative`}
       >
         <ThemeProvider
           attribute="class"
@@ -31,7 +31,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <TheHeader className="flex-none sticky top-0 z-10" />
+          <TheHeader className="flex-none sticky top-0 z-50" />
           <main className="p-4 grow">{children}</main>
         </ThemeProvider>
         <Toaster />

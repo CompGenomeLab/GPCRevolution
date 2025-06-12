@@ -1,7 +1,10 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 export function useSnakePlotTooltip() {
   const tooltipRef = useRef<HTMLDivElement | null>(null);
+  const [fillColor, setFillColor] = useState('#DBD6F9');
+  const [textColor, setTextColor] = useState('#000000');
+
   function initSnakeplotTooltips(svg: SVGElement | null) {
     if (!svg) return;
     let tooltip = document.getElementById('snake-tooltip') as HTMLDivElement;
@@ -76,6 +79,7 @@ export function useSnakePlotTooltip() {
     svg.addEventListener('mousemove', handleMouseMove);
     svg.addEventListener('mouseout', handleMouseOut);
   }
+
   async function updateSnakeplotConservation(conservationFilePath: string) {
     if (!conservationFilePath) {
       console.warn('No conservation file specified.');
@@ -86,8 +90,9 @@ export function useSnakePlotTooltip() {
       const response = await fetch(conservationFilePath);
       const text = await response.text();
       const lines = text
-        .split(/\\r?\\n/)
+        .split(/\r?\n/)
         .filter(line => line.trim() !== '' && !line.toLowerCase().startsWith('residue'));
+
       interface ConservationData {
         conservation: number;
         conservedAA: string;
@@ -95,11 +100,12 @@ export function useSnakePlotTooltip() {
         region: string;
         gpcrdb: string;
       }
+
       const conservationMap: Record<string, ConservationData> = {};
 
       lines.forEach(line => {
-        const parts = line.trim().split(/\\s+/);
-        if (parts.length >= 2) {
+        const parts = line.trim().split(/\t/);
+        if (parts.length >= 6) {
           const residue = parts[0];
           const consValue = parseFloat(parts[1]);
           const conservedAA = parts[2] || '';
@@ -107,13 +113,15 @@ export function useSnakePlotTooltip() {
           const region = parts[4] || '';
           const gpcrdb = parts[5] || '';
 
-          conservationMap[residue] = {
-            conservation: consValue,
-            conservedAA,
-            humanAA,
-            region,
-            gpcrdb,
-          };
+          if (!isNaN(consValue)) {
+            conservationMap[residue] = {
+              conservation: consValue,
+              conservedAA,
+              humanAA,
+              region,
+              gpcrdb,
+            };
+          }
         }
       });
 
@@ -136,9 +144,6 @@ export function useSnakePlotTooltip() {
         }
       }
 
-      const userFillColor = '#B7B7EB';
-      const userTextColor = '#000000';
-
       function getGradientOffset(consValue: number) {
         const p = consValue / 100;
         const A_target = p * Math.PI;
@@ -149,7 +154,7 @@ export function useSnakePlotTooltip() {
 
         let low = 0,
           high = 2,
-          mid,
+          mid = 0,
           A_mid;
         for (let i = 0; i < 20; i++) {
           mid = (low + high) / 2;
@@ -160,8 +165,7 @@ export function useSnakePlotTooltip() {
             high = mid;
           }
         }
-
-        const offset = ((2 - (low + high) / 2) / 2) * 100;
+        const offset = ((2 - mid) / 2) * 100;
         return offset + '%';
       }
 
@@ -199,12 +203,12 @@ export function useSnakePlotTooltip() {
 
         const stop3 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
         stop3.setAttribute('offset', boundary);
-        stop3.setAttribute('stop-color', userFillColor);
+        stop3.setAttribute('stop-color', fillColor);
         linearGradient.appendChild(stop3);
 
         const stop4 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
         stop4.setAttribute('offset', '100%');
-        stop4.setAttribute('stop-color', userFillColor);
+        stop4.setAttribute('stop-color', fillColor);
         linearGradient.appendChild(stop4);
 
         defs.appendChild(linearGradient);
@@ -233,7 +237,7 @@ export function useSnakePlotTooltip() {
         const originalTitle = txt.getAttribute('original_title');
         if (!originalTitle) return;
 
-        const residueMatch = originalTitle.match(/\\d+/);
+        const residueMatch = originalTitle.match(/\d+/);
         if (!residueMatch) return;
 
         const residueId = residueMatch[0];
@@ -254,7 +258,7 @@ export function useSnakePlotTooltip() {
 
         txt.setAttribute('data-snake-tooltip', tooltipHTML);
         txt.setAttribute('data-conservation', String(consValue));
-        txt.setAttribute('style', 'fill: ' + userTextColor + ';');
+        txt.setAttribute('style', 'fill: ' + textColor + ';');
       });
 
       initSnakeplotTooltips(svg);
@@ -305,5 +309,12 @@ export function useSnakePlotTooltip() {
     };
   }, []);
 
-  return { initSnakeplotTooltips, updateSnakeplotConservation };
+  return {
+    initSnakeplotTooltips,
+    updateSnakeplotConservation,
+    fillColor,
+    setFillColor,
+    textColor,
+    setTextColor,
+  };
 }

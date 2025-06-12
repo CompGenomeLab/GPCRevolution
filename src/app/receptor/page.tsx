@@ -154,7 +154,10 @@ function ReceptorContent() {
 
         {conservationData && <ConservationChart data={conservationData} />}
 
-        <SnakePlot svgPath={receptor?.snakePlot || null} />
+        <SnakePlot
+          svgPath={receptor?.snakePlot || null}
+          conservationFile={receptor?.conservationFile || null}
+        />
 
         <SVGTree svgPath={receptor?.svgTree || null} />
 
