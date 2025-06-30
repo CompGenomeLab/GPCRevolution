@@ -13,6 +13,7 @@ import { MSAViewer } from '@/components/MSAViewer';
 import SVGTree from '@/components/SVGTree';
 import DownloadableFiles from '@/components/DownloadableFiles';
 
+
 interface Receptor {
   geneName: string;
   class: string;
@@ -145,7 +146,7 @@ function ReceptorContent() {
                 <p className="font-medium text-foreground">{receptor.lca}</p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">GPCRdb ID</p>
+                <p className="text-sm text-muted-foreground">UniProt ID</p>
                 <p className="font-medium text-foreground">{receptor.gpcrdbId}</p>
               </div>
             </div>

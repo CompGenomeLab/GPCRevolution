@@ -92,7 +92,7 @@ const ConservationChart: React.FC<ConservationChartProps> = ({ data }) => {
     labels: data.map(d => [d.residue.toString(), d.humanAA]),
     datasets: [
       {
-        label: 'Conservation %',
+        label: 'Orthologous Conservation %',
         data: data.map(d => d.conservation),
         backgroundColor: '#434E71',
         borderColor: '#FFFFFF',
@@ -172,8 +172,15 @@ const ConservationChart: React.FC<ConservationChartProps> = ({ data }) => {
         min: -30,
         title: {
           display: true,
-          text: 'Conservation %',
+          text: [
+              'Orthologous',
+              'Conservation %'
+            ],
+          font: {
+            size: 15,
+          },
         },
+        
         ticks: {
           stepSize: 20,
           callback: function (this: Scale, tickValue: number | string) {
@@ -186,11 +193,6 @@ const ConservationChart: React.FC<ConservationChartProps> = ({ data }) => {
         },
       },
       x: {
-        title: {
-          display: true,
-          text: 'GPCRdb #',
-          align: 'start' as const,
-        },
         ticks: {
           maxRotation: 0,
           minRotation: 0,
