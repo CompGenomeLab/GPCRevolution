@@ -234,7 +234,10 @@ const ResultsTable = memo(function ResultsTable({ initialResult }: ResultsTableP
                   return (
                     <TableHead
                       key={header.id}
-                      className={header.column.getCanSort() ? 'cursor-pointer select-none' : ''}
+                      className={`
+                      sticky top-0 bg-card z-10
+                      ${header.column.getCanSort() ? 'cursor-pointer select-none' : ''}
+                    `}
                       onClick={header.column.getToggleSortingHandler()}
                     >
                       <div className="flex flex-col items-center gap-1">
@@ -257,7 +260,10 @@ const ResultsTable = memo(function ResultsTable({ initialResult }: ResultsTableP
                   return (
                     <TableHead
                       key={header.id}
-                      className={header.column.getCanSort() ? 'cursor-pointer select-none' : ''}
+                      className={`
+                      sticky top-0 bg-card z-10
+                      ${header.column.getCanSort() ? 'cursor-pointer select-none' : ''}
+                    `}
                       onClick={header.column.getToggleSortingHandler()}
                     >
                       <div className="flex items-center justify-center gap-2">
