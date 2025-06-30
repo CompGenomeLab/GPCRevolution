@@ -142,7 +142,7 @@ const ResultsTable = memo(function ResultsTable({ initialResult }: ResultsTableP
       cell: info => (
         <div className="font-mono">
           {info.row.original.resNum1 !== 'gap'
-            ? `${info.row.original.resNum1} (${info.row.original.aa1})`
+            ? `${info.row.original.resNum1}`
             : '-'}
         </div>
       ),
@@ -163,7 +163,7 @@ const ResultsTable = memo(function ResultsTable({ initialResult }: ResultsTableP
     }),
     columnHelper.accessor('perc1', {
       header: () => <div className="text-center font-medium">Conservation %</div>,
-      cell: info => <div className="text-right">{info.getValue().toFixed(2)}%</div>,
+      cell: info => <div className="text-center">{info.getValue().toFixed(2)}%</div>,
       meta: {
         parentColumn: result?.receptor1.geneName,
       } as ColumnMeta,
@@ -173,7 +173,7 @@ const ResultsTable = memo(function ResultsTable({ initialResult }: ResultsTableP
       cell: info => (
         <div className="font-mono">
           {info.row.original.resNum2 !== 'gap'
-            ? `${info.row.original.resNum2} (${info.row.original.aa2})`
+            ? `${info.row.original.resNum2}`
             : '-'}
         </div>
       ),
@@ -194,7 +194,7 @@ const ResultsTable = memo(function ResultsTable({ initialResult }: ResultsTableP
     }),
     columnHelper.accessor('perc2', {
       header: () => <div className="text-center font-medium">Conservation %</div>,
-      cell: info => <div className="text-right">{info.getValue().toFixed(2)}%</div>,
+      cell: info => <div className="text-center">{info.getValue().toFixed(2)}%</div>,
       meta: {
         parentColumn: result?.receptor2.geneName,
       } as ColumnMeta,
@@ -224,7 +224,7 @@ const ResultsTable = memo(function ResultsTable({ initialResult }: ResultsTableP
   return (
     <div className="bg-card text-card-foreground rounded-lg p-6 shadow-md">
       <h2 className="text-xl font-semibold mb-4">Results</h2>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto overflow-y-auto max-h-[400px]">
         <Table>
           <TableHeader>
             <TableRow>
@@ -278,7 +278,7 @@ const ResultsTable = memo(function ResultsTable({ initialResult }: ResultsTableP
             {table.getRowModel().rows.map((row, index) => (
               <TableRow key={row.id} className={index % 2 === 0 ? 'bg-muted/50' : ''}>
                 {row.getVisibleCells().map(cell => (
-                  <TableCell key={cell.id}>
+                  <TableCell key={cell.id} className="text-center">
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </TableCell>
                 ))}
@@ -442,7 +442,7 @@ export default function ReceptorComparisonPage() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-8 py-4">
+    <div className="max-w-4xl mx-auto space-y-8 py-4">
       <h1 className="text-3xl font-bold text-left">Differential Residue Conservation</h1>
       <p className="text-lg text-muted-foreground text-left">
         Enter two GPCR gene names from the same class and set a conservation threshold (0–100%).
