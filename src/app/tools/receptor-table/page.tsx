@@ -334,7 +334,7 @@ export default function ReceptorTablePage() {
         const conservationPromises = allReceptors.map(receptor => {
           if (!receptor.gpcrdbId) return Promise.resolve(null);
 
-          const conservationFilePath = `/conservation_files/${receptor.gpcrdbId}.txt`;
+          const conservationFilePath = `/conservation_files/${receptor.geneName}_conservation.txt`;
           return readConservationData(conservationFilePath)
             .then(data => ({ geneName: receptor.geneName, data }))
             .catch(() => ({ geneName: receptor.geneName, data: {} }));
