@@ -392,7 +392,9 @@ const ResultsTable = memo(function ResultsTable({ initialResult }: ResultsTableP
 
       
 
-      {/* ─── Toggle receptor ───────────────────────────── */}
+      <h2 className="text-xl font-semibold mb-2 pt-4">Snake Plot Visualization</h2>
+      
+            {/* ─── Toggle receptor ───────────────────────────── */}
       <div className="flex space-x-4 mb-4">
         <Button
           variant={showReceptor === 1 ? 'default' : 'secondary'}
@@ -408,11 +410,11 @@ const ResultsTable = memo(function ResultsTable({ initialResult }: ResultsTableP
         </Button>
       </div>
 
-      <h2 className="text-xl font-semibold mb-2">Snake Plot Visualization</h2>
       {/* ─── Snake‐plot container ─────────────────────────────────── */}
       <div ref={snakeWrapperRef} className="w-full mb-6">
         {/* The fetched SVG/HTML will appear here */}
       </div>
+      
        {/* ─── Colour legend & customisation ─────────────────────── */}
       <div className="flex flex-wrap gap-x-10 gap-y-4 mt-4">
         {Object.entries(colorMap).map(([label, col]) => (
