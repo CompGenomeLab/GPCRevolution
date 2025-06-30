@@ -31,7 +31,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Loader2} from 'lucide-react';
 import receptors from '../../../../public/receptors.json';
 
 import {
@@ -41,7 +41,6 @@ import {
   flexRender,
   createColumnHelper,
   SortingState,
-  getPaginationRowModel,
 } from '@tanstack/react-table';
 
 const formSchema = z.object({
@@ -56,6 +55,7 @@ interface Receptor {
   numOrthologs: number;
   lca: string;
   gpcrdbId: string;
+  snakePlot: string;
 }
 
 interface CategorizedResidue {
@@ -107,12 +107,34 @@ const ResultsTable = memo(function ResultsTable({ initialResult }: ResultsTableP
       desc: false,
     },
   ]);
-  const [pageIndex, setPageIndex] = useState(0);
-  const [pageSize, setPageSize] = useState(10);
 
   useEffect(() => {
     setResult(initialResult);
   }, [initialResult]);
+
+    // ─── Snake‐plot logic ───────────────────────────────────────
+  // Which receptor’s plot to show (1 or 2)
+  const [showReceptor, setShowReceptor] = useState<1|2>(1);
+
+  // Category → color map (defaults from your old JS)
+  const [colorMap, setColorMap] = useState<Record<string,string>>({
+    'Common Residues': '#E6E6FA',
+    'Specifically Conserved for Both': '#A85638',
+    'Specifically Conserved for Receptor 1': '#FFF9C2',
+    'Specifically Conserved for Receptor 2': '#8F9871',
+  });
+
+  // Where to inject the raw SVG/HTML
+  const snakeWrapperRef = useRef<HTMLDivElement>(null);
+
+  // Whenever result, showReceptor or colors change, (re)fetch & recolor
+  useEffect(() => {
+    if (!result) return;
+    const receptor = showReceptor === 1 ? result.receptor1 : result.receptor2;
+    if (!receptor.snakePlot) return;
+
+  }, [result, showReceptor, colorMap]);
+
 
   const columns = [
     columnHelper.accessor('resNum1', {
@@ -193,25 +215,10 @@ const ResultsTable = memo(function ResultsTable({ initialResult }: ResultsTableP
     columns,
     state: {
       sorting,
-      pagination: {
-        pageIndex,
-        pageSize,
-      },
     },
     onSortingChange: setSorting,
-    onPaginationChange: updater => {
-      if (typeof updater === 'function') {
-        const newState = updater({
-          pageIndex,
-          pageSize,
-        });
-        setPageIndex(newState.pageIndex);
-        setPageSize(newState.pageSize);
-      }
-    },
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
   });
 
   return (
@@ -281,37 +288,42 @@ const ResultsTable = memo(function ResultsTable({ initialResult }: ResultsTableP
         </Table>
       </div>
 
-      <div className="flex items-center justify-between mt-4">
-        <div className="text-sm text-muted-foreground">
-          Showing {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1}{' '}
-          to{' '}
-          {Math.min(
-            (table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize,
-            table.getFilteredRowModel().rows.length
-          )}{' '}
-          of {table.getFilteredRowModel().rows.length} entries
-        </div>
-        <div className="flex items-center space-x-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
-          >
-            <ChevronLeft className="h-4 w-4" />
-            Previous
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
-          >
-            Next
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
+        {/* ─── Color‐pickers ───────────────────────────────────────── */}
+      <div className="flex space-x-6 mb-4">
+        {Object.entries(colorMap).map(([label, col]) => (
+          <div key={label} className="flex flex-col items-center">
+            <span className="text-sm">{label}</span>
+            <input
+              type="color"
+              value={col}
+              onChange={e => setColorMap(m => ({ ...m, [label]: e.target.value }))}
+            />
+          </div>
+        ))}
       </div>
+
+      {/* ─── Toggle receptor ─────────────────────────────────────── */}
+      <div className="flex space-x-4 mb-4">
+        <button
+          className={`px-3 py-1 rounded ${showReceptor === 1 ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}
+          onClick={() => setShowReceptor(1)}
+        >
+          Show {result?.receptor1.geneName}
+        </button>
+        <button
+          className={`px-3 py-1 rounded ${showReceptor === 2 ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}
+          onClick={() => setShowReceptor(2)}
+        >
+          Show {result?.receptor2.geneName}
+        </button>
+      </div>
+
+      {/* ─── Snake‐plot container ─────────────────────────────────── */}
+      <div ref={snakeWrapperRef} className="w-full mb-6">
+        {/* The fetched SVG/HTML will appear here */}
+      </div>
+
+
     </div>
   );
 });
