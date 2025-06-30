@@ -28,7 +28,7 @@ export default function SVGTree({ svgPath }: { svgPath: string | null }) {
       <h2 className="text-xl font-semibold text-foreground mb-4">Phylogenetic Tree of Orthologs</h2>
       {isLoading ? (
         <div className="flex items-center justify-center p-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-foreground"></div>
+          <div className="animate-spin rounded-full h-20 w-8 border-b-2 border-foreground"></div>
         </div>
       ) : !svgContent ? (
         <div className="text-center text-muted-foreground p-4">No tree data available</div>

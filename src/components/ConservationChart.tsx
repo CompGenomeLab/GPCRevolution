@@ -34,16 +34,16 @@ interface ConservationChartProps {
 const ConservationChart: React.FC<ConservationChartProps> = ({ data }) => {
   const getRegionColor = (region: string, index: number) => {
     const colors = [
-      'rgba(100, 149, 237, 0.4)',
-      'rgba(255, 99, 132, 0.4)',
-      'rgba(54, 162, 235, 0.4)',
-      'rgba(255, 205, 86, 0.4)',
-      'rgba(75, 192, 192, 0.4)',
-      'rgba(153, 102, 255, 0.4)',
-      'rgba(255, 159, 64, 0.4)',
-      'rgba(199, 199, 199, 0.4)',
-      'rgba(83, 102, 255, 0.4)',
-      'rgba(255, 99, 71, 0.4)',
+      "#FFFACD",
+      "#E6E6FA",
+      "#FFFACD",
+      "#E6E6FA",
+      "#FFFACD",
+      "#E6E6FA",
+      "#FFFACD",
+      "#E6E6FA",
+      "#FFFACD",
+      "#E6E6FA",
     ];
     return colors[index % colors.length];
   };
@@ -94,7 +94,7 @@ const ConservationChart: React.FC<ConservationChartProps> = ({ data }) => {
       {
         label: 'Orthologous Conservation %',
         data: data.map(d => d.conservation),
-        backgroundColor: '#434E71',
+        backgroundColor: '#424874',
         borderColor: '#FFFFFF',
         borderWidth: 1,
         barThickness: 'flex',
@@ -119,13 +119,17 @@ const ConservationChart: React.FC<ConservationChartProps> = ({ data }) => {
         mode: 'index' as const,
         intersect: false,
         callbacks: {
+          title: () => [],
           label: function (context: TooltipItem<'bar'>) {
             const index = context.dataIndex;
             const d = data[index];
             return [
-              `Res: ${d.residue} (${d.conservation}%)`,
-              `AA: ${d.humanAA} | Cons: ${d.conservedAA}`,
-              `Region: ${d.region} | GPCRdb: ${d.gpcrdb}`,
+              `Residue #: ${d.residue}`,
+              `Conservation %: ${d.conservation}%`,
+              `Human AA: ${d.humanAA}`,
+              `Conserved AA: ${d.conservedAA}`,
+              `Region: ${d.region}`, 
+              `GPCRdb #: ${d.gpcrdb}`,
             ];
           },
         },
@@ -199,7 +203,7 @@ const ConservationChart: React.FC<ConservationChartProps> = ({ data }) => {
           autoSkip: false,
           maxTicksLimit: undefined,
           font: {
-            size: 10,
+            size: 12,
           },
           callback: function (value: number | string, index: number): string[] {
             const labels = data[index];
