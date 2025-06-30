@@ -215,7 +215,7 @@ const ConservationChart: React.FC<ConservationChartProps> = ({ data }) => {
 
   return (
     <div className="bg-card text-card-foreground rounded-lg p-6 shadow-md">
-      <h2 className="text-xl font-semibold text-foreground mb-4">Conservation Plot</h2>
+      <h2 className="text-xl font-semibold text-foreground mb-4">Residue Conservation Bar Plot</h2>
       <div className="relative w-full h-[250px]">
         <div className="absolute inset-0 p-4">
           <div className="w-full h-full overflow-x-auto">

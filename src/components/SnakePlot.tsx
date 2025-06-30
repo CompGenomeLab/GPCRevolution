@@ -180,7 +180,7 @@ export default function SnakePlot({
   return (
     <div className="bg-card text-card-foreground rounded-lg p-6 shadow-md select-none">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-foreground mb-4">Snake Plot</h2>
+        <h2 className="text-xl font-semibold text-foreground mb-4">Residue Conservation Snake Plot</h2>
 
         {svgContent && !isLoading && !error && (
           <div className="flex justify-end gap-4 items-center">
