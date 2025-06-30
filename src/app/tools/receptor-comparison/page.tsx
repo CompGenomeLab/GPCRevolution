@@ -107,7 +107,7 @@ const ResultsTable = memo(function ResultsTable({ initialResult }: ResultsTableP
       desc: false,
     },
   ]);
-
+  
   useEffect(() => {
     setResult(initialResult);
   }, [initialResult]);
@@ -124,16 +124,112 @@ const ResultsTable = memo(function ResultsTable({ initialResult }: ResultsTableP
     'Specifically Conserved for Receptor 2': '#8F9871',
   });
 
+  
+  // Tooltip state for hover popups
+  const [tooltip, setTooltip] = useState<{
+    visible: boolean;
+    x: number;
+    y: number;
+    lines: string[];
+  }>({ visible: false, x: 0, y: 0, lines: [] });
+
   // Where to inject the raw SVG/HTML
   const snakeWrapperRef = useRef<HTMLDivElement>(null);
 
   // Whenever result, showReceptor or colors change, (re)fetch & recolor
   useEffect(() => {
-    if (!result) return;
-    const receptor = showReceptor === 1 ? result.receptor1 : result.receptor2;
-    if (!receptor.snakePlot) return;
+  if (!result) return;
+  const receptor = showReceptor === 1 ? result.receptor1 : result.receptor2;
+  if (!receptor.snakePlot) return;
 
-  }, [result, showReceptor, colorMap]);
+  const container = snakeWrapperRef.current!;
+  container.innerHTML = '';
+
+  // Re-route URL
+  let url = receptor.snakePlot;
+  if (url.startsWith('/tools/snakeplots/')) {
+    url = url.replace('/tools/snakeplots/', '/snakeplots/');
+  }
+  if (!url.startsWith('/')) {
+    url = '/' + url;
+  }
+
+  // Fetch, inject, recolor, and wire tooltips
+  fetch(url)
+    .then(res => {
+      if (!res.ok) throw new Error(`Failed to load SVG (${res.status})`);
+      return res.text();
+    })
+    .then(svgText => {
+      container.innerHTML = svgText;
+      // 1️⃣ strip the <title> that sat in <head>
+      container.querySelector(':scope > title')?.remove();
+
+      // 2️⃣ strip the <meta charset="UTF-8"> that came from <head>
+      container.querySelector(':scope > meta[charset]')?.remove();
+
+      // 3️⃣ strip the <h2> caption that sat in <body>
+      container.querySelector(':scope > h2')?.remove();
+      container.querySelectorAll('text').forEach(t =>
+      t.setAttribute('pointer-events', 'none')
+    );
+
+      // Recolor
+      result.categorizedResidues.forEach(row => {
+        const pos = showReceptor === 1 ? row.resNum1 : row.resNum2;
+        if (pos === 'gap') return;
+        const label = categoryLabels[row.category as keyof typeof categoryLabels];
+        const color = colorMap[label];
+        const circle = container.querySelector<SVGCircleElement>(`circle[id="${pos}"]`);
+        if (circle) {
+          circle.setAttribute('fill', color);
+          circle.setAttribute('data-snake-category', label);
+        }
+      });
+      
+      // Hover tooltips
+      Array.from(container.querySelectorAll<SVGCircleElement>('circle[id]')).forEach(circle => {
+        const pos = circle.id;
+        const row = result.categorizedResidues.find(r =>
+          showReceptor === 1 ? r.resNum1 === pos : r.resNum2 === pos
+        );
+        if (!row) return;
+
+        // get GPCRdb generic number from <text id="XXg">
+        const gpcrdbElem = container.querySelector<SVGTextElement>(`text[id="${pos}t"]`);
+        const gpcrdb   = gpcrdbElem?.textContent?.trim() || '';
+        const aa    = showReceptor === 1 ? row.aa1 : row.aa2;
+        const perc  = ((showReceptor === 1 ? row.perc1 : row.perc2)).toFixed(1) + '%';
+        const label = categoryLabels[row.category as keyof typeof categoryLabels];
+
+        circle.addEventListener('mouseenter', (e: MouseEvent) => {
+          setTooltip({
+            visible: true,
+            x: e.clientX,
+            y: e.clientY,
+            lines: [
+              `${gpcrdb}${pos}`,
+              `Category: ${label}`,
+            ],
+          });
+        });
+        circle.addEventListener('mousemove', (e: MouseEvent) => {
+          setTooltip(t => ({ ...t, x: e.clientX, y: e.clientY }));
+        });
+        circle.addEventListener('mouseleave', () => {
+          setTooltip(t => ({ ...t, visible: false }));
+        });
+      });
+    })
+    
+    .catch(err => {
+      console.error(err);
+      container.innerHTML = '<p class="text-red-500">Failed to load snake plot.</p>';
+    });
+}, [result, showReceptor, colorMap]);
+
+
+
 
 
   const columns = [
@@ -294,43 +390,72 @@ const ResultsTable = memo(function ResultsTable({ initialResult }: ResultsTableP
         </Table>
       </div>
 
-        {/* ─── Color‐pickers ───────────────────────────────────────── */}
-      <div className="flex space-x-6 mb-4">
-        {Object.entries(colorMap).map(([label, col]) => (
-          <div key={label} className="flex flex-col items-center">
-            <span className="text-sm">{label}</span>
-            <input
-              type="color"
-              value={col}
-              onChange={e => setColorMap(m => ({ ...m, [label]: e.target.value }))}
-            />
-          </div>
-        ))}
-      </div>
+      
 
-      {/* ─── Toggle receptor ─────────────────────────────────────── */}
+      {/* ─── Toggle receptor ───────────────────────────── */}
       <div className="flex space-x-4 mb-4">
-        <button
-          className={`px-3 py-1 rounded ${showReceptor === 1 ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}
+        <Button
+          variant={showReceptor === 1 ? 'default' : 'secondary'}
           onClick={() => setShowReceptor(1)}
         >
-          Show {result?.receptor1.geneName}
-        </button>
-        <button
-          className={`px-3 py-1 rounded ${showReceptor === 2 ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}
+          Show Snake Plot for {result?.receptor1.geneName}
+        </Button>
+        <Button
+          variant={showReceptor === 2 ? 'default' : 'secondary'}
           onClick={() => setShowReceptor(2)}
         >
-          Show {result?.receptor2.geneName}
-        </button>
+          Show Snake Plot for {result?.receptor2.geneName}
+        </Button>
       </div>
 
+      <h2 className="text-xl font-semibold mb-2">Snake Plot Visualization</h2>
       {/* ─── Snake‐plot container ─────────────────────────────────── */}
       <div ref={snakeWrapperRef} className="w-full mb-6">
         {/* The fetched SVG/HTML will appear here */}
       </div>
+       {/* ─── Colour legend & customisation ─────────────────────── */}
+      <div className="flex flex-wrap gap-x-10 gap-y-4 mt-4">
+        {Object.entries(colorMap).map(([label, col]) => (
+          <label           // make the whole thing clickable
+            key={label}
+            className="flex items-center gap-2 min-w-[12rem]" // text and box in one line
+          >
+            <input
+              type="color"
+              value={col}
+              onChange={e => setColorMap(m => ({ ...m, [label]: e.target.value }))}
+              className="h-5 w-5 cursor-pointer border rounded-sm"  // square swatch
+            />
+            <span className="text-sm whitespace-nowrap leading-tight">
+              {label}
+            </span>
+          </label>
+        ))}
+      </div>
 
 
+      {/* ─── Tooltip overlay ──────────────────────────────────────── */}
+      {tooltip.visible && (
+        <div
+          style={{
+            position: 'fixed',
+            top: tooltip.y + 8,
+            left: tooltip.x + 8,
+            background: 'rgba(0, 0, 0, 0.8)',
+            color: 'white',
+            padding: '6px 10px',
+            borderRadius: 4,
+            pointerEvents: 'none',
+            whiteSpace: 'pre',
+            fontSize: 12,
+            zIndex: 2000,
+          }}
+        >
+          {tooltip.lines.join('\n')}
+        </div>
+      )}
     </div>
+
   );
 });
 
