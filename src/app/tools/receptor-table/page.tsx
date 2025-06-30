@@ -412,9 +412,6 @@ export default function ReceptorTablePage() {
       ),
       cell: info => {
         const value = info.getValue();
-        if (colType === 'Conservation' && value !== '-') {
-          return <div className="text-right">{value}</div>;
-        }
         return <div className="text-center font-mono">{value}</div>;
       },
       meta: { parentColumn: receptorName } as ColumnMeta,
