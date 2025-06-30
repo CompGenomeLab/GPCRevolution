@@ -30,7 +30,7 @@ import {
   flexRender,
   createColumnHelper,
   SortingState,
-  getPaginationRowModel,
+
 } from '@tanstack/react-table';
 import {
   Table,
@@ -88,8 +88,7 @@ export default function ReceptorTablePage() {
   const [error, setError] = useState<string | null>(null);
   const resultRef = useRef<HTMLDivElement>(null);
   const [sorting, setSorting] = useState<SortingState>([]);
-  const [pageIndex, setPageIndex] = useState(0);
-  const [pageSize, setPageSize] = useState(10);
+
 
   const form = useForm({
     resolver: zodResolver(formSchema),
@@ -385,81 +384,53 @@ export default function ReceptorTablePage() {
   }
 
   const columns = React.useMemo(() => {
-    if (!resultColumns.length) return [];
+  if (resultColumns.length === 0) return [];
 
-    return resultColumns.map(col => {
-      const [receptorName, colType] = col.split('_');
-      const isReference = receptorName === form.getValues('receptorClass');
+  return resultColumns.map(colKey => {
+    // split “GENE_resNum” → [“GENE”, “resNum”]
+    const [receptorName, colType] = colKey.split('_');
 
-      return columnHelper.accessor(col, {
-        id: col,
-        header: () => (
-          <div className="flex flex-col items-center gap-1">
-            {isReference && colType === 'region' && (
-              <div className="text-xs text-muted-foreground">Region</div>
-            )}
-            {isReference && colType === 'gpcrdb' && (
-              <div className="text-xs text-muted-foreground">GPCRdb</div>
-            )}
-            {colType === 'resNum' && (
-              <div className="text-xs text-muted-foreground">{receptorName}</div>
-            )}
-            <div className="text-center font-medium">
-              {colType === 'resNum'
-                ? 'Residue'
-                : colType === 'AA'
-                  ? 'Amino Acid'
-                  : colType === 'Conservation'
-                    ? 'Conservation %'
-                    : colType === 'Conserved_AA'
-                      ? 'Conserved AA'
-                      : colType === 'region'
-                        ? 'Region'
-                        : colType === 'gpcrdb'
-                          ? 'GPCRdb'
-                          : colType}
-            </div>
+    return columnHelper.accessor(colKey, {
+      id: colKey,
+      header: () => (
+        <div className="flex flex-col items-center gap-1">
+          {/* top line: always the receptor name */}
+          <div className="text-xs text-muted-foreground">
+            {receptorName}
           </div>
-        ),
-        cell: info => {
-          const value = info.getValue();
-          if (colType === 'Conservation' && value !== '-') {
-            return <div className="text-right">{value}</div>;
-          }
-          return <div className="text-center font-mono">{value}</div>;
-        },
-        meta: {
-          parentColumn: receptorName,
-        } as ColumnMeta,
-      });
+          {/* bottom line: the human-readable title */}
+          <div className="text-center font-medium">
+            {colType === 'resNum'        ? 'Residue'
+             : colType === 'AA'           ? 'Amino Acid'
+             : colType === 'Conservation' ? 'Conservation %'
+             : colType === 'Conserved_AA' ? 'Conserved AA'
+             : colType === 'region'       ? 'Region'
+             : colType === 'gpcrdb'       ? 'GPCRdb'
+             : colType}
+          </div>
+        </div>
+      ),
+      cell: info => {
+        const value = info.getValue();
+        if (colType === 'Conservation' && value !== '-') {
+          return <div className="text-right">{value}</div>;
+        }
+        return <div className="text-center font-mono">{value}</div>;
+      },
+      meta: { parentColumn: receptorName } as ColumnMeta,
     });
+  });
   }, [resultColumns, form]);
 
-  const table = useReactTable({
-    data: resultData,
-    columns,
-    state: {
-      sorting,
-      pagination: {
-        pageIndex,
-        pageSize,
-      },
-    },
-    onSortingChange: setSorting,
-    onPaginationChange: updater => {
-      if (typeof updater === 'function') {
-        const newState = updater({
-          pageIndex,
-          pageSize,
-        });
-        setPageIndex(newState.pageIndex);
-        setPageSize(newState.pageSize);
-      }
-    },
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-  });
+    const table = useReactTable({
+      data: resultData,
+      columns,
+      state: { sorting },
+      onSortingChange: setSorting,
+      getCoreRowModel:   getCoreRowModel(),
+      getSortedRowModel: getSortedRowModel(),
+    })
+
 
   return (
     <div className="max-w-7xl mx-auto space-y-8 py-4">
