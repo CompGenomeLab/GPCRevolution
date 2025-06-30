@@ -40,7 +40,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { MultiSelect } from '@/components/MultiSelect';
 import React from 'react';
 
@@ -638,8 +637,8 @@ export default function ReceptorTablePage() {
             </Button>
           </div>
 
-          <div className="border rounded-lg overflow-x-auto">
-            <Table>
+          <div className="border rounded-lg max-h-[600px] overflow-y-auto overflow-x-scroll scrollbar-thin">
+            <Table className="min-w-max">
               <TableHeader>
                 <TableRow>
                   {table.getHeaderGroups()[0].headers.map(header => (
@@ -671,26 +670,6 @@ export default function ReceptorTablePage() {
             </Table>
           </div>
 
-          <div className="flex items-center justify-end space-x-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => table.previousPage()}
-              disabled={!table.getCanPreviousPage()}
-            >
-              <ChevronLeft className="h-4 w-4" />
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => table.nextPage()}
-              disabled={!table.getCanNextPage()}
-            >
-              Next
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
         </div>
       )}
     </div>
