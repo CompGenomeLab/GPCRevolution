@@ -112,121 +112,133 @@ const ResultsTable = memo(function ResultsTable({ initialResult }: ResultsTableP
     setResult(initialResult);
   }, [initialResult]);
 
-    // ─── Snake‐plot logic ───────────────────────────────────────
-  // Which receptor’s plot to show (1 or 2)
-  const [showReceptor, setShowReceptor] = useState<1|2>(1);
+// ─── Snake-plot logic ──────────────────────────────────────────
+const adaptBaseText = (raw: string): string => {
+  if (!raw) return '';
+  let txt = raw.trim().replace(/\s+/g, ' ');
+  txt = txt.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  return txt.replace(/\|/g, '<br>');
+};
 
-  // Category → color map (defaults from your old JS)
-  const [colorMap, setColorMap] = useState<Record<string,string>>({
-    'Common Residues': '#E6E6FA',
-    'Specifically Conserved for Both': '#A85638',
-    'Specifically Conserved for Receptor 1': '#FFF9C2',
-    'Specifically Conserved for Receptor 2': '#8F9871',
-  });
+// Which receptor’s plot to show (1 or 2)
+const [showReceptor, setShowReceptor] = useState<1 | 2>(1);
 
-  
-  // Tooltip state for hover popups
-  const [tooltip, setTooltip] = useState<{
-    visible: boolean;
-    x: number;
-    y: number;
-    lines: string[];
-  }>({ visible: false, x: 0, y: 0, lines: [] });
+// Category → colour map
+const [colorMap, setColorMap] = useState<Record<string, string>>({
+  'Common Residues': '#E6E6FA',
+  'Specifically Conserved for Both': '#A85638',
+  'Specifically Conserved for Receptor 1': '#FFF9C2',
+  'Specifically Conserved for Receptor 2': '#8F9871',
+});
 
-  // Where to inject the raw SVG/HTML
-  const snakeWrapperRef = useRef<HTMLDivElement>(null);
+// Tooltip overlay data
+const [tooltip, setTooltip] = useState<{
+  visible: boolean;
+  x: number;
+  y: number;
+  lines: string[];
+}>({ visible: false, x: 0, y: 0, lines: [] });
 
-  // Whenever result, showReceptor or colors change, (re)fetch & recolor
-  useEffect(() => {
+// Where the fetched SVG goes
+const snakeWrapperRef = useRef<HTMLDivElement>(null);
+
+// Re-fetch / recolour plot whenever inputs change
+useEffect(() => {
   if (!result) return;
-  const receptor = showReceptor === 1 ? result.receptor1 : result.receptor2;
+
+  const receptor  = showReceptor === 1 ? result.receptor1 : result.receptor2;
   if (!receptor.snakePlot) return;
 
   const container = snakeWrapperRef.current!;
-  container.innerHTML = '';
+  container.innerHTML = '';            // ← wipe any previous plot immediately
 
-  // Re-route URL
-  let url = receptor.snakePlot;
-  if (url.startsWith('/tools/snakeplots/')) {
-    url = url.replace('/tools/snakeplots/', '/snakeplots/');
-  }
-  if (!url.startsWith('/')) {
-    url = '/' + url;
-  }
+  // normalise URL (works inside /public)
+  let url = receptor.snakePlot.replace('/tools/snakeplots/', '/snakeplots/');
+  if (!url.startsWith('/')) url = '/' + url;
 
-  // Fetch, inject, recolor, and wire tooltips
-  fetch(url)
-    .then(res => {
-      if (!res.ok) throw new Error(`Failed to load SVG (${res.status})`);
-      return res.text();
+  // AbortController lets us cancel this fetch if the effect re-runs
+  const ctrl = new AbortController();
+
+  fetch(url, { signal: ctrl.signal })
+    .then(r => {
+      if (!r.ok) throw new Error(`Failed to load SVG (${r.status})`);
+      return r.text();
     })
-    .then(svgText => {
-      container.innerHTML = svgText;
-      // 1️⃣ strip the <title> that sat in <head>
+    .then(svg => {
+      container.innerHTML = svg;
+
+      /* ───── strip stray elements ───── */
       container.querySelector(':scope > title')?.remove();
-
-      // 2️⃣ strip the <meta charset="UTF-8"> that came from <head>
       container.querySelector(':scope > meta[charset]')?.remove();
-
-      // 3️⃣ strip the <h2> caption that sat in <body>
       container.querySelector(':scope > h2')?.remove();
-      container.querySelectorAll('text').forEach(t =>
-      t.setAttribute('pointer-events', 'none')
-    );
+      container.querySelectorAll('text')
+               .forEach(t => t.setAttribute('pointer-events', 'none'));
 
-      // Recolor
+      /* ───── colour circles by category ───── */
       result.categorizedResidues.forEach(row => {
         const pos = showReceptor === 1 ? row.resNum1 : row.resNum2;
         if (pos === 'gap') return;
         const label = categoryLabels[row.category as keyof typeof categoryLabels];
-        const color = colorMap[label];
+        const fill  = colorMap[label];
         const circle = container.querySelector<SVGCircleElement>(`circle[id="${pos}"]`);
         if (circle) {
-          circle.setAttribute('fill', color);
+          circle.setAttribute('fill', fill);
           circle.setAttribute('data-snake-category', label);
         }
       });
-      
-      // Hover tooltips
-      Array.from(container.querySelectorAll<SVGCircleElement>('circle[id]')).forEach(circle => {
-        const pos = circle.id;
-        const row = result.categorizedResidues.find(r =>
-          showReceptor === 1 ? r.resNum1 === pos : r.resNum2 === pos
-        );
-        if (!row) return;
 
-        // get GPCRdb generic number from <text id="XXg">
-        const gpcrdbElem = container.querySelector<SVGTextElement>(`text[id="${pos}t"]`);
-        const gpcrdb   = gpcrdbElem?.textContent?.trim() || '';
-        const aa    = showReceptor === 1 ? row.aa1 : row.aa2;
-        const perc  = ((showReceptor === 1 ? row.perc1 : row.perc2)).toFixed(1) + '%';
-        const label = categoryLabels[row.category as keyof typeof categoryLabels];
+      /* ───── wire tool-tips ───── */
+      const circles = Array.from(container.querySelectorAll<SVGCircleElement>('circle[id]'));
 
-        circle.addEventListener('mouseenter', (e: MouseEvent) => {
-          setTooltip({
-            visible: true,
-            x: e.clientX,
-            y: e.clientY,
-            lines: [
-              `${gpcrdb}${pos}`,
-              `Category: ${label}`,
-            ],
-          });
+      const onOver = (e: MouseEvent) => {
+        const c        = e.currentTarget as SVGCircleElement;
+        const rawText  = c.getAttribute('data-original-title') ?? c.getAttribute('title') ?? '';
+        const baseText = adaptBaseText(rawText);
+        const label    = c.getAttribute('data-snake-category') ?? '';
+        setTooltip({
+          visible: true,
+          x: e.clientX,
+          y: e.clientY,
+          lines: label ? [baseText, `Category: ${label}`] : [baseText],
         });
-        circle.addEventListener('mousemove', (e: MouseEvent) => {
-          setTooltip(t => ({ ...t, x: e.clientX, y: e.clientY }));
-        });
-        circle.addEventListener('mouseleave', () => {
-          setTooltip(t => ({ ...t, visible: false }));
-        });
+      };
+      const onMove  = (e: MouseEvent) =>
+        setTooltip(t => ({ ...t, x: e.clientX, y: e.clientY }));
+      const onLeave = () => setTooltip(t => ({ ...t, visible: false }));
+
+      circles.forEach(c => {
+        c.addEventListener('mouseover', onOver);
+        c.addEventListener('mousemove', onMove);
+        c.addEventListener('mouseleave', onLeave);
       });
+
+      /* ───── clean-up when effect re-runs or component unmounts ───── */
+      return () => {
+        ctrl.abort();                  // cancel fetch if still running
+        container.innerHTML = '';      // make sure plot is gone
+        circles.forEach(c => {
+          c.removeEventListener('mouseover', onOver);
+          c.removeEventListener('mousemove', onMove);
+          c.removeEventListener('mouseleave', onLeave);
+        });
+      };
     })
-    
     .catch(err => {
+      if (err.name === 'AbortError') return;   // fetch was cancelled – no worries
       console.error(err);
-      container.innerHTML = '<p class="text-red-500">Failed to load snake plot.</p>';
+      container.innerHTML =
+        '<p class="text-red-500">Failed to load snake plot.</p>';
     });
+
+  // clean-up for the *first* run (if fetch resolves successfully,
+  // the inner clean-up returned above will take over)
+  return () => {
+    ctrl.abort();
+    container.innerHTML = '';
+  };
 }, [result, showReceptor, colorMap]);
+
+
 
 
 
@@ -320,7 +332,63 @@ const ResultsTable = memo(function ResultsTable({ initialResult }: ResultsTableP
   return (
     <div className="bg-card text-card-foreground rounded-lg p-6 shadow-md">
       <h2 className="text-xl font-semibold mb-4">Results</h2>
+      {/* ─── Export buttons (place just above the <Table> element) ───────────────── */}
+        <div className="flex justify-end gap-2 mb-4">
+          {(['tsv', 'csv'] as const).map(ext => (
+            <Button
+              key={ext}
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (!result) return;
+
+                const delimiter = ext === 'csv' ? ',' : '\t';
+
+                // Header row
+                const headers = [
+                  'Residue1',
+                  'AA1',
+                  'Perc1',
+                  'Residue2',
+                  'AA2',
+                  'Perc2',
+                  'Category',
+                ];
+
+                // Body rows
+                const rows = result.categorizedResidues.map(r => [
+                  r.resNum1,
+                  r.aa1,
+                  r.perc1.toFixed(2),
+                  r.resNum2,
+                  r.aa2,
+                  r.perc2.toFixed(2),
+                  categoryLabels[r.category as keyof typeof categoryLabels],
+                ]);
+
+                // Join rows → file text
+                const fileText = [headers, ...rows]
+                  .map(cols => cols.join(delimiter))
+                  .join('\n');
+
+                // Trigger download
+                const blob = new Blob([fileText], { type: 'text/plain;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `residue_comparison.${ext}`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+              }}
+            >
+              {`Download ${ext.toUpperCase()}`}
+            </Button>
+          ))}
+        </div>
       <div className="overflow-x-auto overflow-y-auto max-h-[400px]">
+        
         <Table>
           <TableHeader>
             <TableRow>
@@ -392,23 +460,31 @@ const ResultsTable = memo(function ResultsTable({ initialResult }: ResultsTableP
 
       
 
-      <h2 className="text-xl font-semibold mb-2 pt-4">Snake Plot Visualization</h2>
-      
-            {/* ─── Toggle receptor ───────────────────────────── */}
-      <div className="flex space-x-4 mb-4">
-        <Button
-          variant={showReceptor === 1 ? 'default' : 'secondary'}
-          onClick={() => setShowReceptor(1)}
-        >
-          Show Snake Plot for {result?.receptor1.geneName}
-        </Button>
-        <Button
-          variant={showReceptor === 2 ? 'default' : 'secondary'}
-          onClick={() => setShowReceptor(2)}
-        >
-          Show Snake Plot for {result?.receptor2.geneName}
-        </Button>
+      {/* ─── Snake-plot title + toggles ────────────────────────────── */}
+      <div className="flex flex-wrap items-center justify-between pt-4 mb-4 gap-2">
+        <h2 className="text-xl font-semibold">Snake Plot Visualization</h2>
+
+        <div className="flex gap-2">
+          {/* Receptor 1 toggle */}
+          <Button
+            /* 👇  ACTIVE = secondary  |  INACTIVE = default  */
+            variant={showReceptor === 1 ? 'secondary' : 'default'}
+            onClick={() => setShowReceptor(1)}
+          >
+            Show Snake Plot for {result?.receptor1.geneName}
+          </Button>
+
+          {/* Receptor 2 toggle */}
+          <Button
+            variant={showReceptor === 2 ? 'secondary' : 'default'}
+            onClick={() => setShowReceptor(2)}
+          >
+            Show Snake Plot for {result?.receptor2.geneName}
+          </Button>
+        </div>
       </div>
+
+
 
       {/* ─── Snake‐plot container ─────────────────────────────────── */}
       <div ref={snakeWrapperRef} className="w-full mb-6">
