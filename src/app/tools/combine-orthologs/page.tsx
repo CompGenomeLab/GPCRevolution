@@ -143,6 +143,10 @@ export default function CombineOrthologsPage() {
     try {
       setIsLoading(true);
       setError(null);
+
+      if (downloadUrl) {
+        URL.revokeObjectURL(downloadUrl);
+      }
       setDownloadUrl(null);
       setDownloadFilename(null);
       setVisualizationSequences([]);
@@ -230,17 +234,27 @@ export default function CombineOrthologsPage() {
       const fastaString = generateFastaString(combinedSequences);
       const filename = `${values.receptorNames.join('-')}_orthologs_combined.fasta`;
 
-      const blob = new Blob([fastaString], { type: 'text/fasta' });
-      const url = URL.createObjectURL(blob);
+      try {
+        const blob = new Blob([fastaString], {
+          type: 'text/plain;charset=utf-8',
+        });
+        const url = URL.createObjectURL(blob);
 
-      setDownloadUrl(url);
-      setDownloadFilename(filename);
+        setDownloadUrl(url);
+        setDownloadFilename(filename);
 
-      toast.success(
-        `Successfully combined ${combinedSequences.length} sequences from ${values.receptorNames.length} receptors`
-      );
+        toast.success(
+          `Successfully combined ${combinedSequences.length} sequences from ${values.receptorNames.length} receptors`
+        );
 
-      setTimeout(() => URL.revokeObjectURL(url), 10000);
+        setTimeout(() => {
+          URL.revokeObjectURL(url);
+          setDownloadUrl(null);
+          setDownloadFilename(null);
+        }, 60000);
+      } catch (err) {
+        throw new Error(err instanceof Error ? err.message : 'Failed to create download file');
+      }
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : 'An error occurred while processing the sequences.';
@@ -260,12 +274,20 @@ export default function CombineOrthologsPage() {
             variant="outline"
             className="gap-2"
             onClick={() => {
-              const link = document.createElement('a');
-              link.href = downloadUrl;
-              link.download = downloadFilename;
-              document.body.appendChild(link);
-              link.click();
-              document.body.removeChild(link);
+              try {
+                const link = document.createElement('a');
+                link.href = downloadUrl;
+                link.download = downloadFilename;
+                link.style.display = 'none';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                toast.success('Download started successfully');
+              } catch (err) {
+                toast.error('Failed to download file', {
+                  description: err instanceof Error ? err.message : 'An unknown error occurred',
+                });
+              }
             }}
           >
             <Download className="h-4 w-4" />
