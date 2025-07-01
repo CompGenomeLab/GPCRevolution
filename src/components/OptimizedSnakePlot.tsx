@@ -101,8 +101,9 @@ export default function OptimizedSnakePlot({ svgPath, conservationFile }: Optimi
           }
         }
       } catch (err) {
-        toast.error('Error parsing SVG');
-        setError(true);
+        toast.error('Error parsing SVG', {
+          description: err instanceof Error ? err.message : 'An unknown error occurred',
+        });
       }
     } catch (err) {
       if (err instanceof Error && err.name !== 'AbortError') {
