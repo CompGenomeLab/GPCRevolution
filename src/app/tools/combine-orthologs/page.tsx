@@ -17,7 +17,7 @@ import receptors from '../../../../public/receptors.json';
 import { useFastaSequences } from '@/hooks/useFastaSequences';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Download } from 'lucide-react';
-import MSAVisualization from '@/components/MSAVisualization';
+import MSAVisualization from '@/components/MSAVisualization_CO';
 import { MultiSelect } from '@/components/MultiSelect';
 
 const formSchema = z.object({

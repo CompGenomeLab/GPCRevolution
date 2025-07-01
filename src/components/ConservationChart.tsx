@@ -34,16 +34,16 @@ interface ConservationChartProps {
 const ConservationChart: React.FC<ConservationChartProps> = ({ data }) => {
   const getRegionColor = (region: string, index: number) => {
     const colors = [
-      'rgba(100, 149, 237, 0.4)',
-      'rgba(255, 99, 132, 0.4)',
-      'rgba(54, 162, 235, 0.4)',
-      'rgba(255, 205, 86, 0.4)',
-      'rgba(75, 192, 192, 0.4)',
-      'rgba(153, 102, 255, 0.4)',
-      'rgba(255, 159, 64, 0.4)',
-      'rgba(199, 199, 199, 0.4)',
-      'rgba(83, 102, 255, 0.4)',
-      'rgba(255, 99, 71, 0.4)',
+      "#FFFACD",
+      "#E6E6FA",
+      "#FFFACD",
+      "#E6E6FA",
+      "#FFFACD",
+      "#E6E6FA",
+      "#FFFACD",
+      "#E6E6FA",
+      "#FFFACD",
+      "#E6E6FA",
     ];
     return colors[index % colors.length];
   };
@@ -92,9 +92,9 @@ const ConservationChart: React.FC<ConservationChartProps> = ({ data }) => {
     labels: data.map(d => [d.residue.toString(), d.humanAA]),
     datasets: [
       {
-        label: 'Conservation %',
+        label: 'Orthologous Conservation %',
         data: data.map(d => d.conservation),
-        backgroundColor: '#434E71',
+        backgroundColor: '#424874',
         borderColor: '#FFFFFF',
         borderWidth: 1,
         barThickness: 'flex',
@@ -119,13 +119,17 @@ const ConservationChart: React.FC<ConservationChartProps> = ({ data }) => {
         mode: 'index' as const,
         intersect: false,
         callbacks: {
+          title: () => [],
           label: function (context: TooltipItem<'bar'>) {
             const index = context.dataIndex;
             const d = data[index];
             return [
-              `Res: ${d.residue} (${d.conservation}%)`,
-              `AA: ${d.humanAA} | Cons: ${d.conservedAA}`,
-              `Region: ${d.region} | GPCRdb: ${d.gpcrdb}`,
+              `Residue #: ${d.residue}`,
+              `Conservation %: ${d.conservation}%`,
+              `Human AA: ${d.humanAA}`,
+              `Conserved AA: ${d.conservedAA}`,
+              `Region: ${d.region}`, 
+              `GPCRdb #: ${d.gpcrdb}`,
             ];
           },
         },
@@ -172,8 +176,15 @@ const ConservationChart: React.FC<ConservationChartProps> = ({ data }) => {
         min: -30,
         title: {
           display: true,
-          text: 'Conservation %',
+          text: [
+              'Orthologous',
+              'Conservation %'
+            ],
+          font: {
+            size: 15,
+          },
         },
+        
         ticks: {
           stepSize: 20,
           callback: function (this: Scale, tickValue: number | string) {
@@ -186,18 +197,13 @@ const ConservationChart: React.FC<ConservationChartProps> = ({ data }) => {
         },
       },
       x: {
-        title: {
-          display: true,
-          text: 'GPCRdb #',
-          align: 'start' as const,
-        },
         ticks: {
           maxRotation: 0,
           minRotation: 0,
           autoSkip: false,
           maxTicksLimit: undefined,
           font: {
-            size: 10,
+            size: 12,
           },
           callback: function (value: number | string, index: number): string[] {
             const labels = data[index];
@@ -213,7 +219,7 @@ const ConservationChart: React.FC<ConservationChartProps> = ({ data }) => {
 
   return (
     <div className="bg-card text-card-foreground rounded-lg p-6 shadow-md">
-      <h2 className="text-xl font-semibold text-foreground mb-4">Conservation Plot</h2>
+      <h2 className="text-xl font-semibold text-foreground mb-4">Residue Conservation Bar Plot</h2>
       <div className="relative w-full h-[250px]">
         <div className="absolute inset-0 p-4">
           <div className="w-full h-full overflow-x-auto">

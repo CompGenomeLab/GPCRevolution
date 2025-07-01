@@ -269,41 +269,45 @@ interface Receptor {
 
 export async function POST(request: Request) {
   try {
-    const { gene1, gene2, threshold } = await request.json();
+    // read the same keys your client is sending
+    const { receptor1, receptor2, threshold } = await request.json();
 
-    if (!gene1 || !gene2) {
+    if (!receptor1 || !receptor2) {
       return NextResponse.json(
-        { error: 'Both gene1 and gene2 parameters are required' },
+        { error: 'Both receptor1 and receptor2 parameters are required' },
         { status: 400 }
       );
     }
 
+    // load the receptor list from public/receptors.json
     const receptors = JSON.parse(
-      await fs.readFile(path.join(process.cwd(), 'src/data/receptors.json'), 'utf-8')
+      await fs.readFile(path.join(process.cwd(), 'public', 'receptors.json'), 'utf-8')
     ) as Receptor[];
 
-    const receptor1 = receptors.find(r => r.geneName.toLowerCase() === gene1.toLowerCase());
-    const receptor2 = receptors.find(r => r.geneName.toLowerCase() === gene2.toLowerCase());
+    // find matching entries
+    const rec1 = receptors.find(r => r.geneName.toLowerCase() === receptor1.toLowerCase());
+    const rec2 = receptors.find(r => r.geneName.toLowerCase() === receptor2.toLowerCase());
 
-    if (!receptor1 || !receptor2) {
+    if (!rec1 || !rec2) {
       return NextResponse.json(
         { error: 'One or both receptors not found in the database' },
         { status: 404 }
       );
     }
 
-    if (receptor1.class !== receptor2.class) {
+    // require same class
+    if (rec1.class !== rec2.class) {
       return NextResponse.json(
         { error: 'Receptors must belong to the same class' },
         { status: 400 }
       );
     }
 
-    const fastaFilePath = `/alignments/class${receptor1.class}_humans_MSA.fasta`;
+    // load aligned sequences
+    const fastaFilePath = `/alignments/class${rec1.class}_humans_MSA.fasta`;
     const sequences = await readFastaFile(fastaFilePath);
-
-    const seq1 = sequences[receptor1.geneName];
-    const seq2 = sequences[receptor2.geneName];
+    const seq1 = sequences[rec1.geneName];
+    const seq2 = sequences[rec2.geneName];
 
     if (!seq1 || !seq2) {
       return NextResponse.json(
@@ -312,16 +316,17 @@ export async function POST(request: Request) {
       );
     }
 
-    const gene1Data = await readConservationData(receptor1.conservationFile);
-    const gene2Data = await readConservationData(receptor2.conservationFile);
+    // load conservation data
+    const gene1Data = await readConservationData(rec1.conservationFile);
+    const gene2Data = await readConservationData(rec2.conservationFile);
 
+    // map and categorize
     const { resNums1, resNums2, percList1, percList2, aaList1, aaList2 } = mapAllData(
       gene1Data,
       gene2Data,
       seq1,
       seq2
     );
-
     const categorizedResidues = categorizeResidues(
       resNums1,
       resNums2,
@@ -329,12 +334,12 @@ export async function POST(request: Request) {
       percList2,
       aaList1,
       aaList2,
-      threshold || 0.8
+      threshold ?? 0.8
     );
 
     return NextResponse.json({
-      receptor1,
-      receptor2,
+      receptor1: rec1,
+      receptor2: rec2,
       categorizedResidues,
     });
   } catch (error) {
@@ -342,3 +347,4 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
+
