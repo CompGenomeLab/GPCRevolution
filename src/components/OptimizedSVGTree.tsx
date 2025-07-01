@@ -117,11 +117,6 @@ export default function OptimizedSVGTree({ svgPath }: OptimizedSVGTreeProps) {
             {isMinimized ? 'Load Tree' : 'Minimize'}
           </button>
         </div>
-        {!isMinimized && (
-          <p className="text-sm text-muted-foreground mt-2">
-            Large phylogenetic tree - may take a moment to load
-          </p>
-        )}
       </div>
 
       {!isMinimized && (
@@ -157,9 +152,6 @@ export default function OptimizedSVGTree({ svgPath }: OptimizedSVGTreeProps) {
             </div>
           ) : (
             <div className="space-y-4">
-              <div className="text-sm text-muted-foreground">
-                Tree loaded successfully. Use scroll to navigate the large tree.
-              </div>
               <div
                 ref={svgContainerRef}
                 className="w-full overflow-auto h-96 border border-border rounded-lg bg-background"

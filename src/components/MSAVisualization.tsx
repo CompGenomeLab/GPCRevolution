@@ -90,7 +90,7 @@ export default function MSAVisualization({ sequences, className }: MSAVisualizat
                   className={
                     header.column.id === 'header'
                       ? 'sticky left-0 top-0 z-30 bg-muted border-r w-[200px]'
-                      : 'sticky top-0 z-20 bg-muted w-[20px]'
+                      : 'sticky top-0 z-20 bg-muted w-[20px] -rotate-90'
                   }
                 >
                   {header.isPlaceholder

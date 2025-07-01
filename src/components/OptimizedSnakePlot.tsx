@@ -246,11 +246,6 @@ export default function OptimizedSnakePlot({ svgPath, conservationFile }: Optimi
             )}
           </div>
         </div>
-        {!isMinimized && (
-          <p className="text-sm text-muted-foreground mt-2">
-            Interactive conservation visualization - may take a moment to load
-          </p>
-        )}
       </div>
 
       {!isMinimized && (
@@ -314,7 +309,7 @@ export default function OptimizedSnakePlot({ svgPath, conservationFile }: Optimi
                   />
                 </div>
               </div>
-              <div className="w-full overflow-auto max-h-96 border border-border rounded-lg bg-background">
+              <div className="w-full overflow-auto  border border-border rounded-lg bg-background flex justify-center items-center">
                 {svgContent}
               </div>
             </div>
