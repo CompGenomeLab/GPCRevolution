@@ -109,8 +109,6 @@ function ReceptorContent() {
     );
   }
 
-  const isLargeDataset = receptor.numOrthologs > 100;
-
   return (
     <>
       <RootContainer>
@@ -136,14 +134,7 @@ function ReceptorContent() {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Number of Orthologs</p>
-                <p className="font-medium text-foreground">
-                  {receptor.numOrthologs}
-                  {isLargeDataset && (
-                    <span className="ml-2 text-xs text-amber-600 bg-amber-100 px-2 py-1 rounded">
-                      Large Dataset
-                    </span>
-                  )}
-                </p>
+                <p className="font-medium text-foreground">{receptor.numOrthologs}</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Last Common Ancestor</p>
