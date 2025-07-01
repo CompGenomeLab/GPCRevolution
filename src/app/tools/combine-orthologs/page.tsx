@@ -12,13 +12,14 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
 import { useState } from 'react';
 import receptors from '../../../../public/receptors.json';
 import { useFastaSequences } from '@/hooks/useFastaSequences';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Download } from 'lucide-react';
 import MSAVisualization from '@/components/MSAVisualization_CO';
-import { MultiSelect } from '@/components/MultiSelect';
+import { toast } from 'sonner';
 
 const formSchema = z.object({
   receptorNames: z.array(z.string()).min(1, 'At least one receptor is required'),
@@ -53,13 +54,21 @@ interface FastaSequences {
   };
 }
 
+interface ReceptorOption {
+  geneName: string;
+  class: string;
+  numOrthologs: number;
+}
+
 export default function CombineOrthologsPage() {
-  const [selectedReceptors, setSelectedReceptors] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [downloadFilename, setDownloadFilename] = useState<string | null>(null);
   const [visualizationSequences, setVisualizationSequences] = useState<VisualizationSequence[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [inputValue, setInputValue] = useState('');
+  const [suggestions, setSuggestions] = useState<ReceptorOption[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   const {
     trimGapsInAllSequences,
@@ -75,6 +84,60 @@ export default function CombineOrthologsPage() {
       receptorNames: [],
     },
   }) as UseFormReturn<FormValues>;
+
+  const filterSuggestions = (query: string) => {
+    if (!query.trim()) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    const currentValues = query
+      .split(',')
+      .map(v => v.trim())
+      .filter(v => v);
+    const lastValue = currentValues[currentValues.length - 1] || '';
+
+    const filtered = receptors
+      .filter((receptor: Receptor) =>
+        receptor.geneName.toLowerCase().includes(lastValue.toLowerCase())
+      )
+      .slice(0, 10) as ReceptorOption[];
+
+    setSuggestions(filtered);
+    setShowSuggestions(filtered.length > 0);
+  };
+
+  const handleInputChange = (value: string) => {
+    setInputValue(value);
+    filterSuggestions(value);
+
+    const receptorNames = value
+      .split(',')
+      .map(name => name.trim())
+      .filter(name => name && receptors.some((r: Receptor) => r.geneName === name));
+
+    form.setValue('receptorNames', receptorNames);
+  };
+
+  const handleSuggestionClick = (receptor: ReceptorOption) => {
+    const currentValues = inputValue
+      .split(',')
+      .map(v => v.trim())
+      .filter(v => v);
+    currentValues[currentValues.length - 1] = receptor.geneName;
+    const newValue = currentValues.join(', ') + ', ';
+
+    setInputValue(newValue);
+    setShowSuggestions(false);
+
+    const receptorNames = newValue
+      .split(',')
+      .map(name => name.trim())
+      .filter(name => name && receptors.some((r: Receptor) => r.geneName === name));
+
+    form.setValue('receptorNames', receptorNames);
+  };
 
   async function onSubmit(values: FormValues) {
     try {
@@ -103,7 +166,6 @@ export default function CombineOrthologsPage() {
       }
 
       const fastaFilePath = `/alignments/class${receptorClass}_humans_MSA.fasta`;
-      console.log('Fetching class MSA from:', fastaFilePath);
       const response = await fetch(fastaFilePath);
       if (!response.ok) throw new Error(`Failed to fetch ${fastaFilePath}`);
       const fastaData = await response.text();
@@ -131,7 +193,6 @@ export default function CombineOrthologsPage() {
         const orthologPath = receptorData.alignment.startsWith('/')
           ? receptorData.alignment
           : `/${receptorData.alignment}`;
-        console.log('Fetching orthologs from:', orthologPath);
         const orthologResponse = await fetch(orthologPath);
         if (!orthologResponse.ok) {
           console.warn(
@@ -160,12 +221,10 @@ export default function CombineOrthologsPage() {
         combinedSequences.push(...adjustedOrthologs);
       }
 
-      console.log('Combined Sequences:', combinedSequences);
       const visualizationData = combinedSequences.map(seq => ({
         header: seq.header,
         sequence: seq.sequence,
       }));
-      console.log('Visualization Data:', visualizationData);
       setVisualizationSequences(visualizationData);
 
       const fastaString = generateFastaString(combinedSequences);
@@ -177,12 +236,16 @@ export default function CombineOrthologsPage() {
       setDownloadUrl(url);
       setDownloadFilename(filename);
 
+      toast.success(
+        `Successfully combined ${combinedSequences.length} sequences from ${values.receptorNames.length} receptors`
+      );
+
       setTimeout(() => URL.revokeObjectURL(url), 10000);
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'An error occurred while processing the sequences.'
-      );
-      console.error(err);
+      const errorMessage =
+        err instanceof Error ? err.message : 'An error occurred while processing the sequences.';
+      setError(errorMessage);
+      toast.error('Failed to combine alignments');
     } finally {
       setIsLoading(false);
     }
@@ -222,27 +285,41 @@ export default function CombineOrthologsPage() {
             <FormField
               control={form.control}
               name="receptorNames"
-              render={({ field }) => (
+              render={() => (
                 <FormItem>
                   <FormLabel>Select Receptors</FormLabel>
                   <FormControl>
-                    <MultiSelect
-                      placeholder="Search for receptors..."
-                      options={receptors.map((receptor: Receptor) => ({
-                        label: `${receptor.geneName} (Class: ${receptor.class}, Orthologs: ${receptor.numOrthologs})`,
-                        value: receptor.geneName,
-                      }))}
-                      onValueChange={values => {
-                        field.onChange(values);
-                        setSelectedReceptors(values);
-                      }}
-                      defaultValue={selectedReceptors}
-                      variant="secondary"
-                      animation={0.3}
-                      maxCount={5}
-                      className="w-full"
-                    />
+                    <div className="relative">
+                      <Input
+                        placeholder="Type receptor names (comma-separated)..."
+                        value={inputValue}
+                        onChange={e => handleInputChange(e.target.value)}
+                        onFocus={() => {
+                          setSuggestions([]);
+                          setShowSuggestions(false);
+                        }}
+                        onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                        className="w-full"
+                      />
+                      {showSuggestions && suggestions.length > 0 && (
+                        <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                          {suggestions.map(receptor => (
+                            <div
+                              key={receptor.geneName}
+                              className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                              onMouseDown={() => handleSuggestionClick(receptor)}
+                            >
+                              <div className="font-medium">{receptor.geneName}</div>
+                              <div className="text-gray-500 text-xs">
+                                Class: {receptor.class} | Orthologs: {receptor.numOrthologs}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </FormControl>
+
                   <FormMessage />
                 </FormItem>
               )}

@@ -106,7 +106,6 @@ export default function SnakePlot({
 
             const reactElement = htmlToReactParser.parse(container.outerHTML);
 
-            console.log('SVG content:', reactElement);
             setSvgContent(reactElement);
             svgLoadedRef.current = true;
           } else {
@@ -139,11 +138,8 @@ export default function SnakePlot({
 
     const applyConservation = async () => {
       try {
-        console.log('Original conservation file path:', conservationFile);
         const conservationPath = `/conservation_files/${conservationFile.split('/').pop()}`;
-        console.log('Processed conservation path:', conservationPath);
         await updateSnakeplotConservation(conservationPath);
-        console.log('Conservation data applied to snakeplot');
       } catch (err) {
         console.error('Conservation verisi uygulanırken hata:', err);
       }
@@ -180,7 +176,9 @@ export default function SnakePlot({
   return (
     <div className="bg-card text-card-foreground rounded-lg p-6 shadow-md select-none">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-foreground mb-4">Residue Conservation Snake Plot</h2>
+        <h2 className="text-xl font-semibold text-foreground mb-4">
+          Residue Conservation Snake Plot
+        </h2>
 
         {svgContent && !isLoading && !error && (
           <div className="flex justify-end gap-4 items-center">

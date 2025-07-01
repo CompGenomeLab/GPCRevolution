@@ -1,18 +1,18 @@
 'use client';
 
 import { useSearchParams } from 'next/navigation';
-import { useEffect, useState, Suspense } from 'react';
+import { useEffect, useState, Suspense, lazy } from 'react';
 import receptors from '../../../public/receptors.json';
 import Link from 'next/link';
 import { ChevronLeft } from 'lucide-react';
 import RootContainer from '@/components/RootContainer';
-import type { ConservationDatum } from '@/components/ConservationChart';
-import ConservationChart from '@/components/ConservationChart';
-import SnakePlot from '@/components/SnakePlot';
-import { MSAViewer } from '@/components/MSAViewer';
-import SVGTree from '@/components/SVGTree';
+import { LazySection } from '@/components/LazySection';
 import DownloadableFiles from '@/components/DownloadableFiles';
+import { MSAViewer } from '@/components/MSAViewer';
 
+const ConservationChartAsync = lazy(() => import('@/components/ConservationChartAsync'));
+const OptimizedSnakePlot = lazy(() => import('@/components/OptimizedSnakePlot'));
+const OptimizedSVGTree = lazy(() => import('@/components/OptimizedSVGTree'));
 
 interface Receptor {
   geneName: string;
@@ -26,6 +26,31 @@ interface Receptor {
   snakePlot: string;
   svgTree: string;
 }
+
+const ConservationSkeleton = () => (
+  <div className="bg-card text-card-foreground rounded-lg p-6 shadow-md">
+    <div className="animate-pulse space-y-4">
+      <div className="h-6 w-48 bg-muted rounded"></div>
+      <div className="h-64 w-full bg-muted rounded"></div>
+    </div>
+  </div>
+);
+
+const LargeContentSkeleton = ({ title }: { title: string }) => (
+  <div className="bg-card text-card-foreground rounded-lg shadow-md overflow-hidden">
+    <div className="p-6 border-b border-border">
+      <div className="animate-pulse">
+        <div className="h-6 w-64 bg-muted rounded" title={`Loading ${title}...`}></div>
+      </div>
+    </div>
+    <div className="p-6">
+      <div className="animate-pulse space-y-4">
+        <div className="h-4 w-32 bg-muted rounded"></div>
+        <div className="h-96 w-full bg-muted rounded"></div>
+      </div>
+    </div>
+  </div>
+);
 
 export default function ReceptorPage() {
   return (
@@ -51,7 +76,6 @@ function ReceptorContent() {
   const searchParams = useSearchParams();
   const gene = searchParams.get('gene');
   const [receptor, setReceptor] = useState<Receptor | null>(null);
-  const [conservationData, setConservationData] = useState<ConservationDatum[] | null>(null);
 
   useEffect(() => {
     if (gene) {
@@ -59,35 +83,6 @@ function ReceptorContent() {
       setReceptor(found || null);
     }
   }, [gene]);
-
-  useEffect(() => {
-    setConservationData(null);
-    if (receptor?.conservationFile) {
-      fetch(`/${receptor.conservationFile}`)
-        .then(res => res.text())
-        .then(text => {
-          const lines = text.split(/\r?\n/).filter(d => d.trim() && !d.startsWith('residue'));
-          const data = lines.map(line => {
-            const [resStr, consStr, conservedAA, humanAA, region, gpcrdb] = line
-              .trim()
-              .split(/\s+/);
-            return {
-              residue: +resStr,
-              conservation: +consStr,
-              conservedAA,
-              humanAA,
-              region,
-              gpcrdb,
-            };
-          });
-
-          setConservationData(data);
-        })
-        .catch(err => {
-          console.error('Error loading conservation data:', err);
-        });
-    }
-  }, [receptor?.conservationFile]);
 
   if (!gene) {
     return (
@@ -114,6 +109,8 @@ function ReceptorContent() {
     );
   }
 
+  const isLargeDataset = receptor.numOrthologs > 100;
+
   return (
     <>
       <RootContainer>
@@ -139,7 +136,14 @@ function ReceptorContent() {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Number of Orthologs</p>
-                <p className="font-medium text-foreground">{receptor.numOrthologs}</p>
+                <p className="font-medium text-foreground">
+                  {receptor.numOrthologs}
+                  {isLargeDataset && (
+                    <span className="ml-2 text-xs text-amber-600 bg-amber-100 px-2 py-1 rounded">
+                      Large Dataset
+                    </span>
+                  )}
+                </p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Last Common Ancestor</p>
@@ -153,16 +157,33 @@ function ReceptorContent() {
           </div>
         </div>
 
-        {conservationData && <ConservationChart data={conservationData} />}
+        <LazySection fallback={<ConservationSkeleton />} errorTitle="Conservation Chart Error">
+          <ConservationChartAsync conservationFile={receptor.conservationFile} />
+        </LazySection>
 
-        <SnakePlot
-          svgPath={receptor?.snakePlot || null}
-          conservationFile={receptor?.conservationFile || null}
-        />
+        <LazySection
+          fallback={<LargeContentSkeleton title="Snake Plot" />}
+          errorTitle="Snake Plot Error"
+        >
+          <OptimizedSnakePlot
+            svgPath={receptor.snakePlot}
+            conservationFile={receptor.conservationFile}
+          />
+        </LazySection>
 
-        <SVGTree svgPath={receptor?.svgTree || null} />
+        <LazySection
+          fallback={<LargeContentSkeleton title="Phylogenetic Tree" />}
+          errorTitle="Phylogenetic Tree Error"
+        >
+          <OptimizedSVGTree svgPath={receptor.svgTree} />
+        </LazySection>
 
-        <MSAViewer alignmentPath={receptor?.alignment || null} />
+        <LazySection
+          fallback={<LargeContentSkeleton title="Multiple Sequence Alignment" />}
+          errorTitle="Multiple Sequence Alignment Error"
+        >
+          <MSAViewer alignmentPath={receptor.alignment} />
+        </LazySection>
 
         <DownloadableFiles
           tree={receptor.tree}

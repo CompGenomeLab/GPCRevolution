@@ -125,8 +125,6 @@ export function useSnakePlotTooltip() {
         }
       });
 
-      console.log('Conservation Map:', conservationMap);
-
       const elem = document.getElementById('snakeplot');
       if (!(elem instanceof SVGElement)) {
         console.error('Snakeplot SVG not found or is not an SVGElement.');

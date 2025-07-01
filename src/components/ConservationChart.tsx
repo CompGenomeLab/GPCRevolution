@@ -32,18 +32,29 @@ interface ConservationChartProps {
 }
 
 const ConservationChart: React.FC<ConservationChartProps> = ({ data }) => {
+  const tooltipTexts = React.useMemo(() => {
+    return data.map(d => [
+      `Residue #: ${d.residue}`,
+      `Conservation %: ${d.conservation}%`,
+      `Conserved AA: ${d.conservedAA}`,
+      `Human AA: ${d.humanAA}`,
+      `Region: ${d.region}`,
+      `GPCRdb #: ${d.gpcrdb}`,
+    ]);
+  }, [data]);
+
   const getRegionColor = (region: string, index: number) => {
     const colors = [
-      "#FFFACD",
-      "#E6E6FA",
-      "#FFFACD",
-      "#E6E6FA",
-      "#FFFACD",
-      "#E6E6FA",
-      "#FFFACD",
-      "#E6E6FA",
-      "#FFFACD",
-      "#E6E6FA",
+      '#FFFACD',
+      '#E6E6FA',
+      '#FFFACD',
+      '#E6E6FA',
+      '#FFFACD',
+      '#E6E6FA',
+      '#FFFACD',
+      '#E6E6FA',
+      '#FFFACD',
+      '#E6E6FA',
     ];
     return colors[index % colors.length];
   };
@@ -84,7 +95,6 @@ const ConservationChart: React.FC<ConservationChartProps> = ({ data }) => {
       });
     }
 
-    console.log('Region groups with colors:', groups);
     return groups;
   }, [data]);
 
@@ -104,118 +114,120 @@ const ConservationChart: React.FC<ConservationChartProps> = ({ data }) => {
     ],
   };
 
-  const options = {
-    responsive: true,
-    maintainAspectRatio: false,
-    animation: {
-      duration: 0,
-    },
-    plugins: {
-      legend: {
-        display: false,
+  const options = React.useMemo(
+    () => ({
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: {
+        duration: 0,
       },
-      tooltip: {
-        enabled: true,
-        mode: 'index' as const,
+      interaction: {
         intersect: false,
-        callbacks: {
-          title: () => [],
-          label: function (context: TooltipItem<'bar'>) {
-            const index = context.dataIndex;
-            const d = data[index];
-            return [
-              `Residue #: ${d.residue}`,
-              `Conservation %: ${d.conservation}%`,
-              `Human AA: ${d.humanAA}`,
-              `Conserved AA: ${d.conservedAA}`,
-              `Region: ${d.region}`, 
-              `GPCRdb #: ${d.gpcrdb}`,
-            ];
+        mode: 'index' as const,
+      },
+      plugins: {
+        legend: {
+          display: false,
+        },
+        tooltip: {
+          enabled: true,
+          mode: 'index' as const,
+          intersect: false,
+          backgroundColor: '#ffffff',
+          titleColor: '#000000',
+          bodyColor: '#000000',
+          borderColor: '#cccccc',
+          borderWidth: 1,
+          displayColors: false,
+          animation: { duration: 0 },
+          external: undefined,
+          filter: () => true,
+          callbacks: {
+            title: () => [],
+            label: (context: TooltipItem<'bar'>) => tooltipTexts[context.dataIndex],
           },
         },
-      },
-      annotation: {
-        annotations: regionGroups.flatMap(group => {
-          const color = getRegionColor(group.region, group.colorIndex);
+        annotation: {
+          annotations: regionGroups.flatMap(group => {
+            const color = getRegionColor(group.region, group.colorIndex);
 
-          return [
-            {
-              type: 'box' as const,
-              xMin: group.startIndex - 0.5,
-              xMax: group.endIndex + 0.5,
-              yMin: -25,
-              yMax: -5,
-              backgroundColor: color,
-              borderColor: color.replace('0.4', '0.8'),
-              borderWidth: 1,
-            },
-            {
-              type: 'label' as const,
-              xValue: (group.startIndex + group.endIndex) / 2,
-              yValue: -15,
-              content: group.region,
-              backgroundColor: 'rgba(255, 255, 255, 0.9)',
-              borderColor: 'rgba(0, 0, 0, 0.2)',
-              borderWidth: 1,
-              font: {
-                size: 8,
-                weight: 'bold' as const,
+            return [
+              {
+                type: 'box' as const,
+                xMin: group.startIndex - 0.5,
+                xMax: group.endIndex + 0.5,
+                yMin: -25,
+                yMax: -5,
+                backgroundColor: color,
+                borderColor: color.replace('0.4', '0.8'),
+                borderWidth: 1,
               },
-              color: '#000000',
-              padding: 2,
-              borderRadius: 3,
+              {
+                type: 'label' as const,
+                xValue: (group.startIndex + group.endIndex) / 2,
+                yValue: -15,
+                content: group.region,
+                backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                borderColor: 'rgba(0, 0, 0, 0.2)',
+                borderWidth: 1,
+                font: {
+                  size: 8,
+                  weight: 'bold' as const,
+                },
+                color: '#000000',
+                padding: 2,
+                borderRadius: 3,
+              },
+            ];
+          }),
+        },
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          max: 100,
+          min: -30,
+          title: {
+            display: true,
+            text: ['Orthologous', 'Conservation %'],
+            font: {
+              size: 15,
             },
-          ];
-        }),
-      },
-    },
-    scales: {
-      y: {
-        beginAtZero: true,
-        max: 100,
-        min: -30,
-        title: {
-          display: true,
-          text: [
-              'Orthologous',
-              'Conservation %'
-            ],
-          font: {
-            size: 15,
+          },
+
+          ticks: {
+            stepSize: 20,
+            callback: function (this: Scale, tickValue: number | string) {
+              if (Number(tickValue) < 0) return '';
+              return tickValue + '%';
+            },
+          },
+          grid: {
+            display: false,
           },
         },
-        
-        ticks: {
-          stepSize: 20,
-          callback: function (this: Scale, tickValue: number | string) {
-            if (Number(tickValue) < 0) return '';
-            return tickValue + '%';
+        x: {
+          ticks: {
+            maxRotation: 0,
+            minRotation: 0,
+            autoSkip: false,
+            maxTicksLimit: undefined,
+            font: {
+              size: 12,
+            },
+            callback: function (value: number | string, index: number): string[] {
+              const labels = data[index];
+              return [labels.humanAA, labels.residue.toString()];
+            },
           },
-        },
-        grid: {
-          display: false,
-        },
-      },
-      x: {
-        ticks: {
-          maxRotation: 0,
-          minRotation: 0,
-          autoSkip: false,
-          maxTicksLimit: undefined,
-          font: {
-            size: 12,
+          grid: {
+            display: false,
           },
-          callback: function (value: number | string, index: number): string[] {
-            const labels = data[index];
-            return [labels.humanAA, labels.residue.toString()];
-          },
-        },
-        grid: {
-          display: false,
         },
       },
-    },
-  };
+    }),
+    [data, regionGroups, tooltipTexts]
+  );
 
   return (
     <div className="bg-card text-card-foreground rounded-lg p-6 shadow-md">

@@ -63,8 +63,10 @@ export default function MSAVisualization({ sequences, className }: MSAVisualizat
     return [
       columnHelper.accessor('header', {
         id: 'header',
-        header: () => <div className="px-2 py-1 text-xs text-muted-foreground">GPCRdb#</div>,
-        cell: info => <div className="px-2 py-1  text-xs">{info.getValue()}</div>,
+        header: () => (
+          <div className="px-2 py-1 text-xs text-muted-foreground text-right">GPCRdb#</div>
+        ),
+        cell: info => <div className="px-2 py-1 text-xs text-right">{info.getValue()}</div>,
       }),
       ...positionColumns,
     ];
