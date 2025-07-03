@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   useReactTable,
   getCoreRowModel,
@@ -8,6 +8,7 @@ import {
   createColumnHelper,
 } from '@tanstack/react-table';
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { ConservationDatum } from './ConservationChart';
 
 interface Sequence {
   header: string;
@@ -17,6 +18,7 @@ interface Sequence {
 interface MSAVisualizationProps {
   sequences: Sequence[];
   className?: string;
+  conservationFile?: string | null;
 }
 
 const colorMapping: Record<string, string> = {
@@ -40,8 +42,47 @@ const ColoredResidue = React.memo(({ residue }: { residue: string }) => {
 
 ColoredResidue.displayName = 'ColoredResidue';
 
-export default function MSAVisualization({ sequences, className }: MSAVisualizationProps) {
+export default function MSAVisualization({
+  sequences,
+  className,
+  conservationFile,
+}: MSAVisualizationProps) {
   const columnHelper = createColumnHelper<Sequence>();
+  const [conservationData, setConservationData] = useState<ConservationDatum[] | null>(null);
+
+  useEffect(() => {
+    setConservationData(null);
+
+    if (!conservationFile) return;
+
+    fetch(`/${conservationFile}`)
+      .then(res => {
+        if (!res.ok) {
+          throw new Error(`Failed to fetch conservation data: ${res.status}`);
+        }
+        return res.text();
+      })
+      .then(text => {
+        const lines = text.split(/\r?\n/).filter(d => d.trim() && !d.startsWith('residue'));
+        const data = lines.map(line => {
+          const [resStr, consStr, conservedAA, humanAA, region, gpcrdb] = line.trim().split(/\s+/);
+          return {
+            residue: +resStr,
+            conservation: +consStr,
+            conservedAA,
+            humanAA,
+            region,
+            gpcrdb,
+          };
+        });
+
+        setConservationData(data);
+      })
+      .catch(err => {
+        console.error('Error loading conservation data:', err);
+      })
+      .finally(() => {});
+  }, [conservationFile]);
 
   const columns = React.useMemo(() => {
     if (!sequences.length) return [];
@@ -51,7 +92,11 @@ export default function MSAVisualization({ sequences, className }: MSAVisualizat
     const positionColumns = Array.from({ length: maxLength }, (_, i) =>
       columnHelper.accessor(row => row.sequence[i] || '-', {
         id: `pos${i + 1}`,
-        header: () => <div className="text-xs text-muted-foreground text-center">{i + 1}</div>,
+        header: () => (
+          <div className="text-xs text-muted-foreground text-center w-[4px] -rotate-90 h-fit">
+            {conservationData?.[i]?.gpcrdb}
+          </div>
+        ),
         cell: info => (
           <div className="min-w-[1em] text-center  text-xs">
             <ColoredResidue residue={info.getValue()} />
@@ -83,14 +128,14 @@ export default function MSAVisualization({ sequences, className }: MSAVisualizat
       <div className="h-[640px] overflow-y-scroll relative">
         <table>
           <TableHeader>
-            <TableRow className="sticky top-0 bg-muted z-40">
+            <TableRow className="sticky top-0 bg-muted z-40 ">
               {table.getFlatHeaders().map(header => (
                 <TableHead
                   key={header.id}
                   className={
                     header.column.id === 'header'
-                      ? 'sticky left-0 top-0 z-30 bg-muted border-r w-[200px]'
-                      : 'sticky top-0 z-20 bg-muted w-[20px] -rotate-90'
+                      ? 'sticky left-0 top-0 z-30 bg-muted border-r w-[200px] h-16'
+                      : 'sticky top-0 z-20 bg-muted w-[4px]  h-16'
                   }
                 >
                   {header.isPlaceholder
@@ -112,7 +157,7 @@ export default function MSAVisualization({ sequences, className }: MSAVisualizat
                     className={
                       cell.column.id === 'header'
                         ? 'sticky left-0 z-10 bg-background border-r w-[200px]'
-                        : 'w-[30px]'
+                        : 'w-[4px] p-0'
                     }
                   >
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}

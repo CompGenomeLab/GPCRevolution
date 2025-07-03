@@ -173,7 +173,10 @@ function ReceptorContent() {
           fallback={<LargeContentSkeleton title="Multiple Sequence Alignment" />}
           errorTitle="Multiple Sequence Alignment Error"
         >
-          <MSAViewer alignmentPath={receptor.alignment} />
+          <MSAViewer
+            alignmentPath={receptor.alignment}
+            conservationFile={receptor.conservationFile}
+          />
         </LazySection>
 
         <DownloadableFiles

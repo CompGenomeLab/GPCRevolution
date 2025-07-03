@@ -9,7 +9,13 @@ interface Sequence {
   sequence: string;
 }
 
-export function MSAViewer({ alignmentPath }: { alignmentPath: string | null }) {
+export function MSAViewer({
+  alignmentPath,
+  conservationFile,
+}: {
+  alignmentPath: string | null;
+  conservationFile: string | null;
+}) {
   const [sequences, setSequences] = useState<Sequence[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const cleanedSequences = useCleanedSequences(sequences);
@@ -37,7 +43,7 @@ export function MSAViewer({ alignmentPath }: { alignmentPath: string | null }) {
       .finally(() => {
         setIsLoading(false);
       });
-  }, [alignmentPath]);
+  }, [alignmentPath, conservationFile]);
 
   if (!alignmentPath) return null;
 
@@ -52,7 +58,11 @@ export function MSAViewer({ alignmentPath }: { alignmentPath: string | null }) {
         <div className="text-center text-muted-foreground p-4">No alignment data available</div>
       ) : (
         <div className="py-4">
-          <MSAVisualization sequences={cleanedSequences} className="border-0" />
+          <MSAVisualization
+            sequences={cleanedSequences}
+            className="border-0"
+            conservationFile={conservationFile}
+          />
         </div>
       )}
     </div>
