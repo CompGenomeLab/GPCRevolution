@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 
 export function useSnakePlotTooltip() {
   const tooltipRef = useRef<HTMLDivElement | null>(null);
-  const [fillColor, setFillColor] = useState('#DBD6F9');
+  const [fillColor, setFillColor] = useState('#B7B7EB');
   const [textColor, setTextColor] = useState('#000000');
 
   function initSnakeplotTooltips(svg: SVGElement | null) {
@@ -124,8 +124,6 @@ export function useSnakePlotTooltip() {
           }
         }
       });
-
-      console.log('Conservation Map:', conservationMap);
 
       const elem = document.getElementById('snakeplot');
       if (!(elem instanceof SVGElement)) {

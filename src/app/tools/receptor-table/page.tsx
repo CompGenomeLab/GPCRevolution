@@ -30,7 +30,6 @@ import {
   flexRender,
   createColumnHelper,
   SortingState,
-  getPaginationRowModel,
 } from '@tanstack/react-table';
 import {
   Table,
@@ -40,10 +39,9 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { MultiSelect } from '@/components/MultiSelect';
+import { Input } from '@/components/ui/input';
 import React from 'react';
-
+import { toast } from 'sonner';
 const formSchema = z.object({
   receptorClass: z.string().min(1, 'Required'),
   minOrthologs: z.array(z.string()).min(1, 'Required'),
@@ -80,7 +78,6 @@ const columnHelper = createColumnHelper<ResidueMapping>();
 export default function ReceptorTablePage() {
   const [referenceResults, setReferenceResults] = useState<Receptor[]>([]);
   const [hasSearchedReference, setHasSearchedReference] = useState(false);
-  const [selectedTargets, setSelectedTargets] = useState<Receptor[]>([]);
 
   const [resultData, setResultData] = useState<ResidueMapping[]>([]);
   const [resultColumns, setResultColumns] = useState<string[]>([]);
@@ -88,8 +85,10 @@ export default function ReceptorTablePage() {
   const [error, setError] = useState<string | null>(null);
   const resultRef = useRef<HTMLDivElement>(null);
   const [sorting, setSorting] = useState<SortingState>([]);
-  const [pageIndex, setPageIndex] = useState(0);
-  const [pageSize, setPageSize] = useState(10);
+
+  const [targetInputValue, setTargetInputValue] = useState('');
+  const [targetSuggestions, setTargetSuggestions] = useState<Receptor[]>([]);
+  const [showTargetSuggestions, setShowTargetSuggestions] = useState(false);
 
   const form = useForm({
     resolver: zodResolver(formSchema),
@@ -114,6 +113,60 @@ export default function ReceptorTablePage() {
       .slice(0, 10);
 
     setReferenceResults(results);
+  };
+
+  const filterTargetSuggestions = (query: string) => {
+    if (!query.trim()) {
+      setTargetSuggestions([]);
+      setShowTargetSuggestions(false);
+      return;
+    }
+
+    const currentValues = query
+      .split(',')
+      .map(v => v.trim())
+      .filter(v => v);
+    const lastValue = currentValues[currentValues.length - 1] || '';
+
+    const filtered = receptors
+      .filter((receptor: Receptor) =>
+        receptor.geneName.toLowerCase().includes(lastValue.toLowerCase())
+      )
+      .slice(0, 10);
+
+    setTargetSuggestions(filtered);
+    setShowTargetSuggestions(filtered.length > 0);
+  };
+
+  const handleTargetInputChange = (value: string) => {
+    setTargetInputValue(value);
+    filterTargetSuggestions(value);
+
+    const receptorNames = value
+      .split(',')
+      .map(name => name.trim())
+      .filter(name => name && receptors.some((r: Receptor) => r.geneName === name));
+
+    form.setValue('minOrthologs', receptorNames);
+  };
+
+  const handleTargetSuggestionClick = (receptor: Receptor) => {
+    const currentValues = targetInputValue
+      .split(',')
+      .map(v => v.trim())
+      .filter(v => v);
+    currentValues[currentValues.length - 1] = receptor.geneName;
+    const newValue = currentValues.join(', ') + ', ';
+
+    setTargetInputValue(newValue);
+    setShowTargetSuggestions(false);
+
+    const receptorNames = newValue
+      .split(',')
+      .map(name => name.trim())
+      .filter(name => name && receptors.some((r: Receptor) => r.geneName === name));
+
+    form.setValue('minOrthologs', receptorNames);
   };
 
   async function readFastaFile(fastaFilePath: string) {
@@ -143,7 +196,7 @@ export default function ReceptorTablePage() {
 
       return sequences;
     } catch (error) {
-      console.error('FASTA file reading error:', error);
+      toast.error('Failed to read FASTA file');
       throw error;
     }
   }
@@ -174,7 +227,9 @@ export default function ReceptorTablePage() {
 
       return conservationData;
     } catch (error) {
-      console.error('Conservation data reading error:', error);
+      toast.error('Failed to read conservation data', {
+        description: error instanceof Error ? error.message : 'An unknown error occurred',
+      });
       return {};
     }
   }
@@ -334,7 +389,7 @@ export default function ReceptorTablePage() {
         const conservationPromises = allReceptors.map(receptor => {
           if (!receptor.gpcrdbId) return Promise.resolve(null);
 
-          const conservationFilePath = `/conservation_files/${receptor.gpcrdbId}.txt`;
+          const conservationFilePath = `/conservation_files/${receptor.geneName}_conservation.txt`;
           return readConservationData(conservationFilePath)
             .then(data => ({ geneName: receptor.geneName, data }))
             .catch(() => ({ geneName: receptor.geneName, data: {} }));
@@ -377,7 +432,6 @@ export default function ReceptorTablePage() {
         resultRef.current.scrollIntoView({ behavior: 'smooth' });
       }
     } catch (err) {
-      console.error('Mapping error:', err);
       setError(err instanceof Error ? err.message : 'An unknown error occurred');
     } finally {
       setIsLoading(false);
@@ -385,25 +439,16 @@ export default function ReceptorTablePage() {
   }
 
   const columns = React.useMemo(() => {
-    if (!resultColumns.length) return [];
+    if (resultColumns.length === 0) return [];
 
-    return resultColumns.map(col => {
-      const [receptorName, colType] = col.split('_');
-      const isReference = receptorName === form.getValues('receptorClass');
+    return resultColumns.map(colKey => {
+      const [receptorName, colType] = colKey.split('_');
 
-      return columnHelper.accessor(col, {
-        id: col,
+      return columnHelper.accessor(colKey, {
+        id: colKey,
         header: () => (
           <div className="flex flex-col items-center gap-1">
-            {isReference && colType === 'region' && (
-              <div className="text-xs text-muted-foreground">Region</div>
-            )}
-            {isReference && colType === 'gpcrdb' && (
-              <div className="text-xs text-muted-foreground">GPCRdb</div>
-            )}
-            {colType === 'resNum' && (
-              <div className="text-xs text-muted-foreground">{receptorName}</div>
-            )}
+            <div className="text-xs text-muted-foreground">{receptorName}</div>
             <div className="text-center font-medium">
               {colType === 'resNum'
                 ? 'Residue'
@@ -423,14 +468,9 @@ export default function ReceptorTablePage() {
         ),
         cell: info => {
           const value = info.getValue();
-          if (colType === 'Conservation' && value !== '-') {
-            return <div className="text-right">{value}</div>;
-          }
           return <div className="text-center font-mono">{value}</div>;
         },
-        meta: {
-          parentColumn: receptorName,
-        } as ColumnMeta,
+        meta: { parentColumn: receptorName } as ColumnMeta,
       });
     });
   }, [resultColumns, form]);
@@ -438,27 +478,10 @@ export default function ReceptorTablePage() {
   const table = useReactTable({
     data: resultData,
     columns,
-    state: {
-      sorting,
-      pagination: {
-        pageIndex,
-        pageSize,
-      },
-    },
+    state: { sorting },
     onSortingChange: setSorting,
-    onPaginationChange: updater => {
-      if (typeof updater === 'function') {
-        const newState = updater({
-          pageIndex,
-          pageSize,
-        });
-        setPageIndex(newState.pageIndex);
-        setPageSize(newState.pageSize);
-      }
-    },
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
   });
 
   return (
@@ -502,7 +525,7 @@ export default function ReceptorTablePage() {
                   <FormItem>
                     <FormLabel>Reference Receptor</FormLabel>
                     <FormControl>
-                      <Command className="rounded-lg border shadow-md">
+                      <Command className="rounded-lg border shadow-none">
                         <CommandInput
                           placeholder="Search for receptor..."
                           onValueChange={value => {
@@ -555,28 +578,39 @@ export default function ReceptorTablePage() {
               <FormField
                 control={form.control}
                 name="minOrthologs"
-                render={({ field }) => (
+                render={() => (
                   <FormItem>
                     <FormLabel>Target Receptor(s)</FormLabel>
                     <FormControl>
-                      <MultiSelect
-                        placeholder="Search for target receptors..."
-                        options={receptors.map((receptor: Receptor) => ({
-                          label: `${receptor.geneName} (Class: ${receptor.class}, Orthologs: ${receptor.numOrthologs})`,
-                          value: receptor.geneName,
-                        }))}
-                        onValueChange={values => {
-                          field.onChange(values);
-
-                          const selectedReceptorObjects = values
-                            .map(value => receptors.find((r: Receptor) => r.geneName === value))
-                            .filter(r => r !== undefined) as Receptor[];
-
-                          setSelectedTargets(selectedReceptorObjects);
-                        }}
-                        defaultValue={selectedTargets.map(r => r.geneName)}
-                        variant="secondary"
-                      />
+                      <div className="relative">
+                        <Input
+                          placeholder="Type receptor names (comma-separated)..."
+                          value={targetInputValue}
+                          onChange={e => handleTargetInputChange(e.target.value)}
+                          onFocus={() => {
+                            setTargetSuggestions([]);
+                            setShowTargetSuggestions(false);
+                          }}
+                          onBlur={() => setTimeout(() => setShowTargetSuggestions(false), 200)}
+                          className="w-full"
+                        />
+                        {showTargetSuggestions && targetSuggestions.length > 0 && (
+                          <div className="absolute z-10 w-full mt-1 bg-popover border border-border rounded-md shadow-lg max-h-60 overflow-y-auto">
+                            {targetSuggestions.map(receptor => (
+                              <div
+                                key={receptor.geneName}
+                                className="px-4 py-2 hover:bg-accent cursor-pointer text-sm"
+                                onMouseDown={() => handleTargetSuggestionClick(receptor)}
+                              >
+                                <div className="font-medium">{receptor.geneName}</div>
+                                <div className="text-muted-foreground text-xs">
+                                  Class: {receptor.class} | Orthologs: {receptor.numOrthologs}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -590,7 +624,7 @@ export default function ReceptorTablePage() {
                   <FormItem>
                     <FormLabel>Residue Numbers (comma-separated, optional)</FormLabel>
                     <FormControl>
-                      <Command className="rounded-lg border shadow-md">
+                      <Command className="rounded-lg border shadow-none">
                         <CommandInput
                           placeholder="Enter residue numbers..."
                           onValueChange={value => {
@@ -670,8 +704,8 @@ export default function ReceptorTablePage() {
             </Button>
           </div>
 
-          <div className="border rounded-lg overflow-x-auto">
-            <Table>
+          <div className="border rounded-lg max-h-[600px] overflow-y-auto overflow-x-scroll scrollbar-thin">
+            <Table className="min-w-max">
               <TableHeader>
                 <TableRow>
                   {table.getHeaderGroups()[0].headers.map(header => (
@@ -701,27 +735,6 @@ export default function ReceptorTablePage() {
                 ))}
               </TableBody>
             </Table>
-          </div>
-
-          <div className="flex items-center justify-end space-x-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => table.previousPage()}
-              disabled={!table.getCanPreviousPage()}
-            >
-              <ChevronLeft className="h-4 w-4" />
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => table.nextPage()}
-              disabled={!table.getCanNextPage()}
-            >
-              Next
-              <ChevronRight className="h-4 w-4" />
-            </Button>
           </div>
         </div>
       )}

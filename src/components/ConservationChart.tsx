@@ -32,18 +32,29 @@ interface ConservationChartProps {
 }
 
 const ConservationChart: React.FC<ConservationChartProps> = ({ data }) => {
+  const tooltipTexts = React.useMemo(() => {
+    return data.map(d => [
+      `Residue #: ${d.residue}`,
+      `Conservation %: ${d.conservation}%`,
+      `Conserved AA: ${d.conservedAA}`,
+      `Human AA: ${d.humanAA}`,
+      `Region: ${d.region}`,
+      `GPCRdb #: ${d.gpcrdb}`,
+    ]);
+  }, [data]);
+
   const getRegionColor = (region: string, index: number) => {
     const colors = [
-      'rgba(100, 149, 237, 0.4)',
-      'rgba(255, 99, 132, 0.4)',
-      'rgba(54, 162, 235, 0.4)',
-      'rgba(255, 205, 86, 0.4)',
-      'rgba(75, 192, 192, 0.4)',
-      'rgba(153, 102, 255, 0.4)',
-      'rgba(255, 159, 64, 0.4)',
-      'rgba(199, 199, 199, 0.4)',
-      'rgba(83, 102, 255, 0.4)',
-      'rgba(255, 99, 71, 0.4)',
+      '#FFFACD',
+      '#E6E6FA',
+      '#FFFACD',
+      '#E6E6FA',
+      '#FFFACD',
+      '#E6E6FA',
+      '#FFFACD',
+      '#E6E6FA',
+      '#FFFACD',
+      '#E6E6FA',
     ];
     return colors[index % colors.length];
   };
@@ -84,7 +95,6 @@ const ConservationChart: React.FC<ConservationChartProps> = ({ data }) => {
       });
     }
 
-    console.log('Region groups with colors:', groups);
     return groups;
   }, [data]);
 
@@ -92,9 +102,9 @@ const ConservationChart: React.FC<ConservationChartProps> = ({ data }) => {
     labels: data.map(d => [d.residue.toString(), d.humanAA]),
     datasets: [
       {
-        label: 'Conservation %',
+        label: 'Orthologous Conservation %',
         data: data.map(d => d.conservation),
-        backgroundColor: '#434E71',
+        backgroundColor: '#424874',
         borderColor: '#FFFFFF',
         borderWidth: 1,
         barThickness: 'flex',
@@ -104,116 +114,124 @@ const ConservationChart: React.FC<ConservationChartProps> = ({ data }) => {
     ],
   };
 
-  const options = {
-    responsive: true,
-    maintainAspectRatio: false,
-    animation: {
-      duration: 0,
-    },
-    plugins: {
-      legend: {
-        display: false,
+  const options = React.useMemo(
+    () => ({
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: {
+        duration: 0,
       },
-      tooltip: {
-        enabled: true,
-        mode: 'index' as const,
+      interaction: {
         intersect: false,
-        callbacks: {
-          label: function (context: TooltipItem<'bar'>) {
-            const index = context.dataIndex;
-            const d = data[index];
-            return [
-              `Res: ${d.residue} (${d.conservation}%)`,
-              `AA: ${d.humanAA} | Cons: ${d.conservedAA}`,
-              `Region: ${d.region} | GPCRdb: ${d.gpcrdb}`,
-            ];
+        mode: 'index' as const,
+      },
+      plugins: {
+        legend: {
+          display: false,
+        },
+        tooltip: {
+          enabled: true,
+          mode: 'index' as const,
+          intersect: false,
+          backgroundColor: '#ffffff',
+          titleColor: '#000000',
+          bodyColor: '#000000',
+          borderColor: '#cccccc',
+          borderWidth: 1,
+          displayColors: false,
+          animation: { duration: 0 },
+          external: undefined,
+          filter: () => true,
+          callbacks: {
+            title: () => [],
+            label: (context: TooltipItem<'bar'>) => tooltipTexts[context.dataIndex],
           },
         },
-      },
-      annotation: {
-        annotations: regionGroups.flatMap(group => {
-          const color = getRegionColor(group.region, group.colorIndex);
+        annotation: {
+          annotations: regionGroups.flatMap(group => {
+            const color = getRegionColor(group.region, group.colorIndex);
 
-          return [
-            {
-              type: 'box' as const,
-              xMin: group.startIndex - 0.5,
-              xMax: group.endIndex + 0.5,
-              yMin: -25,
-              yMax: -5,
-              backgroundColor: color,
-              borderColor: color.replace('0.4', '0.8'),
-              borderWidth: 1,
-            },
-            {
-              type: 'label' as const,
-              xValue: (group.startIndex + group.endIndex) / 2,
-              yValue: -15,
-              content: group.region,
-              backgroundColor: 'rgba(255, 255, 255, 0.9)',
-              borderColor: 'rgba(0, 0, 0, 0.2)',
-              borderWidth: 1,
-              font: {
-                size: 8,
-                weight: 'bold' as const,
+            return [
+              {
+                type: 'box' as const,
+                xMin: group.startIndex - 0.5,
+                xMax: group.endIndex + 0.5,
+                yMin: -25,
+                yMax: -5,
+                backgroundColor: color,
+                borderColor: color.replace('0.4', '0.8'),
+                borderWidth: 1,
               },
-              color: '#000000',
-              padding: 2,
-              borderRadius: 3,
+              {
+                type: 'label' as const,
+                xValue: (group.startIndex + group.endIndex) / 2,
+                yValue: -15,
+                content: group.region,
+                backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                borderColor: 'rgba(0, 0, 0, 0.2)',
+                borderWidth: 1,
+                font: {
+                  size: 8,
+                  weight: 'bold' as const,
+                },
+                color: '#000000',
+                padding: 2,
+                borderRadius: 3,
+              },
+            ];
+          }),
+        },
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          max: 100,
+          min: -30,
+          title: {
+            display: true,
+            text: ['Orthologous', 'Conservation %'],
+            font: {
+              size: 15,
             },
-          ];
-        }),
-      },
-    },
-    scales: {
-      y: {
-        beginAtZero: true,
-        max: 100,
-        min: -30,
-        title: {
-          display: true,
-          text: 'Conservation %',
-        },
-        ticks: {
-          stepSize: 20,
-          callback: function (this: Scale, tickValue: number | string) {
-            if (Number(tickValue) < 0) return '';
-            return tickValue + '%';
+          },
+
+          ticks: {
+            stepSize: 20,
+            callback: function (this: Scale, tickValue: number | string) {
+              if (Number(tickValue) < 0) return '';
+              return tickValue + '%';
+            },
+          },
+          grid: {
+            display: false,
           },
         },
-        grid: {
-          display: false,
-        },
-      },
-      x: {
-        title: {
-          display: true,
-          text: 'GPCRdb #',
-          align: 'start' as const,
-        },
-        ticks: {
-          maxRotation: 0,
-          minRotation: 0,
-          autoSkip: false,
-          maxTicksLimit: undefined,
-          font: {
-            size: 10,
+        x: {
+          ticks: {
+            maxRotation: 0,
+            minRotation: 0,
+            autoSkip: false,
+            maxTicksLimit: undefined,
+            font: {
+              size: 12,
+            },
+            callback: function (value: number | string, index: number): string[] {
+              const labels = data[index];
+              return [labels.humanAA, labels.residue.toString()];
+            },
           },
-          callback: function (value: number | string, index: number): string[] {
-            const labels = data[index];
-            return [labels.humanAA, labels.residue.toString()];
+          grid: {
+            display: false,
           },
         },
-        grid: {
-          display: false,
-        },
       },
-    },
-  };
+    }),
+    [data, regionGroups, tooltipTexts]
+  );
 
   return (
     <div className="bg-card text-card-foreground rounded-lg p-6 shadow-md">
-      <h2 className="text-xl font-semibold text-foreground mb-4">Conservation Plot</h2>
+      <h2 className="text-xl font-semibold text-foreground mb-4">Residue Conservation Bar Plot</h2>
       <div className="relative w-full h-[250px]">
         <div className="absolute inset-0 p-4">
           <div className="w-full h-full overflow-x-auto">

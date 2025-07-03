@@ -9,7 +9,13 @@ interface Sequence {
   sequence: string;
 }
 
-export function MSAViewer({ alignmentPath }: { alignmentPath: string | null }) {
+export function MSAViewer({
+  alignmentPath,
+  conservationFile,
+}: {
+  alignmentPath: string | null;
+  conservationFile: string | null;
+}) {
   const [sequences, setSequences] = useState<Sequence[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const cleanedSequences = useCleanedSequences(sequences);
@@ -37,13 +43,13 @@ export function MSAViewer({ alignmentPath }: { alignmentPath: string | null }) {
       .finally(() => {
         setIsLoading(false);
       });
-  }, [alignmentPath]);
+  }, [alignmentPath, conservationFile]);
 
   if (!alignmentPath) return null;
 
   return (
-    <div className="space-y-4">
-      <h3 className="text-lg font-medium">Multiple Sequence Alignment of Orthologs</h3>
+    <div className="bg-card text-card-foreground rounded-lg p-6 shadow-md select-none">
+      <h2 className="text-lg font-medium">Multiple Sequence Alignment of Orthologs</h2>
       {isLoading ? (
         <div className="flex items-center justify-center p-8">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-foreground"></div>
@@ -51,8 +57,12 @@ export function MSAViewer({ alignmentPath }: { alignmentPath: string | null }) {
       ) : sequences.length === 0 ? (
         <div className="text-center text-muted-foreground p-4">No alignment data available</div>
       ) : (
-        <div className="border rounded-lg p-4">
-          <MSAVisualization sequences={cleanedSequences} className="border-0" />
+        <div className="py-4">
+          <MSAVisualization
+            sequences={cleanedSequences}
+            className="border-0"
+            conservationFile={conservationFile}
+          />
         </div>
       )}
     </div>
