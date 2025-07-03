@@ -56,6 +56,7 @@ interface Receptor {
   lca: string;
   gpcrdbId: string;
   snakePlot: string;
+  name: string;
 }
 
 interface CategorizedResidue {
@@ -120,7 +121,7 @@ const adaptBaseText = (raw: string): string => {
   return txt.replace(/\|/g, '<br>');
 };
 
-// Which receptor’s plot to show (1 or 2)
+// Which receptor's plot to show (1 or 2)
 const [showReceptor, setShowReceptor] = useState<1 | 2>(1);
 
 // Category → colour map
@@ -588,8 +589,12 @@ export default function ReceptorComparisonPage() {
     }
 
     setHasSearched1(true);
+    const term = value.toLowerCase();
     const results = receptors
-      .filter((receptor: Receptor) => receptor.geneName.toLowerCase().includes(value.toLowerCase()))
+      .filter(
+        (receptor: Receptor) =>
+          receptor.geneName.toLowerCase().includes(term) || receptor.name.toLowerCase().includes(term)
+      )
       .slice(0, 10);
 
     setSearchResults1(results);
@@ -603,8 +608,12 @@ export default function ReceptorComparisonPage() {
     }
 
     setHasSearched2(true);
+    const term = value.toLowerCase();
     const results = receptors
-      .filter((receptor: Receptor) => receptor.geneName.toLowerCase().includes(value.toLowerCase()))
+      .filter(
+        (receptor: Receptor) =>
+          receptor.geneName.toLowerCase().includes(term) || receptor.name.toLowerCase().includes(term)
+      )
       .slice(0, 10);
 
     setSearchResults2(results);
@@ -699,7 +708,7 @@ export default function ReceptorComparisonPage() {
                                   }}
                                 >
                                   <div className="flex flex-col">
-                                    <span className="font-medium">{receptor.geneName}</span>
+                                    <span className="font-medium">{`${receptor.geneName} - ${receptor.name}`}</span>
                                     <span className="text-sm text-muted-foreground">
                                       Class: {receptor.class} | Orthologs: {receptor.numOrthologs} |
                                       LCA: {receptor.lca}
@@ -756,7 +765,7 @@ export default function ReceptorComparisonPage() {
                                   }}
                                 >
                                   <div className="flex flex-col">
-                                    <span className="font-medium">{receptor.geneName}</span>
+                                    <span className="font-medium">{`${receptor.geneName} - ${receptor.name}`}</span>
                                     <span className="text-sm text-muted-foreground">
                                       Class: {receptor.class} | Orthologs: {receptor.numOrthologs} |
                                       LCA: {receptor.lca}

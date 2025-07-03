@@ -25,6 +25,7 @@ interface Receptor {
   conservationFile: string;
   snakePlot: string;
   svgTree: string;
+  name: string;
 }
 
 const ConservationSkeleton = () => (
@@ -119,7 +120,7 @@ function ReceptorContent() {
           >
             <ChevronLeft className="w-8 h-8" />
             <h1 className="text-3xl font-bold text-foreground hover:text-foreground/80">
-              {receptor.geneName}
+              {`${receptor.geneName} - ${receptor.name}`}
             </h1>
           </Link>
         </div>

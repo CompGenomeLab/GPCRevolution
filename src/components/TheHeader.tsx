@@ -30,6 +30,7 @@ interface Receptor {
   numOrthologs: number;
   lca: string;
   gpcrdbId: string;
+  name: string;
 }
 
 export const navigationItems = [
@@ -101,8 +102,12 @@ export function TheHeader({ className }: Props) {
     }
 
     setHasSearched(true);
+    const term = value.toLowerCase();
     const results = receptors
-      .filter((receptor: Receptor) => receptor.geneName.toLowerCase().includes(value.toLowerCase()))
+      .filter(
+        (receptor: Receptor) =>
+          receptor.geneName.toLowerCase().includes(term) || receptor.name.toLowerCase().includes(term)
+      )
       .slice(0, 10);
 
     setSearchResults(results);
@@ -156,7 +161,7 @@ export function TheHeader({ className }: Props) {
                             onSelect={() => handleSelect(receptor.geneName)}
                           >
                             <div className="flex flex-col">
-                              <span className="font-medium">{receptor.geneName}</span>
+                              <span className="font-medium">{`${receptor.geneName} - ${receptor.name}`}</span>
                               <span className="text-sm text-muted-foreground">
                                 Class: {receptor.class} | Orthologs: {receptor.numOrthologs} | LCA:{' '}
                                 {receptor.lca}

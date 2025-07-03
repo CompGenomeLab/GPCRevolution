@@ -55,6 +55,7 @@ interface Receptor {
   numOrthologs: number;
   lca: string;
   gpcrdbId: string;
+  name: string;
 }
 
 interface ConservationData {
@@ -108,8 +109,12 @@ export default function ReceptorTablePage() {
     }
 
     setHasSearchedReference(true);
+    const term = value.toLowerCase();
     const results = receptors
-      .filter((receptor: Receptor) => receptor.geneName.toLowerCase().includes(value.toLowerCase()))
+      .filter(
+        (receptor: Receptor) =>
+          receptor.geneName.toLowerCase().includes(term) || receptor.name.toLowerCase().includes(term)
+      )
       .slice(0, 10);
 
     setReferenceResults(results);
@@ -129,9 +134,12 @@ export default function ReceptorTablePage() {
     const lastValue = currentValues[currentValues.length - 1] || '';
 
     const filtered = receptors
-      .filter((receptor: Receptor) =>
-        receptor.geneName.toLowerCase().includes(lastValue.toLowerCase())
-      )
+      .filter((receptor: Receptor) => {
+        const low = lastValue.toLowerCase();
+        return (
+          receptor.geneName.toLowerCase().includes(low) || receptor.name.toLowerCase().includes(low)
+        );
+      })
       .slice(0, 10);
 
     setTargetSuggestions(filtered);
@@ -556,7 +564,7 @@ export default function ReceptorTablePage() {
                                     }}
                                   >
                                     <div className="flex flex-col">
-                                      <span className="font-medium">{receptor.geneName}</span>
+                                      <span className="font-medium">{`${receptor.geneName} - ${receptor.name}`}</span>
                                       <span className="text-sm text-muted-foreground">
                                         Class: {receptor.class} | Orthologs: {receptor.numOrthologs}{' '}
                                         | LCA: {receptor.lca}
@@ -602,7 +610,7 @@ export default function ReceptorTablePage() {
                                 className="px-4 py-2 hover:bg-accent cursor-pointer text-sm"
                                 onMouseDown={() => handleTargetSuggestionClick(receptor)}
                               >
-                                <div className="font-medium">{receptor.geneName}</div>
+                                <div className="font-medium">{`${receptor.geneName} - ${receptor.name}`}</div>
                                 <div className="text-muted-foreground text-xs">
                                   Class: {receptor.class} | Orthologs: {receptor.numOrthologs}
                                 </div>
