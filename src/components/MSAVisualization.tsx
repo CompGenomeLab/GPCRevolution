@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { useTheme } from 'next-themes';
 import {
   useReactTable,
   getCoreRowModel,
@@ -31,9 +32,24 @@ const colorMapping: Record<string, string> = {
 };
 
 const ColoredResidue = React.memo(({ residue }: { residue: string }) => {
+  const { theme } = useTheme();
   const char = residue.toUpperCase();
   for (const [color, acids] of Object.entries(colorMapping)) {
     if (acids.includes(char)) {
+      if (theme === 'dark') {
+        return (
+          <span
+            style={{
+              backgroundColor: `#${color}`,
+              color: '#ffffff',
+              display: 'inline-block',
+              width: '1em',
+            }}
+          >
+            {char}
+          </span>
+        );
+      }
       return <span style={{ color: `#${color}` }}>{char}</span>;
     }
   }
@@ -93,12 +109,12 @@ export default function MSAVisualization({
       columnHelper.accessor(row => row.sequence[i] || '-', {
         id: `pos${i + 1}`,
         header: () => (
-          <div className="text-xs text-muted-foreground text-center w-[4px] -rotate-90 h-fit">
+          <div className="text-xs text-muted-foreground text-center w-[4px] -rotate-90 h-fit relative top-3.5 left-1">
             {conservationData?.[i]?.gpcrdb}
           </div>
         ),
         cell: info => (
-          <div className="min-w-[1em] text-center  text-xs">
+          <div className="min-w-[1em] text-center text-xs leading-none">
             <ColoredResidue residue={info.getValue()} />
           </div>
         ),
@@ -109,9 +125,9 @@ export default function MSAVisualization({
       columnHelper.accessor('header', {
         id: 'header',
         header: () => (
-          <div className="px-2 py-1 text-xs text-muted-foreground text-right">GPCRdb#</div>
+          <div className="px-2 py-0 text-xs leading-tight text-muted-foreground text-right">GPCRdb#</div>
         ),
-        cell: info => <div className="px-2 py-1 text-xs text-right">{info.getValue()}</div>,
+        cell: info => <div className="px-2 py-0 text-xs text-right leading-tight">{info.getValue()}</div>,
       }),
       ...positionColumns,
     ];
@@ -128,14 +144,14 @@ export default function MSAVisualization({
       <div className="h-[640px] overflow-y-scroll relative">
         <table>
           <TableHeader>
-            <TableRow className="sticky top-0 bg-muted z-40 ">
+            <TableRow className="sticky top-0 bg-muted z-40 h-12 ">
               {table.getFlatHeaders().map(header => (
                 <TableHead
                   key={header.id}
                   className={
                     header.column.id === 'header'
-                      ? 'sticky left-0 top-0 z-30 bg-muted border-r w-[200px] h-16'
-                      : 'sticky top-0 z-20 bg-muted w-[4px]  h-16'
+                      ? 'sticky left-0 top-0 z-30 bg-muted border-r w-[200px] h-12 p-0'
+                      : 'sticky top-0 z-20 bg-muted w-[4px]  h-12 p-0'
                   }
                 >
                   {header.isPlaceholder
@@ -149,7 +165,11 @@ export default function MSAVisualization({
             {table.getRowModel().rows.map((row, rowIndex) => (
               <TableRow
                 key={row.id}
-                className={rowIndex === 0 ? 'sticky top-[39px] z-15 bg-background border-b' : ''}
+                className={
+                  rowIndex === 0
+                    ? 'sticky top-[48px] z-15 bg-background border-b font-semibold h-8'
+                    : 'h-8 font-semibold'
+                }
               >
                 {row.getVisibleCells().map(cell => (
                   <TableCell

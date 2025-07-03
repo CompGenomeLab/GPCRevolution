@@ -677,7 +677,7 @@ export default function ReceptorComparisonPage() {
                 <FormItem>
                   <FormLabel>Receptor 1 Name</FormLabel>
                   <FormControl>
-                    <Command className="rounded-lg border shadow-md">
+                    <Command shouldFilter={false} className="rounded-lg border shadow-md">
                       <CommandInput
                         placeholder="Search for receptor 1..."
                         onValueChange={value => {
@@ -699,7 +699,7 @@ export default function ReceptorComparisonPage() {
                               {searchResults1.map((receptor, index) => (
                                 <CommandItem
                                   key={index}
-                                  value={receptor.geneName}
+                                  value={`${receptor.geneName} ${receptor.name}`}
                                   className="cursor-pointer"
                                   onSelect={() => {
                                     field.onChange(receptor.geneName);
@@ -734,7 +734,7 @@ export default function ReceptorComparisonPage() {
                 <FormItem>
                   <FormLabel>Receptor 2 Name</FormLabel>
                   <FormControl>
-                    <Command className="rounded-lg border shadow-md">
+                    <Command shouldFilter={false} className="rounded-lg border shadow-md">
                       <CommandInput
                         placeholder="Search for receptor 2..."
                         onValueChange={value => {
@@ -756,7 +756,7 @@ export default function ReceptorComparisonPage() {
                               {searchResults2.map((receptor, index) => (
                                 <CommandItem
                                   key={index}
-                                  value={receptor.geneName}
+                                  value={`${receptor.geneName} ${receptor.name}`}
                                   className="cursor-pointer"
                                   onSelect={() => {
                                     field.onChange(receptor.geneName);

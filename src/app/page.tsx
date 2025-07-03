@@ -57,7 +57,7 @@ export default function Home() {
         GPCR Evolution Database (GPCREVOdb) is a comprehensive resource for exploring the
         evolutionary history of human GPCRs.
       </p>
-      <Command className="rounded-lg border shadow-md">
+      <Command shouldFilter={false} className="rounded-lg border shadow-md">
         <CommandInput placeholder="Search for a receptor..." onValueChange={handleSearch} />
         {hasSearched && (
           <CommandList className={searchResults.length > 5 ? 'max-h-[300px] overflow-y-auto' : ''}>
@@ -68,7 +68,7 @@ export default function Home() {
                 {searchResults.map((receptor, index) => (
                   <CommandItem
                     key={index}
-                    value={receptor.geneName}
+                    value={`${receptor.geneName} ${receptor.name}`}
                     className="cursor-pointer"
                     onSelect={() => handleSelect(receptor.geneName)}
                   >

@@ -533,7 +533,7 @@ export default function ReceptorTablePage() {
                   <FormItem>
                     <FormLabel>Reference Receptor</FormLabel>
                     <FormControl>
-                      <Command className="rounded-lg border shadow-none">
+                      <Command shouldFilter={false} className="rounded-lg border shadow-none">
                         <CommandInput
                           placeholder="Search for receptor..."
                           onValueChange={value => {
@@ -555,7 +555,7 @@ export default function ReceptorTablePage() {
                                 {referenceResults.map((receptor, index) => (
                                   <CommandItem
                                     key={index}
-                                    value={receptor.geneName}
+                                    value={`${receptor.geneName} ${receptor.name}`}
                                     className="cursor-pointer"
                                     onSelect={() => {
                                       field.onChange(receptor.geneName);

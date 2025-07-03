@@ -73,6 +73,7 @@ export function TheHeader({ className }: Props) {
   const [mounted, setMounted] = useState(false);
   const [searchResults, setSearchResults] = useState<Receptor[]>([]);
   const [hasSearched, setHasSearched] = useState(false);
+  const [searchValue, setSearchValue] = useState('');
   const router = useRouter();
   const searchRef = useRef<HTMLDivElement>(null);
 
@@ -95,6 +96,7 @@ export function TheHeader({ className }: Props) {
   }, []);
 
   const handleSearch = (value: string) => {
+    setSearchValue(value);
     if (!value.trim()) {
       setSearchResults([]);
       setHasSearched(false);
@@ -116,6 +118,7 @@ export function TheHeader({ className }: Props) {
   const handleSelect = (geneName: string) => {
     setHasSearched(false);
     setSearchResults([]);
+    setSearchValue('');
     router.push(`/receptor?gene=${encodeURIComponent(geneName)}`);
   };
 
@@ -141,9 +144,10 @@ export function TheHeader({ className }: Props) {
 
           <div className="flex items-center gap-4">
             <div className="relative w-36 sm:w-72" ref={searchRef}>
-              <Command className="rounded-lg border shadow-none">
+              <Command shouldFilter={false} className="rounded-lg border shadow-none">
                 <CommandInput
                   placeholder="Search for a receptor..."
+                  value={searchValue}
                   onValueChange={handleSearch}
                   className="h-9"
                 />
@@ -156,7 +160,7 @@ export function TheHeader({ className }: Props) {
                         {searchResults.map((receptor, index) => (
                           <CommandItem
                             key={index}
-                            value={receptor.geneName}
+                            value={`${receptor.geneName} ${receptor.name}`}
                             className="cursor-pointer"
                             onSelect={() => handleSelect(receptor.geneName)}
                           >
