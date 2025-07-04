@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { toast } from 'sonner';
 
 interface OptimizedSVGTreeProps {
@@ -19,7 +19,7 @@ export default function OptimizedSVGTree({ svgPath, onLoaded }: OptimizedSVGTree
   const abortControllerRef = useRef<AbortController | null>(null);
   const hasCalledLoadedRef = useRef(false);
 
-  const loadSVGContent = async () => {
+  const loadSVGContent = useCallback(async () => {
     if (!svgPath) return;
 
     if (abortControllerRef.current) {
@@ -76,7 +76,7 @@ export default function OptimizedSVGTree({ svgPath, onLoaded }: OptimizedSVGTree
       setIsLoading(false);
       setLoadingProgress(0);
     }
-  };
+  }, [svgPath]);
 
   const optimizeSVGContent = (content: string): string => {
     return content
@@ -104,7 +104,7 @@ export default function OptimizedSVGTree({ svgPath, onLoaded }: OptimizedSVGTree
         abortControllerRef.current.abort();
       }
     };
-  }, [svgPath, isMinimized]);
+  }, [svgPath, isMinimized, loadSVGContent]);
 
   useEffect(() => {
     if (hasCalledLoadedRef.current) return;

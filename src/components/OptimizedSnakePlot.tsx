@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { Parser as HtmlToReactParser } from 'html-to-react';
 import { useSnakePlotTooltip } from '../hooks/useSnakePlotTooltip';
 import { Button } from './ui/button';
@@ -26,7 +26,7 @@ export default function OptimizedSnakePlot({ svgPath, conservationFile, onLoaded
   const { updateSnakeplotConservation, fillColor, setFillColor, textColor, setTextColor } =
     useSnakePlotTooltip();
 
-  const loadSnakePlotContent = async () => {
+  const loadSnakePlotContent = useCallback(async () => {
     if (!svgPath) return;
 
     if (abortControllerRef.current) {
@@ -117,7 +117,7 @@ export default function OptimizedSnakePlot({ svgPath, conservationFile, onLoaded
       setIsLoading(false);
       setLoadingProgress(0);
     }
-  };
+  }, [svgPath]);
 
   useEffect(() => {
     if (!svgLoadedRef.current || !conservationFile || isMinimized) return;
@@ -217,7 +217,7 @@ export default function OptimizedSnakePlot({ svgPath, conservationFile, onLoaded
         abortControllerRef.current.abort();
       }
     };
-  }, [svgPath, isMinimized]);
+  }, [svgPath, isMinimized, loadSnakePlotContent]);
 
   useEffect(() => {
     if (hasCalledLoadedRef.current) return;
