@@ -1,20 +1,26 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import ConservationChart, { ConservationDatum } from './ConservationChart';
 
 interface ConservationChartAsyncProps {
   conservationFile: string | null;
+  /** Callback fired once the chart data has loaded (success or error). */
+  onLoaded?: () => void;
 }
 
-export default function ConservationChartAsync({ conservationFile }: ConservationChartAsyncProps) {
+export default function ConservationChartAsync({ conservationFile, onLoaded }: ConservationChartAsyncProps) {
   const [conservationData, setConservationData] = useState<ConservationDatum[] | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const hasCalledLoadedRef = useRef(false);
+  const loadStartRef = useRef<number | null>(null);
 
   useEffect(() => {
     setConservationData(null);
     setError(null);
+    hasCalledLoadedRef.current = false;
+    loadStartRef.current = Date.now();
 
     if (!conservationFile) return;
 
@@ -51,6 +57,18 @@ export default function ConservationChartAsync({ conservationFile }: Conservatio
         setIsLoading(false);
       });
   }, [conservationFile]);
+
+  // Notify parent when loading completes (either data or error).
+  useEffect(() => {
+    if (hasCalledLoadedRef.current) return;
+    const done = !isLoading && conservationFile && (conservationData !== null || error !== null);
+    if (done) {
+      const elapsed = loadStartRef.current ? Date.now() - loadStartRef.current : 0;
+      const remaining = Math.max(0, 1000 - elapsed);
+      hasCalledLoadedRef.current = true;
+      window.setTimeout(() => onLoaded?.(), remaining);
+    }
+  }, [isLoading, conservationData, error, conservationFile, onLoaded]);
 
   if (!conservationFile) return null;
 

@@ -11,24 +11,24 @@ export function useSnakePlotTooltip() {
     if (!tooltip) {
       tooltip = document.createElement('div');
       tooltip.id = 'snake-tooltip';
-      tooltip.classList.add('snake-tooltip');
+      tooltip.classList.add(
+        'snake-tooltip',
+        'pointer-events-none',
+        'bg-white',
+        'dark:bg-black',
+        'dark:text-white',
+        'text-xs',
+        'rounded',
+        'border',
+        'border-gray-300',
+        'px-2',
+        'py-1',
+        'absolute',
+        'opacity-0',
+        'z-50'
+      );
       document.body.appendChild(tooltip);
       tooltipRef.current = tooltip;
-      const tooltipStyle = `
-        position: absolute;
-        background-color: white;
-        border: 1px solid #ccc;
-        border-radius: 4px;
-        padding: 8px;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-        z-index: 1000;
-        pointer-events: none;
-        opacity: 0;
-        display: none;
-        max-width: 300px;
-        font-size: 12px;
-      `;
-      tooltip.style.cssText = tooltipStyle;
     }
     svg.removeEventListener('mouseover', handleMouseOver);
     svg.removeEventListener('mousemove', handleMouseMove);
@@ -131,6 +131,12 @@ export function useSnakePlotTooltip() {
         return;
       }
       const svg = elem;
+
+      // Ensure container and svg inherit theme background
+      const containerDiv = svg.parentElement as HTMLElement | null;
+      containerDiv?.removeAttribute('style');
+      containerDiv?.classList.add('bg-background');
+      svg.removeAttribute('style');
 
       let defs = svg.querySelector('defs');
       if (!defs) {

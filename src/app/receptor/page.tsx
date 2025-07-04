@@ -6,13 +6,12 @@ import receptors from '../../../public/receptors.json';
 import Link from 'next/link';
 import { ChevronLeft } from 'lucide-react';
 import RootContainer from '@/components/RootContainer';
-import { LazySection } from '@/components/LazySection';
 import DownloadableFiles from '@/components/DownloadableFiles';
-import { MSAViewer } from '@/components/MSAViewer';
-
+import FullScreenSection from '@/components/FullScreenSection';
 const ConservationChartAsync = lazy(() => import('@/components/ConservationChartAsync'));
 const OptimizedSnakePlot = lazy(() => import('@/components/OptimizedSnakePlot'));
 const OptimizedSVGTree = lazy(() => import('@/components/OptimizedSVGTree'));
+const MSAViewer = lazy(() => import('@/components/MSAViewer').then(m => ({ default: m.MSAViewer })));
 
 interface Receptor {
   geneName: string;
@@ -27,31 +26,6 @@ interface Receptor {
   svgTree: string;
   name: string;
 }
-
-const ConservationSkeleton = () => (
-  <div className="bg-card text-card-foreground rounded-lg p-6 shadow-md">
-    <div className="animate-pulse space-y-4">
-      <div className="h-6 w-48 bg-muted rounded"></div>
-      <div className="h-64 w-full bg-muted rounded"></div>
-    </div>
-  </div>
-);
-
-const LargeContentSkeleton = ({ title }: { title: string }) => (
-  <div className="bg-card text-card-foreground rounded-lg shadow-md overflow-hidden">
-    <div className="p-6 border-b border-border">
-      <div className="animate-pulse">
-        <div className="h-6 w-64 bg-muted rounded" title={`Loading ${title}...`}></div>
-      </div>
-    </div>
-    <div className="p-6">
-      <div className="animate-pulse space-y-4">
-        <div className="h-4 w-32 bg-muted rounded"></div>
-        <div className="h-96 w-full bg-muted rounded"></div>
-      </div>
-    </div>
-  </div>
-);
 
 export default function ReceptorPage() {
   return (
@@ -149,43 +123,94 @@ function ReceptorContent() {
           </div>
         </div>
 
-        <LazySection fallback={<ConservationSkeleton />} errorTitle="Conservation Chart Error">
-          <ConservationChartAsync conservationFile={receptor.conservationFile} />
-        </LazySection>
-
-        <LazySection
-          fallback={<LargeContentSkeleton title="Snake Plot" />}
-          errorTitle="Snake Plot Error"
-        >
-          <OptimizedSnakePlot
-            svgPath={receptor.snakePlot}
-            conservationFile={receptor.conservationFile}
-          />
-        </LazySection>
-
-        <LazySection
-          fallback={<LargeContentSkeleton title="Phylogenetic Tree" />}
-          errorTitle="Phylogenetic Tree Error"
-        >
-          <OptimizedSVGTree svgPath={receptor.svgTree} />
-        </LazySection>
-
-        <LazySection
-          fallback={<LargeContentSkeleton title="Multiple Sequence Alignment" />}
-          errorTitle="Multiple Sequence Alignment Error"
-        >
-          <MSAViewer
-            alignmentPath={receptor.alignment}
-            conservationFile={receptor.conservationFile}
-          />
-        </LazySection>
-
-        <DownloadableFiles
-          tree={receptor.tree}
-          alignment={receptor.alignment}
-          conservationFile={receptor.conservationFile}
-        />
+        {/* Sequential section loading */}
+        <SequentialSections receptor={receptor} />
       </RootContainer>
+    </>
+  );
+}
+
+// ----- Local loading fallback components -----
+
+const ConservationSkeleton = () => (
+  <div className="bg-card text-card-foreground rounded-lg p-6 shadow-md">
+    <div className="animate-pulse space-y-4">
+      <div className="h-6 w-48 bg-muted rounded"></div>
+      <div className="h-64 w-full bg-muted rounded"></div>
+    </div>
+  </div>
+);
+
+const SectionSpinner = ({ title }: { title: string }) => (
+  <div className="bg-card text-card-foreground rounded-lg p-6 shadow-md">
+    <h2 className="text-lg font-medium mb-4">{title}</h2>
+    <div className="flex items-center justify-center p-8">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-foreground"></div>
+    </div>
+  </div>
+);
+
+// --- SequentialSections component ---
+function SequentialSections({ receptor }: { receptor: Receptor }) {
+  const [sectionIndex, setSectionIndex] = useState(0);
+
+  const next = (expected: number) => () =>
+    setSectionIndex(prev => (prev < expected ? expected : prev));
+
+  return (
+    <>
+      {sectionIndex >= 0 && (
+        <Suspense fallback={<ConservationSkeleton />}>
+          <FullScreenSection>
+            <ConservationChartAsync
+              conservationFile={receptor.conservationFile}
+              onLoaded={next(1)}
+            />
+          </FullScreenSection>
+        </Suspense>
+      )}
+
+      {sectionIndex >= 1 && (
+        <Suspense fallback={<SectionSpinner title="Residue Conservation Snake Plot" />}>
+          <FullScreenSection>
+            <OptimizedSnakePlot
+              svgPath={receptor.snakePlot}
+              conservationFile={receptor.conservationFile}
+              onLoaded={next(2)}
+            />
+          </FullScreenSection>
+        </Suspense>
+      )}
+
+      {sectionIndex >= 2 && (
+        <Suspense fallback={<SectionSpinner title="Phylogenetic Tree of Orthologs" />}>
+          <FullScreenSection>
+            <OptimizedSVGTree svgPath={receptor.svgTree} onLoaded={next(3)} />
+          </FullScreenSection>
+        </Suspense>
+      )}
+
+      {sectionIndex >= 3 && (
+        <Suspense fallback={<SectionSpinner title="Multiple Sequence Alignment of Orthologs" />}>
+          <FullScreenSection>
+            <MSAViewer
+              alignmentPath={receptor.alignment}
+              conservationFile={receptor.conservationFile}
+              onLoaded={next(4)}
+            />
+          </FullScreenSection>
+        </Suspense>
+      )}
+
+      {sectionIndex >= 4 && (
+        <FullScreenSection>
+          <DownloadableFiles
+            tree={receptor.tree}
+            alignment={receptor.alignment}
+            conservationFile={receptor.conservationFile}
+          />
+        </FullScreenSection>
+      )}
     </>
   );
 }

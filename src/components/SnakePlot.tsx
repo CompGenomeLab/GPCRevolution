@@ -93,26 +93,31 @@ export default function SnakePlot({
         try {
           const parser = new DOMParser();
           const doc = parser.parseFromString(text, 'text/html');
+          const isDarkMode = document.documentElement.classList.contains('dark');
+          const themeColor = isDarkMode ? 'white' : 'black';
+
+          const applyTheme = (svg: SVGElement) => {
+            svg.removeAttribute('style');
+            svg.querySelectorAll('[stroke="black"]').forEach(el => el.setAttribute('stroke', themeColor));
+            svg.querySelectorAll('[fill="black"]').forEach(el => el.setAttribute('fill', themeColor));
+            const bg = getComputedStyle(document.documentElement).getPropertyValue('--muted') || '#2f2f2f';
+            svg.style.backgroundColor = bg.trim();
+          };
 
           const container = doc.getElementById('snakeplot-container');
-
           if (container) {
-            container.style.backgroundColor = '#FDFBF7';
-
+            container.removeAttribute('style');
             const svgInContainer = container.querySelector('svg');
             if (svgInContainer) {
-              svgInContainer.style.backgroundColor = '#FDFBF7';
+              applyTheme(svgInContainer);
             }
-
             const reactElement = htmlToReactParser.parse(container.outerHTML);
-
             setSvgContent(reactElement);
             svgLoadedRef.current = true;
           } else {
             const svgElement = doc.querySelector('svg');
             if (svgElement) {
-              svgElement.setAttribute('style', 'background-color: #FDFBF7');
-
+              applyTheme(svgElement);
               const reactElement = htmlToReactParser.parse(svgElement.outerHTML);
               setSvgContent(reactElement);
               svgLoadedRef.current = true;
@@ -226,10 +231,8 @@ export default function SnakePlot({
       ) : !svgContent ? (
         <div className="text-center text-muted-foreground p-4">No tree data available</div>
       ) : (
-        <div className="flex flex-row justify-center items-center mx-auto">
-          <div className="flex justify-center">
-            <div className="w-full overflow-auto p-2 rounded">{svgContent}</div>
-          </div>
+        <div className="w-full overflow-auto border border-border rounded-lg bg-muted/50 flex justify-center items-center">
+          {svgContent}
         </div>
       )}
     </div>

@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { useTheme } from 'next-themes';
 import {
   useReactTable,
   getCoreRowModel,
@@ -32,24 +31,9 @@ const colorMapping: Record<string, string> = {
 };
 
 const ColoredResidue = React.memo(({ residue }: { residue: string }) => {
-  const { theme } = useTheme();
   const char = residue.toUpperCase();
   for (const [color, acids] of Object.entries(colorMapping)) {
     if (acids.includes(char)) {
-      if (theme === 'dark') {
-        return (
-          <span
-            style={{
-              backgroundColor: `#${color}`,
-              color: '#ffffff',
-              display: 'inline-block',
-              width: '1em',
-            }}
-          >
-            {char}
-          </span>
-        );
-      }
       return <span style={{ color: `#${color}` }}>{char}</span>;
     }
   }
@@ -65,11 +49,14 @@ export default function MSAVisualization({
 }: MSAVisualizationProps) {
   const columnHelper = createColumnHelper<Sequence>();
   const [conservationData, setConservationData] = useState<ConservationDatum[] | null>(null);
+  const [isConservationLoading, setIsConservationLoading] = useState(false);
 
   useEffect(() => {
     setConservationData(null);
 
     if (!conservationFile) return;
+
+    setIsConservationLoading(true);
 
     fetch(`/${conservationFile}`)
       .then(res => {
@@ -97,7 +84,9 @@ export default function MSAVisualization({
       .catch(err => {
         console.error('Error loading conservation data:', err);
       })
-      .finally(() => {});
+      .finally(() => {
+        setIsConservationLoading(false);
+      });
   }, [conservationFile]);
 
   const columns = React.useMemo(() => {
@@ -109,7 +98,7 @@ export default function MSAVisualization({
       columnHelper.accessor(row => row.sequence[i] || '-', {
         id: `pos${i + 1}`,
         header: () => (
-          <div className="text-xs text-muted-foreground text-center w-[4px] -rotate-90 h-fit relative top-3.5 left-1">
+          <div className="text-xs text-black text-center w-[4px] -rotate-90 h-fit relative top-3.5 left-1">
             {conservationData?.[i]?.gpcrdb}
           </div>
         ),
@@ -125,13 +114,13 @@ export default function MSAVisualization({
       columnHelper.accessor('header', {
         id: 'header',
         header: () => (
-          <div className="px-2 py-0 text-xs leading-tight text-muted-foreground text-right">GPCRdb#</div>
+          <div className="px-2 py-0 text-xs leading-tight text-black font-bold text-right">GPCRdb #</div>
         ),
-        cell: info => <div className="px-2 py-0 text-xs text-right leading-tight">{info.getValue()}</div>,
+        cell: info => <div className="px-2 py-0 text-xs text-right leading-tight font-semibold text-black">{info.getValue()}</div>,
       }),
       ...positionColumns,
     ];
-  }, [sequences, columnHelper]);
+  }, [sequences, columnHelper, conservationData]);
 
   const table = useReactTable({
     data: sequences,
@@ -139,19 +128,28 @@ export default function MSAVisualization({
     getCoreRowModel: getCoreRowModel(),
   });
 
+  if (conservationFile && (isConservationLoading || !conservationData)) {
+    return (
+      <div className={`flex flex-col items-center justify-center gap-2 p-8 ${className}`}>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-foreground"></div>
+        <p className="text-sm text-muted-foreground">Loading...</p>
+      </div>
+    );
+  }
+
   return (
-    <div className={`w-full rounded-md border ${className}`}>
+    <div className={`w-full rounded-md ${className}`}>
       <div className="h-[640px] overflow-y-scroll relative">
-        <table>
+        <table className="text-black bg-white dark:bg-white">
           <TableHeader>
-            <TableRow className="sticky top-0 bg-muted z-40 h-12 ">
+            <TableRow className="sticky top-0 z-40 h-12 bg-gray-100 dark:bg-gray-100 border-0">
               {table.getFlatHeaders().map(header => (
                 <TableHead
                   key={header.id}
                   className={
                     header.column.id === 'header'
-                      ? 'sticky left-0 top-0 z-30 bg-muted border-r w-[200px] h-12 p-0'
-                      : 'sticky top-0 z-20 bg-muted w-[4px]  h-12 p-0'
+                      ? 'sticky left-0 top-0 z-30 w-[200px] h-12 p-0 bg-gray-100 dark:bg-gray-100'
+                      : 'sticky top-0 z-20 w-[4px]  h-12 p-0 bg-gray-100 dark:bg-gray-100'
                   }
                 >
                   {header.isPlaceholder
@@ -167,8 +165,8 @@ export default function MSAVisualization({
                 key={row.id}
                 className={
                   rowIndex === 0
-                    ? 'sticky top-[48px] z-15 bg-background border-b font-semibold h-8'
-                    : 'h-8 font-semibold'
+                    ? 'sticky top-[48px] z-15 font-semibold h-6 bg-white dark:bg-white border-0'
+                    : 'font-semibold border-0 h-6'
                 }
               >
                 {row.getVisibleCells().map(cell => (
@@ -176,7 +174,7 @@ export default function MSAVisualization({
                     key={cell.id}
                     className={
                       cell.column.id === 'header'
-                        ? 'sticky left-0 z-10 bg-background border-r w-[200px]'
+                        ? 'sticky left-0 w-[200px] p-0 bg-white dark:bg-white'
                         : 'w-[4px] p-0'
                     }
                   >

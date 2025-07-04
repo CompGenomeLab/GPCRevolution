@@ -9,16 +9,19 @@ import { toast } from 'sonner';
 interface OptimizedSnakePlotProps {
   svgPath: string | null;
   conservationFile?: string | null;
+  /** Callback fired once the snake plot finishes loading (success or error). */
+  onLoaded?: () => void;
 }
 
-export default function OptimizedSnakePlot({ svgPath, conservationFile }: OptimizedSnakePlotProps) {
+export default function OptimizedSnakePlot({ svgPath, conservationFile, onLoaded }: OptimizedSnakePlotProps) {
   const [svgContent, setSvgContent] = useState<React.ReactNode | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<boolean>(false);
-  const [isMinimized, setIsMinimized] = useState(true);
+  const [isMinimized] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const svgLoadedRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const hasCalledLoadedRef = useRef(false);
 
   const { updateSnakeplotConservation, fillColor, setFillColor, textColor, setTextColor } =
     useSnakePlotTooltip();
@@ -202,15 +205,6 @@ export default function OptimizedSnakePlot({ svgPath, conservationFile }: Optimi
     URL.revokeObjectURL(url);
   };
 
-  const toggleMinimized = () => {
-    setIsMinimized(!isMinimized);
-    if (!isMinimized) {
-      setSvgContent(null);
-      setError(false);
-      svgLoadedRef.current = false;
-    }
-  };
-
   useEffect(() => {
     if (!svgPath) return;
 
@@ -225,6 +219,17 @@ export default function OptimizedSnakePlot({ svgPath, conservationFile }: Optimi
     };
   }, [svgPath, isMinimized]);
 
+  useEffect(() => {
+    if (hasCalledLoadedRef.current) return;
+
+    const done = !isLoading && (svgContent || error);
+
+    if (done) {
+      hasCalledLoadedRef.current = true;
+      onLoaded?.();
+    }
+  }, [isLoading, svgContent, error, onLoaded]);
+
   if (!svgPath) return null;
 
   return (
@@ -232,14 +237,8 @@ export default function OptimizedSnakePlot({ svgPath, conservationFile }: Optimi
       <div className="p-6 border-b border-border">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-semibold text-foreground">Residue Conservation Snake Plot</h2>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={toggleMinimized}
-              className="px-3 py-1 text-sm bg-muted hover:bg-muted/80 rounded transition-colors"
-            >
-              {isMinimized ? 'Load Snake Plot' : 'Minimize'}
-            </button>
-            {svgContent && !isLoading && !error && !isMinimized && (
+          <div className="flex items-center gap-2 pr-10">
+            {svgContent && !isLoading && !error && (
               <Button onClick={downloadSVG} variant="outline" size="sm">
                 Download SVG
               </Button>
@@ -248,82 +247,72 @@ export default function OptimizedSnakePlot({ svgPath, conservationFile }: Optimi
         </div>
       </div>
 
-      {!isMinimized && (
-        <div className="p-6">
-          {isLoading ? (
-            <div className="space-y-4">
-              <div className="flex items-center justify-center p-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-foreground mr-4"></div>
-                <span>Loading snake plot... {loadingProgress}%</span>
+      <div className="p-6">
+        {isLoading ? (
+          <div className="space-y-4">
+            <div className="flex items-center justify-center p-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-foreground mr-4"></div>
+              <span>Loading snake plot... {loadingProgress}%</span>
+            </div>
+            {loadingProgress > 0 && (
+              <div className="w-full bg-muted rounded-full h-2">
+                <div
+                  className="bg-primary h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${loadingProgress}%` }}
+                ></div>
               </div>
-              {loadingProgress > 0 && (
-                <div className="w-full bg-muted rounded-full h-2">
-                  <div
-                    className="bg-primary h-2 rounded-full transition-all duration-300"
-                    style={{ width: `${loadingProgress}%` }}
-                  ></div>
-                </div>
-              )}
-            </div>
-          ) : error ? (
-            <div className="text-center text-destructive p-4">
-              Failed to load snake plot
-              <button
-                onClick={loadSnakePlotContent}
-                className="block mx-auto mt-2 px-3 py-1 text-sm bg-primary text-primary-foreground rounded hover:bg-primary/90"
-              >
-                Retry
-              </button>
-            </div>
-          ) : !svgContent ? (
-            <div className="text-center text-muted-foreground p-4">
-              Click Load Snake Plot to view the conservation visualization
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="flex flex-wrap gap-4 p-4 bg-muted/50 rounded-lg">
-                <div className="flex items-center gap-2">
-                  <label htmlFor="fillColor" className="text-sm font-medium">
-                    Circle Fill Color:
-                  </label>
-                  <input
-                    type="color"
-                    id="fillColor"
-                    value={fillColor}
-                    onChange={e => setFillColor(e.target.value)}
-                    className="w-8 h-6 rounded cursor-pointer"
-                    title="Circle Fill Color"
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <label htmlFor="textColor" className="text-sm font-medium">
-                    Text Color:
-                  </label>
-                  <input
-                    type="color"
-                    id="textColor"
-                    value={textColor}
-                    onChange={e => setTextColor(e.target.value)}
-                    className="w-8 h-6 rounded cursor-pointer"
-                    title="Text Color"
-                  />
-                </div>
+            )}
+          </div>
+        ) : error ? (
+          <div className="text-center text-destructive p-4">
+            Failed to load snake plot
+            <button
+              onClick={loadSnakePlotContent}
+              className="block mx-auto mt-2 px-3 py-1 text-sm bg-primary text-primary-foreground rounded hover:bg-primary/90"
+            >
+              Retry
+            </button>
+          </div>
+        ) : !svgContent ? (
+          <div className="text-center text-muted-foreground p-4">
+            Click Load Snake Plot to view the conservation visualization
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex flex-wrap gap-4 p-4 bg-muted/50 rounded-lg">
+              <div className="flex items-center gap-2">
+                <label htmlFor="fillColor" className="text-sm font-medium">
+                  Circle Fill Color:
+                </label>
+                <input
+                  type="color"
+                  id="fillColor"
+                  value={fillColor}
+                  onChange={e => setFillColor(e.target.value)}
+                  className="w-8 h-6 rounded cursor-pointer"
+                  title="Circle Fill Color"
+                />
               </div>
-              <div className="w-full overflow-auto  border border-border rounded-lg bg-background flex justify-center items-center">
-                {svgContent}
+              <div className="flex items-center gap-2">
+                <label htmlFor="textColor" className="text-sm font-medium">
+                  Text Color:
+                </label>
+                <input
+                  type="color"
+                  id="textColor"
+                  value={textColor}
+                  onChange={e => setTextColor(e.target.value)}
+                  className="w-8 h-6 rounded cursor-pointer"
+                  title="Text Color"
+                />
               </div>
             </div>
-          )}
-        </div>
-      )}
-
-      {isMinimized && (
-        <div className="p-6 text-center text-muted-foreground">
-          <p className="text-sm mt-1">
-            Click Load Snake Plot to view the interactive conservation visualization.
-          </p>
-        </div>
-      )}
+            <div className="w-full overflow-auto  border border-border rounded-lg bg-background flex justify-center items-center">
+              {svgContent}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

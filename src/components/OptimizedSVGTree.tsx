@@ -5,16 +5,19 @@ import { toast } from 'sonner';
 
 interface OptimizedSVGTreeProps {
   svgPath: string | null;
+  /** Callback fired once the tree finishes loading (success or error). */
+  onLoaded?: () => void;
 }
 
-export default function OptimizedSVGTree({ svgPath }: OptimizedSVGTreeProps) {
+export default function OptimizedSVGTree({ svgPath, onLoaded }: OptimizedSVGTreeProps) {
   const [svgContent, setSvgContent] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isMinimized, setIsMinimized] = useState(true);
+  const [isMinimized] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const svgContainerRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const hasCalledLoadedRef = useRef(false);
 
   const loadSVGContent = async () => {
     if (!svgPath) return;
@@ -95,13 +98,16 @@ export default function OptimizedSVGTree({ svgPath }: OptimizedSVGTreeProps) {
     };
   }, [svgPath, isMinimized]);
 
-  const toggleMinimized = () => {
-    setIsMinimized(!isMinimized);
-    if (!isMinimized) {
-      setSvgContent(null);
-      setError(null);
+  useEffect(() => {
+    if (hasCalledLoadedRef.current) return;
+
+    const done = !isLoading && (svgContent !== null || error !== null);
+
+    if (done) {
+      hasCalledLoadedRef.current = true;
+      onLoaded?.();
     }
-  };
+  }, [isLoading, svgContent, error, onLoaded]);
 
   if (!svgPath) return null;
 
@@ -110,12 +116,7 @@ export default function OptimizedSVGTree({ svgPath }: OptimizedSVGTreeProps) {
       <div className="p-6 border-b border-border">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-semibold text-foreground">Phylogenetic Tree of Orthologs</h2>
-          <button
-            onClick={toggleMinimized}
-            className="px-3 py-1 text-sm bg-muted hover:bg-muted/80 rounded transition-colors"
-          >
-            {isMinimized ? 'Load Tree' : 'Minimize'}
-          </button>
+          <div className="pr-10"></div>
         </div>
       </div>
 
@@ -154,17 +155,11 @@ export default function OptimizedSVGTree({ svgPath }: OptimizedSVGTreeProps) {
             <div className="space-y-4">
               <div
                 ref={svgContainerRef}
-                className="w-full overflow-auto h-96 border border-border rounded-lg bg-background"
+                className="w-full overflow-auto h-[640px] border border-border rounded-lg bg-background"
                 dangerouslySetInnerHTML={{ __html: svgContent }}
               />
             </div>
           )}
-        </div>
-      )}
-
-      {isMinimized && (
-        <div className="p-6 text-center text-muted-foreground">
-          <p className="text-sm mt-1">Click Load Tree to view the tree visualization.</p>
         </div>
       )}
     </div>

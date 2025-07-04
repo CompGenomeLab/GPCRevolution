@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import MSAVisualization from '@/components/MSAVisualization';
 import useCleanedSequences from '@/hooks/useCleanedSequence';
 
@@ -9,41 +9,66 @@ interface Sequence {
   sequence: string;
 }
 
+// Simple in-memory cache to avoid re-fetching alignments
+const alignmentCache: Map<string, Sequence[]> = new Map();
+
 export function MSAViewer({
   alignmentPath,
   conservationFile,
+  onLoaded,
 }: {
   alignmentPath: string | null;
   conservationFile: string | null;
+  onLoaded?: () => void;
 }) {
   const [sequences, setSequences] = useState<Sequence[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const hasCalledLoadedRef = useRef(false);
   const cleanedSequences = useCleanedSequences(sequences);
   useEffect(() => {
     if (!alignmentPath) return;
 
-    setIsLoading(true);
-    fetch(`/alignments/${alignmentPath.split('/').pop()}`)
-      .then(res => res.text())
-      .then(text => {
-        const fastaSequences = text.split('>').filter(Boolean);
-        const parsedSequences = fastaSequences.map(seq => {
-          const [header, ...sequenceParts] = seq.split('\n');
-          const sequence = sequenceParts.join('').trim();
-          return {
-            header: header.trim(),
-            sequence,
-          };
+    const cacheKey = alignmentPath;
+    if (alignmentCache.has(cacheKey)) {
+      setSequences(alignmentCache.get(cacheKey)!);
+      setIsLoading(false);
+    } else {
+      setIsLoading(true);
+      fetch(`/alignments/${alignmentPath.split('/').pop()}`)
+        .then(res => res.text())
+        .then(text => {
+          const fastaSequences = text.split('>').filter(Boolean);
+          const parsedSequences = fastaSequences.map(seq => {
+            const [header, ...sequenceParts] = seq.split('\n');
+            const sequence = sequenceParts.join('').trim();
+            return {
+              header: header.trim(),
+              sequence,
+            };
+          });
+          setSequences(parsedSequences);
+          alignmentCache.set(cacheKey, parsedSequences);
+        })
+        .catch(err => {
+          console.error('Error loading alignment data:', err);
+        })
+        .finally(() => {
+          setIsLoading(false);
         });
-        setSequences(parsedSequences);
-      })
-      .catch(err => {
-        console.error('Error loading alignment data:', err);
-      })
-      .finally(() => {
-        setIsLoading(false);
-      });
+    }
   }, [alignmentPath, conservationFile]);
+
+  // Notify parent when loading completes (either data fetched or error).
+  useEffect(() => {
+    if (hasCalledLoadedRef.current) return;
+
+    const done = !isLoading && (sequences.length > 0 || alignmentPath === null);
+
+    if (done) {
+      hasCalledLoadedRef.current = true;
+      onLoaded?.();
+    }
+  }, [isLoading, sequences.length, alignmentPath, onLoaded]);
 
   if (!alignmentPath) return null;
 

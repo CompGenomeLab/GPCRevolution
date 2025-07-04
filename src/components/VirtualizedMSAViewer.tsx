@@ -112,11 +112,11 @@ export function VirtualizedMSAViewer({ alignmentPath }: VirtualizedMSAViewerProp
           <div className="w-48 truncate text-xs font-mono mr-4 text-muted-foreground">
             {sequence.header}
           </div>
-          <div className="flex-1 font-mono text-xs tracking-wider overflow-x-auto">
+          <div className="flex-1 font-mono text-xs whitespace-nowrap overflow-x-auto">
             {sequence.sequence.split('').map((aa, i) => (
               <span
                 key={i}
-                className={`inline-block w-3 text-center ${
+                className={`inline-block w-4 text-center leading-none ${
                   aa === '-' ? 'text-muted-foreground' : 'text-foreground'
                 }`}
               >

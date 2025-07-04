@@ -1,22 +1,8 @@
 'use client';
 
-import React from 'react';
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend,
-  TooltipItem,
-  Scale,
-  ChartData,
-} from 'chart.js';
-import { Bar } from 'react-chartjs-2';
-import annotationPlugin from 'chartjs-plugin-annotation';
-
-ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, annotationPlugin);
+import React, { useRef, useEffect } from 'react';
+import * as d3 from 'd3';
+import type { NumberValue } from 'd3';
 
 export interface ConservationDatum {
   residue: number;
@@ -27,223 +13,286 @@ export interface ConservationDatum {
   gpcrdb: string;
 }
 
+type RegionGroup = { region: string; startResidue: number; endResidue: number };
+
 interface ConservationChartProps {
   data: ConservationDatum[];
 }
 
 const ConservationChart: React.FC<ConservationChartProps> = ({ data }) => {
-  const tooltipTexts = React.useMemo(() => {
-    return data.map(d => [
-      `Residue #: ${d.residue}`,
-      `Conservation %: ${d.conservation}%`,
-      `Conserved AA: ${d.conservedAA}`,
-      `Human AA: ${d.humanAA}`,
-      `Region: ${d.region}`,
-      `GPCRdb #: ${d.gpcrdb}`,
-    ]);
-  }, [data]);
+  const yAxisContainerRef = useRef<HTMLDivElement>(null);
+  const chartContainerRef = useRef<HTMLDivElement>(null);
 
-  const getRegionColor = (region: string, index: number) => {
-    const colors = [
-      '#FFFACD',
-      '#E6E6FA',
-      '#FFFACD',
-      '#E6E6FA',
-      '#FFFACD',
-      '#E6E6FA',
-      '#FFFACD',
-      '#E6E6FA',
-      '#FFFACD',
-      '#E6E6FA',
-    ];
-    return colors[index % colors.length];
-  };
+  useEffect(() => {
+    const yAxisContainer = yAxisContainerRef.current;
+    const chartContainer = chartContainerRef.current;
 
-  const regionGroups = React.useMemo(() => {
-    const groups: { region: string; startIndex: number; endIndex: number; colorIndex: number }[] =
-      [];
-    let currentRegion = '';
-    let startIndex = 0;
+    if (!yAxisContainer || !chartContainer) return;
+
+    // Clear any previous SVG content
+    yAxisContainer.innerHTML = '';
+    chartContainer.innerHTML = '';
+    if (!data || data.length === 0) return;
+
+    /* ---------- Layout constants ---------- */
+    const margin = { top: 20, right: 20, bottom: 20, left: 20 };
+    const yAxisWidth = 80;
+    const totalHeight = 242;
+    const barWidthEstimate = 12.35;
+    const totalWidth = data.length * barWidthEstimate + margin.left + margin.right;
+    const infoRowHeight = 20;
+    const gapBetweenInfoRows = 8;
+    const gapBeforeRegion = 12;
+    const regionBlockHeight = 22;
+    const chartAreaHeight =
+      totalHeight -
+      margin.top -
+      margin.bottom -
+      infoRowHeight * 2 - // For humanAA and GPCRdb rows
+      gapBetweenInfoRows -
+      gapBeforeRegion -
+      regionBlockHeight;
+
+    const pastelColors = ['#FFFACD', '#E6E6FA'];
+
+    /* ---------- Color mapping for regions ---------- */
+    const regionColorMapping: Record<string, string> = {};
     let colorIndex = 0;
-    const seenRegions = new Set<string>();
-
-    data.forEach((item, index) => {
-      if (item.region !== currentRegion) {
-        if (currentRegion !== '') {
-          groups.push({
-            region: currentRegion,
-            startIndex,
-            endIndex: index - 1,
-            colorIndex: colorIndex - 1,
-          });
-        }
-        currentRegion = item.region;
-        startIndex = index;
-        if (!seenRegions.has(item.region)) {
-          seenRegions.add(item.region);
-          colorIndex++;
-        }
+    data.forEach(d => {
+      if (!(d.region in regionColorMapping)) {
+        regionColorMapping[d.region] = pastelColors[colorIndex % pastelColors.length];
+        colorIndex += 1;
       }
     });
 
-    if (currentRegion !== '') {
-      groups.push({
+    /* ---------- SVGs for Axis and Chart ---------- */
+    const yAxisSvg = d3
+      .select(yAxisContainer)
+      .append('svg')
+      .attr('width', yAxisWidth)
+      .attr('height', totalHeight);
+
+    const chartSvg = d3
+      .select(chartContainer)
+      .append('svg')
+      .attr('width', totalWidth)
+      .attr('height', totalHeight);
+
+    /* ---------- Tooltip ---------- */
+    let tooltip = d3.select('body').select<HTMLDivElement>('.conservation-tooltip');
+    if (tooltip.empty()) {
+      tooltip = d3
+        .select('body')
+        .append('div')
+        .attr(
+          'class',
+          'conservation-tooltip pointer-events-none bg-white dark:bg-black dark:text-white text-xs rounded border border-gray-300 px-2 py-1 absolute opacity-0'
+        );
+    }
+
+    /* ---------- Scales ---------- */
+    const x = d3
+      .scaleBand<string>()
+      .domain(data.map(d => d.residue.toString()))
+      .range([0, totalWidth])
+      .paddingInner(0.05);
+
+    const y = d3.scaleLinear().domain([0, 100]).range([margin.top + chartAreaHeight, margin.top]);
+
+    /* ---------- Y-Axis (in its own SVG) ---------- */
+    const yAxis = d3.axisLeft(y).ticks(5).tickFormat((d: NumberValue) => `${d}%`);
+    yAxisSvg
+      .append('g')
+      .attr('transform', `translate(${yAxisWidth - 1},0)`)
+      .attr('class', 'axis text-foreground')
+      .call(yAxis)
+      .selectAll('text')
+      .style('font-size', '12px');
+
+    const yLabel = yAxisSvg
+      .append('text')
+      .attr('text-anchor', 'middle')
+      .attr(
+        'transform',
+        `translate(${yAxisWidth - 65},${margin.top + chartAreaHeight / 2}) rotate(-90)`
+      )
+      .attr('class', 'text-foreground fill-current')
+      .style('font-size', '14px');
+
+    yLabel.append('tspan').attr('x', 0).text('Orthologous');
+    yLabel.append('tspan').attr('x', 0).attr('dy', '1.2em').text('Conservation');
+
+    /* ---------- Bars (in Chart SVG) ---------- */
+    chartSvg
+      .selectAll('rect.bar')
+      .data(data)
+      .enter()
+      .append('rect')
+      .attr('class', 'bar')
+      .attr('fill', '#424874')
+      .attr('x', (d: ConservationDatum) => x(d.residue.toString())!)
+      .attr('y', (d: ConservationDatum) => y(d.conservation))
+      .attr('width', x.bandwidth())
+      .attr('height', (d: ConservationDatum) => y(0) - y(d.conservation))
+      .on('mouseover', (event: PointerEvent, d: ConservationDatum) => {
+        tooltip
+          .html(
+            `<strong>Residue #:</strong> ${d.residue}<br/>` +
+              `<strong>Conservation %:</strong> ${d.conservation}%<br/>` +
+              `<strong>Conserved AA:</strong> ${d.conservedAA}<br/>` +
+              `<strong>Human AA:</strong> ${d.humanAA}<br/>` +
+              `<strong>Region:</strong> ${d.region}<br/>` +
+              `<strong>GPCRdb #:</strong> ${d.gpcrdb}`
+          )
+          .style('opacity', 1);
+      })
+      .on('mousemove', (event: PointerEvent) => {
+        tooltip.style('left', `${event.pageX + 10}px`).style('top', `${event.pageY - 40}px`);
+      })
+      .on('mouseout', () => {
+        tooltip.style('opacity', 0);
+      });
+
+    /* ---------- Bar Outlines for Dark Mode Visibility ---------- */
+    chartSvg
+      .selectAll('path.bar-outline')
+      .data(data)
+      .enter()
+      .append('path')
+      .attr('class', 'bar-outline')
+      .attr('fill', 'none')
+      .attr('stroke', '#FFFFFF')
+      .attr('stroke-width', 1)
+      .attr('d', (d: ConservationDatum) => {
+        if (d.conservation === 0) return '';
+        const barX = x(d.residue.toString())!;
+        const barY = y(d.conservation);
+        const barW = x.bandwidth();
+        const barH = y(0) - y(d.conservation);
+        // Path: Move to bottom-left, line to top-left, line to top-right, line to bottom-right
+        return `M ${barX} ${barY + barH} L ${barX} ${barY} L ${barX + barW} ${barY} L ${barX + barW} ${barY + barH}`;
+      })
+      .attr('pointer-events', 'none');
+
+    /* ---------- Information rows (in Chart SVG) ---------- */
+    const humanRowY = margin.top + chartAreaHeight + 4;
+    chartSvg
+      .selectAll('text.human-aa')
+      .data(data)
+      .enter()
+      .append('text')
+      .attr('class', 'human-aa text-foreground fill-current')
+      .attr('text-anchor', 'middle')
+      .style('font-size', '12px')
+      .attr('x', (d: ConservationDatum) => x(d.residue.toString())! + x.bandwidth() / 2)
+      .attr('y', humanRowY + infoRowHeight / 2)
+      .attr('dominant-baseline', 'middle')
+      .text((d: ConservationDatum) => d.humanAA);
+
+    const gpcrRowY = humanRowY + infoRowHeight + gapBetweenInfoRows;
+    const regionRowY = gpcrRowY + infoRowHeight + gapBeforeRegion;
+
+    /* ---------- Region blocks (in Chart SVG) ---------- */
+    const regionGroups: RegionGroup[] = [];
+    if (data.length > 0) {
+      let startResidue = data[0].residue;
+      let currentRegion = data[0].region;
+      for (let i = 1; i < data.length; i++) {
+        const prev = data[i - 1];
+        const cur = data[i];
+        if (cur.region !== prev.region) {
+          regionGroups.push({ region: prev.region, startResidue, endResidue: prev.residue });
+          startResidue = cur.residue;
+          currentRegion = cur.region;
+        }
+      }
+      regionGroups.push({
         region: currentRegion,
-        startIndex,
-        endIndex: data.length - 1,
-        colorIndex: colorIndex - 1,
+        startResidue,
+        endResidue: data[data.length - 1].residue,
       });
     }
 
-    return groups;
+    chartSvg
+      .selectAll('rect.region-block')
+      .data(regionGroups)
+      .enter()
+      .append('rect')
+      .attr('class', 'region-block')
+      .attr('x', (d: RegionGroup) => x(d.startResidue.toString())!)
+      .attr('y', regionRowY)
+      .attr(
+        'width',
+        (d: RegionGroup) =>
+          x(d.endResidue.toString())! + x.bandwidth() - x(d.startResidue.toString())!
+      )
+      .attr('height', regionBlockHeight)
+      .attr('fill', (d: RegionGroup) => regionColorMapping[d.region])
+      .on('mouseover', (event: PointerEvent, d: RegionGroup) => {
+        d3.select(event.currentTarget as SVGRectElement)
+          .style('stroke', '#000')
+          .style('stroke-width', 1);
+        tooltip
+          .html(
+            `<strong>Region:</strong> ${d.region}<br/>Residues ${d.startResidue} - ${d.endResidue}`
+          )
+          .style('opacity', 1);
+      })
+      .on('mousemove', (event: PointerEvent) => {
+        tooltip.style('left', `${event.pageX + 10}px`).style('top', `${event.pageY - 40}px`);
+      })
+      .on('mouseout', (event: PointerEvent) => {
+        d3.select(event.currentTarget as SVGRectElement).style('stroke', 'none');
+        tooltip.style('opacity', 0);
+      });
+
+    chartSvg
+      .selectAll('text.region-label')
+      .data(regionGroups)
+      .enter()
+      .append('text')
+      .attr('class', 'region-label')
+      .style('fill', 'black')
+      .style('font-size', '12px')
+      .attr('text-anchor', 'middle')
+      .attr('x', (d: RegionGroup) => {
+        const leftX = x(d.startResidue.toString())!;
+        const rightX = x(d.endResidue.toString())! + x.bandwidth();
+        return (leftX + rightX) / 2;
+      })
+      .attr('y', regionRowY + regionBlockHeight / 2)
+      .attr('dominant-baseline', 'middle')
+      .text((d: RegionGroup) => d.region);
+
+    /* ---------- GPCRdb row (drawn last to be on top) ---------- */
+    chartSvg
+      .selectAll('text.gpcrdb')
+      .data(data)
+      .enter()
+      .append('text')
+      .attr('class', 'gpcrdb text-foreground fill-current')
+      .style('font-size', '12px')
+      .attr('text-anchor', 'middle')
+      .attr('dominant-baseline', 'middle')
+      .attr('transform', (d: ConservationDatum) => {
+        const cx = x(d.residue.toString())! + x.bandwidth() / 2;
+        const cy = gpcrRowY + infoRowHeight / 2;
+        return `translate(${cx}, ${cy}) rotate(-90)`;
+      })
+      .text((d: ConservationDatum) => d.gpcrdb);
+
+    return () => {
+      tooltip.remove();
+    };
   }, [data]);
-
-  const chartData: ChartData<'bar'> = {
-    labels: data.map(d => [d.residue.toString(), d.humanAA]),
-    datasets: [
-      {
-        label: 'Orthologous Conservation %',
-        data: data.map(d => d.conservation),
-        backgroundColor: '#424874',
-        borderColor: '#FFFFFF',
-        borderWidth: 1,
-        barThickness: 'flex',
-        categoryPercentage: 1.0,
-        barPercentage: 1.0,
-      },
-    ],
-  };
-
-  const options = React.useMemo(
-    () => ({
-      responsive: true,
-      maintainAspectRatio: false,
-      animation: {
-        duration: 0,
-      },
-      interaction: {
-        intersect: false,
-        mode: 'index' as const,
-      },
-      plugins: {
-        legend: {
-          display: false,
-        },
-        tooltip: {
-          enabled: true,
-          mode: 'index' as const,
-          intersect: false,
-          backgroundColor: '#ffffff',
-          titleColor: '#000000',
-          bodyColor: '#000000',
-          borderColor: '#cccccc',
-          borderWidth: 1,
-          displayColors: false,
-          animation: { duration: 0 },
-          external: undefined,
-          filter: () => true,
-          callbacks: {
-            title: () => [],
-            label: (context: TooltipItem<'bar'>) => tooltipTexts[context.dataIndex],
-          },
-        },
-        annotation: {
-          annotations: regionGroups.flatMap(group => {
-            const color = getRegionColor(group.region, group.colorIndex);
-
-            return [
-              {
-                type: 'box' as const,
-                xMin: group.startIndex - 0.5,
-                xMax: group.endIndex + 0.5,
-                yMin: -25,
-                yMax: -5,
-                backgroundColor: color,
-                borderColor: color.replace('0.4', '0.8'),
-                borderWidth: 1,
-              },
-              {
-                type: 'label' as const,
-                xValue: (group.startIndex + group.endIndex) / 2,
-                yValue: -15,
-                content: group.region,
-                backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                borderColor: 'rgba(0, 0, 0, 0.2)',
-                borderWidth: 1,
-                font: {
-                  size: 8,
-                  weight: 'bold' as const,
-                },
-                color: '#000000',
-                padding: 2,
-                borderRadius: 3,
-              },
-            ];
-          }),
-        },
-      },
-      scales: {
-        y: {
-          beginAtZero: true,
-          max: 100,
-          min: -30,
-          title: {
-            display: true,
-            text: ['Orthologous', 'Conservation %'],
-            font: {
-              size: 15,
-            },
-          },
-
-          ticks: {
-            stepSize: 20,
-            callback: function (this: Scale, tickValue: number | string) {
-              if (Number(tickValue) < 0) return '';
-              return tickValue + '%';
-            },
-          },
-          grid: {
-            display: false,
-          },
-        },
-        x: {
-          ticks: {
-            maxRotation: 0,
-            minRotation: 0,
-            autoSkip: false,
-            maxTicksLimit: undefined,
-            font: {
-              size: 12,
-            },
-            callback: function (value: number | string, index: number): string[] {
-              const labels = data[index];
-              return [labels.humanAA, labels.residue.toString()];
-            },
-          },
-          grid: {
-            display: false,
-          },
-        },
-      },
-    }),
-    [data, regionGroups, tooltipTexts]
-  );
 
   return (
     <div className="bg-card text-card-foreground rounded-lg p-6 shadow-md">
       <h2 className="text-xl font-semibold text-foreground mb-4">Residue Conservation Bar Plot</h2>
-      <div className="relative w-full h-[250px]">
-        <div className="absolute inset-0 p-4">
-          <div className="w-full h-full overflow-x-auto">
-            <div
-              style={{
-                width: `${Math.max(800, data.length * 25)}px`,
-                height: '100%',
-              }}
-            >
-              <Bar data={chartData} options={options} />
-            </div>
-          </div>
+      <div className="relative w-full h-[300px] flex overflow-hidden">
+        <div ref={yAxisContainerRef} className="flex-shrink-0 z-10 bg-card" />
+        <div className="flex-grow overflow-x-auto">
+          <div ref={chartContainerRef} className="h-full" />
         </div>
       </div>
     </div>
