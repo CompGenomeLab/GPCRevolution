@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { Parser as HtmlToReactParser } from 'html-to-react';
 import { useSnakePlotTooltip } from '../hooks/useSnakePlotTooltip';
 import { Button } from './ui/button';
 
@@ -18,19 +17,20 @@ export default function SnakePlot({
   conservationFile?: string | null;
 }) {
   // ——————————————————————————— state & refs ——————————————————————————
-  const [svgContent, setSvgContent] = useState<React.ReactNode | null>(null);
+  const [svgHtml, setSvgHtml] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(false);
   const svgLoadedRef = useRef(false);
+  const svgContainerRef = useRef<HTMLDivElement>(null);
 
   /**
    * Tooltip + conservation hook gives us:
-   *   • attachTooltip                – (adds residue tooltips)
-   *   • updateSnakeplotConservation – (colours circles by conservation)
-   *   • fillColor / textColor        – colour‑picker state
+   *   • initSnakeplotTooltips        – (adds residue tooltips)
+   *   • updateSnakeplotConservation – (colours circles by conservation)
+   *   • fillColor / textColor        – colour‑picker state
    */
   const {
-    attachTooltip,
+    initSnakeplotTooltips,
     updateSnakeplotConservation,
     fillColor,
     setFillColor,
@@ -46,7 +46,7 @@ export default function SnakePlot({
       return;
     }
 
-    // clone so we don’t mutate what the user is seeing
+    // clone so we don't mutate what the user is seeing
     const clonedSvg = svgElement.cloneNode(true) as SVGElement;
 
     // make gradient + text colours match the current pickers
@@ -85,8 +85,6 @@ export default function SnakePlot({
   // ————————————————————— fetch + prepare SVG ——————————————————————
   useEffect(() => {
     if (!svgPath) return;
-
-    const htmlToReactParser = new HtmlToReactParser();
 
     setIsLoading(true);
     setError(false);
@@ -136,12 +134,12 @@ export default function SnakePlot({
             container.removeAttribute('style');
             const svgInContainer = container.querySelector('svg');
             if (svgInContainer) applyTheme(svgInContainer);
-            setSvgContent(htmlToReactParser.parse(container.outerHTML));
+            setSvgHtml(container.outerHTML);
           } else {
             const svgElement = doc.querySelector('svg');
             if (svgElement) {
               applyTheme(svgElement);
-              setSvgContent(htmlToReactParser.parse(svgElement.outerHTML));
+              setSvgHtml(svgElement.outerHTML);
             } else {
               console.warn('SVG or container not found');
             }
@@ -160,20 +158,21 @@ export default function SnakePlot({
 
   // —————————————————— recolour circles/text live ————————————————————
   useEffect(() => {
-    if (!svgContent) return;
+    if (!svgHtml) return;
 
     requestAnimationFrame(() => {
-      const svg =
-        (document.getElementById('snakeplot') as SVGElement) ||
+      const svgElement = document.getElementById('snakeplot');
+      const svg = 
+        (svgElement instanceof SVGElement ? svgElement : null) ||
         (document.querySelector('#snakeplot-container svg') as SVGElement) ||
         (document.querySelector('svg') as SVGElement);
       if (!svg) return;
 
       svg.querySelectorAll('ellipse,circle').forEach(el => el.setAttribute('fill', fillColor));
       svg.querySelectorAll('text').forEach(el => el.setAttribute('fill', textColor));
-      attachTooltip(svg); // (re)‑attach residue tooltips
+      initSnakeplotTooltips(svg);
     });
-  }, [svgContent, fillColor, textColor, attachTooltip]);
+  }, [svgHtml, fillColor, textColor, initSnakeplotTooltips]);
 
   // ———————————————— apply conservation colours ————————————————
   useEffect(() => {
@@ -221,7 +220,7 @@ export default function SnakePlot({
           Residue Conservation Snake Plot
         </h2>
 
-        {svgContent && !isLoading && !error && (
+        {svgHtml && !isLoading && !error && (
           <div className="flex justify-end gap-4 items-center">
             {/* colour pickers + download */}
             <div className="flex flex-wrap gap-4 p-4 rounded-lg">
@@ -266,12 +265,14 @@ export default function SnakePlot({
         </div>
       ) : error ? (
         <div className="text-center text-muted-foreground p-4">Not found</div>
-      ) : !svgContent ? (
+      ) : !svgHtml ? (
         <div className="text-center text-muted-foreground p-4">No snake‑plot data available</div>
       ) : (
-        <div className="w-full overflow-auto border border-border rounded-lg flex justify-center items-center">
-          {svgContent}
-        </div>
+        <div 
+          ref={svgContainerRef}
+          className="w-full overflow-auto border border-border rounded-lg flex justify-center items-center"
+          dangerouslySetInnerHTML={{ __html: svgHtml }}
+        />
       )}
     </div>
   );
