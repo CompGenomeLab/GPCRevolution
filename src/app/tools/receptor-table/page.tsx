@@ -459,7 +459,7 @@ export default function ReceptorTablePage() {
             <div className="text-xs text-muted-foreground">{receptorName}</div>
             <div className="text-center font-medium">
               {colType === 'resNum'
-                ? 'Residue'
+                ? 'Residue #'
                 : colType === 'AA'
                   ? 'Amino Acid'
                   : colType === 'Conservation'
@@ -469,7 +469,7 @@ export default function ReceptorTablePage() {
                       : colType === 'region'
                         ? 'Region'
                         : colType === 'gpcrdb'
-                          ? 'GPCRdb'
+                          ? 'GPCRdb #'
                           : colType}
             </div>
           </div>
