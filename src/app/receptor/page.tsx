@@ -67,7 +67,7 @@ function ReceptorContent() {
     if (receptor) {
       window.scrollTo({ top: 0 });
     }
-  }, [receptor?.geneName]);
+  }, [receptor]);
 
   if (!gene) {
     return (
