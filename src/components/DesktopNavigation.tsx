@@ -37,7 +37,7 @@ export default function DesktopNavigation({ items }: DesktopNavigationProps) {
                   {item.title}
                 </NavigationMenuTrigger>
                 <NavigationMenuContent>
-                  <ul className="grid gap-3 p-4 min-w-[400px] grid-rows-4 grid-flow-col">
+                  <ul className="grid gap-3 p-4 min-w-[400px] grid-rows-3 grid-flow-col">
                     {item.items.map((subItem, subIndex) => (
                       <li key={subIndex} className="w-[400px]">
                         <NavigationMenuLink asChild>
