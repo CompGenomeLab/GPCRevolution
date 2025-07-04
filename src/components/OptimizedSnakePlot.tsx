@@ -81,7 +81,7 @@ export default function OptimizedSnakePlot({ svgPath, conservationFile, onLoaded
         const container = doc.getElementById('snakeplot-container');
 
         if (container) {
-          container.style.backgroundColor = '#FDFBF7';
+          container.classList.add('bg-card');
 
           const svgInContainer = container.querySelector('svg');
           if (svgInContainer) {
@@ -307,7 +307,7 @@ export default function OptimizedSnakePlot({ svgPath, conservationFile, onLoaded
                 />
               </div>
             </div>
-            <div className="w-full overflow-auto  border border-border rounded-lg bg-background flex justify-center items-center">
+            <div className="w-full overflow-auto rounded-lg bg-card flex justify-center items-center">
               {svgContent}
             </div>
           </div>

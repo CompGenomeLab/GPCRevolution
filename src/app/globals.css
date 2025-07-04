@@ -112,6 +112,18 @@
   --sidebar-ring: #DBD6F9;
 }
 
+
+/* Tree coloring */
+:root {
+  --tree-colour: #000;     /* light-mode lines + labels   */
+  --node-colour: #424874;  /* light-mode node circles     */
+}
+
+.dark {
+  --tree-colour: #e5e7eb;  /* slate-200 — near-white      */
+  --node-colour: #a5b4ff;  /* indigo-300 — light indigo   */
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

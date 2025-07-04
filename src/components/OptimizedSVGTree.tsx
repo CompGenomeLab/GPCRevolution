@@ -63,7 +63,9 @@ export default function OptimizedSVGTree({ svgPath, onLoaded }: OptimizedSVGTree
         }
       }
 
-      const optimizedContent = optimizeSVGContent(content);
+      const optimizedContent = normaliseSVGColours(
+        optimizeSVGContent(content),
+      );
       setSvgContent(optimizedContent);
     } catch (err) {
       if (err instanceof Error && err.name !== 'AbortError') {
@@ -83,6 +85,12 @@ export default function OptimizedSVGTree({ svgPath, onLoaded }: OptimizedSVGTree
       .replace(/<g[^>]*>\s*<\/g>/g, '')
       .trim();
   };
+
+  const normaliseSVGColours = (svg: string): string =>
+    svg
+      .replace(/stroke="#?000000?"/gi, 'stroke="currentColor"')
+      .replace(/fill="#?000000?"/gi,   'fill="currentColor"')
+      .replace(/(#424874)/gi, 'var(--node-colour)');
 
   useEffect(() => {
     if (!svgPath) return;
@@ -142,7 +150,7 @@ export default function OptimizedSVGTree({ svgPath, onLoaded }: OptimizedSVGTree
               Failed to load tree: {error}
               <button
                 onClick={loadSVGContent}
-                className="block mx-auto mt-2 px-3 py-1 text-sm bg-primary text-primary-foreground rounded hover:bg-primary/90"
+                className="block mx-auto mt-2 px-3 py-1 text-sm bg-card text-primary-foreground rounded hover:bg-primary/90"
               >
                 Retry
               </button>
@@ -155,9 +163,11 @@ export default function OptimizedSVGTree({ svgPath, onLoaded }: OptimizedSVGTree
             <div className="space-y-4">
               <div
                 ref={svgContainerRef}
-                className="w-full overflow-auto h-[640px] border border-border rounded-lg bg-background"
+                className="w-full overflow-auto h-[640px] rounded-lg bg-card
+                          text-[color:var(--tree-colour)]"                     // NEW
                 dangerouslySetInnerHTML={{ __html: svgContent }}
               />
+
             </div>
           )}
         </div>

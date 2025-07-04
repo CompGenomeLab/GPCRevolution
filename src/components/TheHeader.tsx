@@ -135,7 +135,7 @@ export function TheHeader({ className }: Props) {
                 height={32}
               />
               <span className="text-xl font-semibold tracking-tight text-primary dark:text-primary">
-                GPCREVOdb
+                GPCR Evolution DB
               </span>
             </Link>
 

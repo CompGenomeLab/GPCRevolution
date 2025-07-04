@@ -51,41 +51,42 @@ export default function Home() {
   };
 
   return (
-    <RootContainer className="max-w-2xl">
-      <h1 className="text-3xl font-bold text-left">Welcome to the GPCR Evolution Database</h1>
-      <p className="text-lg text-muted-foreground text-left">
-        GPCR Evolution Database (GPCREVOdb) is a comprehensive resource for exploring the
-        evolutionary history of human GPCRs.
-      </p>
-      <Command shouldFilter={false} className="rounded-lg border shadow-md">
-        <CommandInput placeholder="Search for a receptor..." onValueChange={handleSearch} />
-        {hasSearched && (
-          <CommandList className={searchResults.length > 5 ? 'max-h-[300px] overflow-y-auto' : ''}>
-            {searchResults.length === 0 ? (
-              <CommandEmpty>No results found.</CommandEmpty>
-            ) : (
-              <CommandGroup>
-                {searchResults.map((receptor, index) => (
-                  <CommandItem
-                    key={index}
-                    value={`${receptor.geneName} ${receptor.name}`}
-                    className="cursor-pointer"
-                    onSelect={() => handleSelect(receptor.geneName)}
-                  >
-                    <div className="flex flex-col">
-                      <span className="font-medium">{`${receptor.geneName} - ${receptor.name}`}</span>
-                      <span className="text-sm text-muted-foreground">
-                        Class: {receptor.class} | Orthologs: {receptor.numOrthologs} | LCA:{' '}
-                        {receptor.lca}
-                      </span>
-                    </div>
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            )}
-          </CommandList>
-        )}
-      </Command>
+    <RootContainer className="flex flex-col items-center min-h-[70vh] pt-24">
+      <h1 className="text-4xl font-bold text-center mb-8">Find your receptor</h1>
+      <div className="w-full max-w-xl">
+        <Command shouldFilter={false} className="rounded-lg border shadow-md bg-background">
+          <CommandInput
+            placeholder="Search for a receptor..."
+            onValueChange={handleSearch}
+            className="h-14 text-lg px-6"
+          />
+          {hasSearched && (
+            <CommandList className={searchResults.length > 5 ? 'max-h-[300px] overflow-y-auto' : ''}>
+              {searchResults.length === 0 ? (
+                <CommandEmpty>No results found.</CommandEmpty>
+              ) : (
+                <CommandGroup>
+                  {searchResults.map((receptor, index) => (
+                    <CommandItem
+                      key={index}
+                      value={`${receptor.geneName} ${receptor.name}`}
+                      className="cursor-pointer"
+                      onSelect={() => handleSelect(receptor.geneName)}
+                    >
+                      <div className="flex flex-col">
+                        <span className="font-medium">{`${receptor.geneName} - ${receptor.name}`}</span>
+                        <span className="text-sm text-muted-foreground">
+                          Class: {receptor.class} | Orthologs: {receptor.numOrthologs} | LCA: {receptor.lca}
+                        </span>
+                      </div>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              )}
+            </CommandList>
+          )}
+        </Command>
+      </div>
     </RootContainer>
   );
 }
