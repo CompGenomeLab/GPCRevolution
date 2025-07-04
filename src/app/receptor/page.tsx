@@ -28,6 +28,9 @@ interface Receptor {
 }
 
 export default function ReceptorPage() {
+  const searchParams = useSearchParams();
+  const gene = searchParams.get('gene') || 'no-gene';
+
   return (
     <Suspense
       fallback={
@@ -42,7 +45,7 @@ export default function ReceptorPage() {
         </RootContainer>
       }
     >
-      <ReceptorContent />
+      <ReceptorContent key={gene} />
     </Suspense>
   );
 }
@@ -58,6 +61,13 @@ function ReceptorContent() {
       setReceptor(found || null);
     }
   }, [gene]);
+
+  // Scroll to top whenever a new receptor is loaded
+  useEffect(() => {
+    if (receptor) {
+      window.scrollTo({ top: 0 });
+    }
+  }, [receptor?.geneName]);
 
   if (!gene) {
     return (
@@ -124,7 +134,7 @@ function ReceptorContent() {
         </div>
 
         {/* Sequential section loading */}
-        <SequentialSections receptor={receptor} />
+        <SequentialSections key={receptor.geneName} receptor={receptor} />
       </RootContainer>
     </>
   );
@@ -203,13 +213,11 @@ function SequentialSections({ receptor }: { receptor: Receptor }) {
       )}
 
       {sectionIndex >= 4 && (
-        <FullScreenSection>
-          <DownloadableFiles
-            tree={receptor.tree}
-            alignment={receptor.alignment}
-            conservationFile={receptor.conservationFile}
-          />
-        </FullScreenSection>
+        <DownloadableFiles
+          tree={receptor.tree}
+          alignment={receptor.alignment}
+          conservationFile={receptor.conservationFile}
+        />
       )}
     </>
   );

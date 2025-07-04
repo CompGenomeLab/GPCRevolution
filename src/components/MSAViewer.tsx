@@ -25,6 +25,7 @@ export function MSAViewer({
   const [isLoading, setIsLoading] = useState(false);
   const hasCalledLoadedRef = useRef(false);
   const cleanedSequences = useCleanedSequences(sequences);
+
   useEffect(() => {
     if (!alignmentPath) return;
 

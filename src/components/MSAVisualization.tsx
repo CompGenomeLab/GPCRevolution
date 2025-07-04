@@ -143,20 +143,35 @@ export default function MSAVisualization({
         <table className="text-black bg-white dark:bg-white">
           <TableHeader>
             <TableRow className="sticky top-0 z-40 h-12 bg-gray-100 dark:bg-gray-100 border-0">
-              {table.getFlatHeaders().map(header => (
-                <TableHead
-                  key={header.id}
-                  className={
-                    header.column.id === 'header'
-                      ? 'sticky left-0 top-0 z-30 w-[200px] h-12 p-0 bg-gray-100 dark:bg-gray-100'
-                      : 'sticky top-0 z-20 w-[4px]  h-12 p-0 bg-gray-100 dark:bg-gray-100'
-                  }
-                >
-                  {header.isPlaceholder
-                    ? null
-                    : flexRender(header.column.columnDef.header, header.getContext())}
-                </TableHead>
-              ))}
+              {table.getFlatHeaders().map(header => {
+                const isHeaderCol = header.column.id === 'header';
+                if (isHeaderCol) {
+                  return (
+                    <TableHead
+                      key={header.id}
+                      className="sticky left-0 top-0 z-30 w-[200px] h-12 p-0 bg-white dark:bg-white"
+                    >
+                      {header.isPlaceholder
+                        ? null
+                        : flexRender(header.column.columnDef.header, header.getContext())}
+                    </TableHead>
+                  );
+                }
+
+                const colIndex = parseInt(header.column.id.slice(3), 10);
+                const bgClass = colIndex % 2 === 0 ? 'bg-white' : 'bg-gray-100';
+
+                return (
+                  <TableHead
+                    key={header.id}
+                    className={`sticky top-0 z-20 w-[4px] h-12 p-0 ${bgClass}`}
+                  >
+                    {header.isPlaceholder
+                      ? null
+                      : flexRender(header.column.columnDef.header, header.getContext())}
+                  </TableHead>
+                );
+              })}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -165,22 +180,32 @@ export default function MSAVisualization({
                 key={row.id}
                 className={
                   rowIndex === 0
-                    ? 'sticky top-[48px] z-15 font-semibold h-6 bg-white dark:bg-white border-0'
-                    : 'font-semibold border-0 h-6'
+                    ? 'sticky top-[48px] z-15 font-semibold h-6 bg-white dark:bg-white border-0 hover:bg-transparent'
+                    : 'font-semibold border-0 h-6 hover:bg-transparent'
                 }
               >
-                {row.getVisibleCells().map(cell => (
-                  <TableCell
-                    key={cell.id}
-                    className={
-                      cell.column.id === 'header'
-                        ? 'sticky left-0 w-[200px] p-0 bg-white dark:bg-white'
-                        : 'w-[4px] p-0'
-                    }
-                  >
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </TableCell>
-                ))}
+                {row.getVisibleCells().map(cell => {
+                  const isHeaderCol = cell.column.id === 'header';
+                  if (isHeaderCol) {
+                    return (
+                      <TableCell
+                        key={cell.id}
+                        className="sticky left-0 w-[200px] p-0 bg-white dark:bg-white"
+                      >
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
+                    );
+                  }
+
+                  const colIndex = parseInt(cell.column.id.slice(3), 10);
+                  const bgClass = colIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50';
+
+                  return (
+                    <TableCell key={cell.id} className={`w-[4px] p-0 ${bgClass}`}>
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </TableCell>
+                  );
+                })}
               </TableRow>
             ))}
           </TableBody>
