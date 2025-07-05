@@ -82,7 +82,7 @@ export default function OptimizedSnakePlot({ svgPath, conservationFile, onLoaded
 
         if (container) {
           container.classList.add('bg-card');
-          (container as HTMLElement).style.width = '100%';
+          (container as HTMLElement).style.maxWidth = '100%';
           (container as HTMLElement).style.overflowX = 'auto';
 
           const svgInContainer = container.querySelector('svg');
@@ -93,10 +93,9 @@ export default function OptimizedSnakePlot({ svgPath, conservationFile, onLoaded
               svgInContainer.setAttribute('viewBox', `0 0 ${widthAttr} ${heightAttr}`);
             }
 
-            svgInContainer.removeAttribute('width');
-            svgInContainer.removeAttribute('height');
             svgInContainer.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-            svgInContainer.style.width = '100%';
+            svgInContainer.classList.add('w-full', 'sm:w-auto', 'h-auto');
+            if (widthAttr) svgInContainer.style.maxWidth = `${widthAttr}px`;
             svgInContainer.style.height = 'auto';
 
             svgInContainer.style.backgroundColor = '#FDFBF7';
@@ -114,10 +113,9 @@ export default function OptimizedSnakePlot({ svgPath, conservationFile, onLoaded
               svgElement.setAttribute('viewBox', `0 0 ${widthAttr2} ${heightAttr2}`);
             }
 
-            svgElement.removeAttribute('width');
-            svgElement.removeAttribute('height');
             svgElement.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-            svgElement.style.width = '100%';
+            svgElement.classList.add('w-full', 'sm:w-auto', 'h-auto');
+            if (widthAttr2) svgElement.style.maxWidth = `${widthAttr2}px`;
             svgElement.style.height = 'auto';
 
             svgElement.setAttribute('style', 'background-color: #FDFBF7');
@@ -333,8 +331,10 @@ export default function OptimizedSnakePlot({ svgPath, conservationFile, onLoaded
                 />
               </div>
             </div>
-            <div className="min-w-full rounded-lg bg-card">
-              {svgContent}
+            <div className="w-full max-w-full mx-auto rounded-lg bg-card overflow-x-auto text-center">
+              <div className="w-full sm:w-auto sm:max-w-none sm:inline-block">
+                {svgContent}
+              </div>
             </div>
           </div>
         )}

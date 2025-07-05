@@ -78,10 +78,10 @@ export default function OptimizedSVGTree({ svgPath, onLoaded }: OptimizedSVGTree
             svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
           }
 
-          svg.removeAttribute('width');
-          svg.removeAttribute('height');
+          // Responsive approach: keep original dimensions but add CSS classes
           svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-          svg.setAttribute('style', 'width: 100%; height: auto;');
+          svg.classList.add('w-full', 'sm:w-auto', 'h-auto');
+          if (width) svg.style.maxWidth = `${width}px`;
 
           return svg.outerHTML;
         } catch {
@@ -183,13 +183,14 @@ export default function OptimizedSVGTree({ svgPath, onLoaded }: OptimizedSVGTree
               Click Load Tree to view the phylogenetic tree
             </div>
           ) : (
-            <div className="space-y-4">
-              <div
-                ref={svgContainerRef}
-                className="min-w-full h-[480px] sm:h-[640px] overflow-auto rounded-lg bg-card
-                          text-[color:var(--tree-colour)]"
-                dangerouslySetInnerHTML={{ __html: svgContent }}
-              />
+            <div className="w-full max-w-full mx-auto rounded-lg bg-card overflow-x-auto text-center">
+              <div className="w-full sm:w-auto sm:max-w-none sm:inline-block">
+                <div
+                  ref={svgContainerRef}
+                  className="h-[480px] sm:h-[640px] overflow-auto rounded-lg bg-card text-[color:var(--tree-colour)]"
+                  dangerouslySetInnerHTML={{ __html: svgContent }}
+                />
+              </div>
             </div>
           )}
         </div>
