@@ -63,10 +63,33 @@ export default function OptimizedSVGTree({ svgPath, onLoaded }: OptimizedSVGTree
         }
       }
 
-      const optimizedContent = normaliseSVGColours(
-        optimizeSVGContent(content),
-      );
-      setSvgContent(optimizedContent);
+      const baseSVG = normaliseSVGColours(optimizeSVGContent(content));
+
+      const makeSvgResponsive = (svgString: string): string => {
+        try {
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(svgString, 'image/svg+xml');
+          const svg = doc.querySelector('svg');
+          if (!svg) return svgString;
+
+          const width = svg.getAttribute('width');
+          const height = svg.getAttribute('height');
+          if (!svg.hasAttribute('viewBox') && width && height) {
+            svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+          }
+
+          svg.removeAttribute('width');
+          svg.removeAttribute('height');
+          svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+          svg.setAttribute('style', 'width: 100%; height: auto;');
+
+          return svg.outerHTML;
+        } catch {
+          return svgString;
+        }
+      };
+
+      setSvgContent(makeSvgResponsive(baseSVG));
     } catch (err) {
       if (err instanceof Error && err.name !== 'AbortError') {
         toast.error('Error loading SVG tree');
@@ -120,7 +143,7 @@ export default function OptimizedSVGTree({ svgPath, onLoaded }: OptimizedSVGTree
   if (!svgPath) return null;
 
   return (
-    <div className="bg-card text-card-foreground rounded-lg shadow-md overflow-hidden">
+    <div className="bg-card text-card-foreground rounded-lg shadow-md overflow-x-auto transform-gpu scale-[0.95] sm:scale-100 origin-top">
       <div className="p-6 border-b border-border">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-semibold text-foreground">Phylogenetic Tree of Orthologs</h2>
@@ -163,11 +186,10 @@ export default function OptimizedSVGTree({ svgPath, onLoaded }: OptimizedSVGTree
             <div className="space-y-4">
               <div
                 ref={svgContainerRef}
-                className="w-full overflow-auto h-[640px] rounded-lg bg-card
-                          text-[color:var(--tree-colour)]"                     // NEW
+                className="min-w-full h-[480px] sm:h-[640px] overflow-auto rounded-lg bg-card
+                          text-[color:var(--tree-colour)]"
                 dangerouslySetInnerHTML={{ __html: svgContent }}
               />
-
             </div>
           )}
         </div>

@@ -6,7 +6,6 @@ import Link from 'next/link';
 import { ChevronLeft } from 'lucide-react';
 
 import RootContainer from '@/components/RootContainer';
-import FullScreenSection from '@/components/FullScreenSection';
 import DownloadableFiles from '@/components/DownloadableFiles';
 
 import receptors from '../../../public/receptors.json';
@@ -146,44 +145,36 @@ function SequentialSections({ receptor }: { receptor: Receptor }) {
     <>
       {sectionIndex >= 0 && (
         <Suspense fallback={<ConservationSkeleton />}>
-          <FullScreenSection>
-            <ConservationChartAsync
-              conservationFile={receptor.conservationFile}
-              onLoaded={next(1)}
-            />
-          </FullScreenSection>
+          <ConservationChartAsync
+            conservationFile={receptor.conservationFile}
+            onLoaded={next(1)}
+          />
         </Suspense>
       )}
 
       {sectionIndex >= 1 && (
         <Suspense fallback={<SectionSpinner title="Residue Conservation Snake Plot" />}>
-          <FullScreenSection>
-            <OptimizedSnakePlot
-              svgPath={receptor.snakePlot}
-              conservationFile={receptor.conservationFile}
-              onLoaded={next(2)}
-            />
-          </FullScreenSection>
+          <OptimizedSnakePlot
+            svgPath={receptor.snakePlot}
+            conservationFile={receptor.conservationFile}
+            onLoaded={next(2)}
+          />
         </Suspense>
       )}
 
       {sectionIndex >= 2 && (
         <Suspense fallback={<SectionSpinner title="Phylogenetic Tree of Orthologs" />}>
-          <FullScreenSection>
-            <OptimizedSVGTree svgPath={receptor.svgTree} onLoaded={next(3)} />
-          </FullScreenSection>
+          <OptimizedSVGTree svgPath={receptor.svgTree} onLoaded={next(3)} />
         </Suspense>
       )}
 
       {sectionIndex >= 3 && (
         <Suspense fallback={<SectionSpinner title="Multiple Sequence Alignment of Orthologs" />}>
-          <FullScreenSection>
-            <MSAViewer
-              alignmentPath={receptor.alignment}
-              conservationFile={receptor.conservationFile}
-              onLoaded={next(4)}
-            />
-          </FullScreenSection>
+          <MSAViewer
+            alignmentPath={receptor.alignment}
+            conservationFile={receptor.conservationFile}
+            onLoaded={next(4)}
+          />
         </Suspense>
       )}
 

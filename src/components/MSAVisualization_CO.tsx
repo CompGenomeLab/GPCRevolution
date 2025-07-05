@@ -76,9 +76,14 @@ export default function MSAVisualization({ sequences, className }: MSAVisualizat
     getCoreRowModel: getCoreRowModel(),
   });
 
+  const getShortHeader = (hdr: string) => {
+    const parts = hdr.split('|');
+    return parts.length >= 3 ? parts[2] : hdr;
+  };
+
   return (
     <div className={`w-full rounded-md border ${className}`}>
-      <div className="h-[640px] overflow-y-scroll relative">
+      <div className="h-[360px] sm:h-[640px] overflow-y-scroll overflow-x-auto relative transform-gpu scale-[0.85] sm:scale-100 origin-top mx-auto">
         <table>
           <TableHeader>
             <TableRow className="sticky top-0 bg-muted z-40">
@@ -87,7 +92,7 @@ export default function MSAVisualization({ sequences, className }: MSAVisualizat
                   key={header.id}
                   className={
                     header.column.id === 'header'
-                      ? 'sticky left-0 top-0 z-30 bg-muted border-r w-[200px]'
+                      ? 'sticky left-0 top-0 z-30 bg-muted border-r w-[120px] sm:w-[200px]'
                       : 'sticky top-0 z-20 bg-muted w-[20px]'
                   }
                 >
@@ -109,11 +114,12 @@ export default function MSAVisualization({ sequences, className }: MSAVisualizat
                     key={cell.id}
                     className={
                       cell.column.id === 'header'
-                        ? 'sticky left-0 z-10 bg-background border-r w-[200px]'
+                        ? 'sticky left-0 z-10 bg-background border-r w-[120px] sm:w-[200px]'
                         : 'w-[30px]'
                     }
                   >
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    <span className="sm:hidden">{getShortHeader(String(cell.getValue()))}</span>
+                    <span className="hidden sm:inline">{flexRender(cell.column.columnDef.cell, cell.getContext())}</span>
                   </TableCell>
                 ))}
               </TableRow>

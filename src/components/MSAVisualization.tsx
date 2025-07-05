@@ -51,6 +51,11 @@ export default function MSAVisualization({
   const [conservationData, setConservationData] = useState<ConservationDatum[] | null>(null);
   const [isConservationLoading, setIsConservationLoading] = useState(false);
 
+  const getShortHeader = (hdr: string) => {
+    const parts = hdr.split('|');
+    return parts.length >= 3 ? parts[2] : hdr;
+  };
+
   useEffect(() => {
     setConservationData(null);
 
@@ -116,7 +121,12 @@ export default function MSAVisualization({
         header: () => (
           <div className="px-2 py-0 text-xs leading-tight text-black font-bold text-right">GPCRdb #</div>
         ),
-        cell: info => <div className="px-2 py-0 text-xs text-right leading-tight font-semibold text-black">{info.getValue()}</div>,
+        cell: info => (
+          <div className="px-2 py-0 text-xs text-right leading-tight font-semibold text-black">
+            <span className="sm:hidden">{getShortHeader(info.getValue())}</span>
+            <span className="hidden sm:inline">{info.getValue()}</span>
+          </div>
+        ),
       }),
       ...positionColumns,
     ];
@@ -139,7 +149,7 @@ export default function MSAVisualization({
 
   return (
     <div className={`w-full rounded-md ${className}`}>
-      <div className="h-[640px] overflow-y-scroll relative">
+      <div className="h-[360px] sm:h-[640px] overflow-y-scroll overflow-x-auto relative transform-gpu scale-[0.85] sm:scale-100 origin-top mx-auto">
         <table className="text-black bg-white dark:bg-white">
           <TableHeader>
             <TableRow className="sticky top-0 z-40 h-12 bg-gray-100 dark:bg-gray-100 border-0">
@@ -149,7 +159,7 @@ export default function MSAVisualization({
                   return (
                     <TableHead
                       key={header.id}
-                      className="sticky left-0 top-0 z-30 w-[200px] h-12 p-0 bg-white dark:bg-white"
+                      className="sticky left-0 top-0 z-30 w-[120px] sm:w-[200px] h-12 p-0 bg-white dark:bg-white"
                     >
                       {header.isPlaceholder
                         ? null
@@ -190,7 +200,7 @@ export default function MSAVisualization({
                     return (
                       <TableCell
                         key={cell.id}
-                        className="sticky left-0 w-[200px] p-0 bg-white dark:bg-white"
+                        className="sticky left-0 w-[120px] sm:w-[200px] p-0 bg-white dark:bg-white"
                       >
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </TableCell>

@@ -82,9 +82,23 @@ export default function OptimizedSnakePlot({ svgPath, conservationFile, onLoaded
 
         if (container) {
           container.classList.add('bg-card');
+          (container as HTMLElement).style.width = '100%';
+          (container as HTMLElement).style.overflowX = 'auto';
 
           const svgInContainer = container.querySelector('svg');
           if (svgInContainer) {
+            const widthAttr = svgInContainer.getAttribute('width');
+            const heightAttr = svgInContainer.getAttribute('height');
+            if (!svgInContainer.hasAttribute('viewBox') && widthAttr && heightAttr) {
+              svgInContainer.setAttribute('viewBox', `0 0 ${widthAttr} ${heightAttr}`);
+            }
+
+            svgInContainer.removeAttribute('width');
+            svgInContainer.removeAttribute('height');
+            svgInContainer.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+            svgInContainer.style.width = '100%';
+            svgInContainer.style.height = 'auto';
+
             svgInContainer.style.backgroundColor = '#FDFBF7';
           }
 
@@ -94,6 +108,18 @@ export default function OptimizedSnakePlot({ svgPath, conservationFile, onLoaded
         } else {
           const svgElement = doc.querySelector('svg');
           if (svgElement) {
+            const widthAttr2 = svgElement.getAttribute('width');
+            const heightAttr2 = svgElement.getAttribute('height');
+            if (!svgElement.hasAttribute('viewBox') && widthAttr2 && heightAttr2) {
+              svgElement.setAttribute('viewBox', `0 0 ${widthAttr2} ${heightAttr2}`);
+            }
+
+            svgElement.removeAttribute('width');
+            svgElement.removeAttribute('height');
+            svgElement.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+            svgElement.style.width = '100%';
+            svgElement.style.height = 'auto';
+
             svgElement.setAttribute('style', 'background-color: #FDFBF7');
             const reactElement = htmlToReactParser.parse(svgElement.outerHTML);
             setSvgContent(reactElement);
@@ -233,7 +259,7 @@ export default function OptimizedSnakePlot({ svgPath, conservationFile, onLoaded
   if (!svgPath) return null;
 
   return (
-    <div className="bg-card text-card-foreground rounded-lg shadow-md select-none overflow-hidden">
+    <div className="bg-card text-card-foreground rounded-lg shadow-md select-none overflow-x-auto">
       <div className="p-6 border-b border-border">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-semibold text-foreground">Residue Conservation Snake Plot</h2>
@@ -307,7 +333,7 @@ export default function OptimizedSnakePlot({ svgPath, conservationFile, onLoaded
                 />
               </div>
             </div>
-            <div className="w-full overflow-auto rounded-lg bg-card flex justify-center items-center">
+            <div className="min-w-full rounded-lg bg-card">
               {svgContent}
             </div>
           </div>

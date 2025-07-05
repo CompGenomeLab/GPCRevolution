@@ -30,7 +30,7 @@ export default function FullScreenSection({ children }: FullScreenSectionProps) 
 
   // Wrapper classes toggle between normal flow and fullscreen fixed
   const wrapperClasses = isOpen
-    ? 'fixed left-4 right-4 top-24 bottom-4 md:left-8 md:right-8 md:top-28 md:bottom-8 lg:left-16 lg:right-16 lg:top-32 lg:bottom-12 z-[100] flex flex-col bg-background rounded-lg shadow-lg overflow-auto fullscreen-override'
+    ? 'fixed inset-2 sm:inset-4 md:inset-6 lg:inset-8 z-[100] flex flex-col bg-transparent overflow-auto fullscreen-override'
     : 'relative';
 
   return (
@@ -50,7 +50,7 @@ export default function FullScreenSection({ children }: FullScreenSectionProps) 
       </div>
       {isOpen && (
         <style>{`
-          .fullscreen-override [class*='h-\[640px\]'] { height: 80vh !important; }
+          .fullscreen-override [class*='h-\[640px\]'] { height: 88vh !important; }
         `}</style>
       )}
     </>
