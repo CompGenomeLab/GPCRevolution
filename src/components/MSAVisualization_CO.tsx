@@ -83,7 +83,7 @@ export default function MSAVisualization({ sequences, className }: MSAVisualizat
 
   return (
     <div className={`w-full rounded-md border ${className}`}>
-      <div className="h-[360px] sm:h-[640px] overflow-y-scroll overflow-x-auto relative transform-gpu scale-[0.85] sm:scale-100 origin-top mx-auto">
+      <div className="h-[360px] sm:h-[640px] overflow-y-scroll overflow-x-auto relative transform-gpu scale-100 origin-top">
         <table>
           <TableHeader>
             <TableRow className="sticky top-0 bg-muted z-40">

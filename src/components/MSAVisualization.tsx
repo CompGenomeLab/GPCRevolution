@@ -149,7 +149,7 @@ export default function MSAVisualization({
 
   return (
     <div className={`w-full rounded-md ${className}`}>
-      <div className="h-[360px] sm:h-[640px] overflow-y-scroll overflow-x-auto relative transform-gpu scale-[0.85] sm:scale-100 origin-top mx-auto">
+      <div className="h-[360px] sm:h-[640px] overflow-y-scroll overflow-x-auto relative transform-gpu scale-100 origin-top">
         <table className="text-black bg-white dark:bg-white">
           <TableHeader>
             <TableRow className="sticky top-0 z-40 h-12 bg-gray-100 dark:bg-gray-100 border-0">
