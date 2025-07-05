@@ -444,6 +444,13 @@ useEffect(() => {
       container.querySelectorAll('text')
                .forEach(t => t.setAttribute('pointer-events', 'none'));
 
+      // Make SVG background transparent to inherit card color (like receptor page)
+      const svgElement = container.querySelector('svg');
+      if (svgElement) {
+        svgElement.removeAttribute('style'); // Remove any fixed background styles
+        // SVG will now be transparent and inherit the card background
+      }
+
       /* ───── colour circles by category ───── */
       result.categorizedResidues.forEach(row => {
         const pos = showReceptor === 1 ? row.resNum1 : row.resNum2;
@@ -750,36 +757,39 @@ useEffect(() => {
 
 
 
-      {/* ─── Snake‐plot container ─────────────────────────────────── */}
-      <div ref={snakeWrapperRef} className="w-full mb-6">
-        {/* The fetched SVG/HTML will appear here */}
-      </div>
-      
-       {/* ─── Colour legend & customisation ─────────────────────── */}
-      <div className="flex flex-wrap gap-x-10 gap-y-4 mt-4">
+      {/* ─── Color customization panel ─────────────────────── */}
+      <div className="flex flex-wrap gap-4 p-4 bg-muted/50 rounded-lg mb-4">
         {Object.entries(colorMap).map(([label, col]) => (
-          <label           // make the whole thing clickable
-            key={label}
-            className="flex items-center gap-2 min-w-[12rem]" // text and box in one line
-          >
+          <div key={label} className="flex items-center gap-2">
+            <label htmlFor={`color-${label}`} className="text-sm font-medium whitespace-nowrap">
+              {label}:
+            </label>
             <input
               type="color"
+              id={`color-${label}`}
               value={col}
               onChange={e => setColorMap(m => ({ ...m, [label]: e.target.value }))}
-              className="h-5 w-5 cursor-pointer border rounded-sm"  // square swatch
+              className="w-8 h-6 rounded cursor-pointer"
+              title={label}
             />
-            <span className="text-sm whitespace-nowrap leading-tight">
-              {label}
-            </span>
-          </label>
+          </div>
         ))}
+      </div>
+
+      {/* ─── Snake‐plot container ─────────────────────────────────── */}
+      <div className="w-full max-w-full mx-auto rounded-lg bg-card overflow-x-auto text-center mb-6">
+        <div className="w-full sm:w-auto sm:max-w-none sm:inline-block">
+          <div ref={snakeWrapperRef} className="w-full">
+            {/* The fetched SVG/HTML will appear here */}
+          </div>
+        </div>
       </div>
 
 
       {/* ───── Tooltip overlay (mobile-friendly) ───── */}
       {tooltip.visible && (
         <div
-          className="fixed z-40 pointer-events-none bg-white dark:bg-black dark:text-white text-xs sm:text-sm rounded border border-gray-300 px-1 py-0.5 sm:px-2 sm:py-1 max-w-xs sm:max-w-sm break-words leading-tight sm:leading-normal"
+          className="fixed z-40 pointer-events-none bg-white text-black dark:bg-black dark:text-white text-xs sm:text-sm rounded border border-gray-300 dark:border-gray-600 px-1 py-0.5 sm:px-2 sm:py-1 max-w-xs sm:max-w-sm break-words leading-tight sm:leading-normal shadow-lg"
           style={{
             left: Math.min(tooltip.x + 10, window.innerWidth - 200),
             top: Math.max(tooltip.y - 40, 10),
