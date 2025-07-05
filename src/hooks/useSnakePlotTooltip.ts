@@ -37,6 +37,11 @@ export function useSnakePlotTooltip() {
       );
       document.body.appendChild(tooltip);
       tooltipRef.current = tooltip;
+      
+      // Set initial positioning
+      tooltip.style.left = '0px';
+      tooltip.style.top = '0px';
+      tooltip.style.transform = '';
     }
     svg.removeEventListener('mouseover', handleMouseOver);
     svg.removeEventListener('mousemove', handleMouseMove);
@@ -68,7 +73,9 @@ export function useSnakePlotTooltip() {
         const tooltipHeight = 120; // Estimated tooltip height
         const x = Math.min(mouseEvent.pageX + 12, window.innerWidth - tooltipWidth);
         const y = Math.min(Math.max(mouseEvent.pageY + 12, 10), window.innerHeight - tooltipHeight);
-        tooltip.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+        tooltip.style.left = `${x}px`;
+        tooltip.style.top = `${y}px`;
+        tooltip.style.transform = '';
       }
     }
 
