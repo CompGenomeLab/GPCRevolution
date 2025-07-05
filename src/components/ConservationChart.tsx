@@ -86,7 +86,7 @@ const ConservationChart: React.FC<ConservationChartProps> = ({ data }) => {
         .append('div')
         .attr(
           'class',
-          'conservation-tooltip pointer-events-none bg-white dark:bg-black dark:text-white text-xs rounded border border-gray-300 px-2 py-1 absolute opacity-0'
+          'conservation-tooltip pointer-events-none bg-white dark:bg-black dark:text-white text-xs sm:text-sm rounded border border-gray-300 px-1 py-0.5 sm:px-2 sm:py-1 absolute opacity-0 z-40 max-w-xs sm:max-w-sm break-words leading-tight sm:leading-normal'
         );
     }
 
@@ -147,7 +147,11 @@ const ConservationChart: React.FC<ConservationChartProps> = ({ data }) => {
           .style('opacity', 1);
       })
       .on('mousemove', (event: PointerEvent) => {
-        tooltip.style('left', `${event.pageX + 10}px`).style('top', `${event.pageY - 40}px`);
+        const tooltipWidth = 200; // Estimated tooltip width
+        const tooltipHeight = 120; // Estimated tooltip height
+        const x = Math.min(event.pageX + 10, window.innerWidth - tooltipWidth);
+        const y = Math.min(Math.max(event.pageY - 40, 10), window.innerHeight - tooltipHeight);
+        tooltip.style('left', `${x}px`).style('top', `${y}px`);
       })
       .on('mouseout', () => {
         tooltip.style('opacity', 0);
@@ -239,7 +243,11 @@ const ConservationChart: React.FC<ConservationChartProps> = ({ data }) => {
           .style('opacity', 1);
       })
       .on('mousemove', (event: PointerEvent) => {
-        tooltip.style('left', `${event.pageX + 10}px`).style('top', `${event.pageY - 40}px`);
+        const tooltipWidth = 200; // Estimated tooltip width
+        const tooltipHeight = 120; // Estimated tooltip height
+        const x = Math.min(event.pageX + 10, window.innerWidth - tooltipWidth);
+        const y = Math.min(Math.max(event.pageY - 40, 10), window.innerHeight - tooltipHeight);
+        tooltip.style('left', `${x}px`).style('top', `${y}px`);
       })
       .on('mouseout', (event: PointerEvent) => {
         d3.select(event.currentTarget as SVGRectElement).style('stroke', 'none');

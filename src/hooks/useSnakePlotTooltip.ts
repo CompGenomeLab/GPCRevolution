@@ -18,14 +18,22 @@ export function useSnakePlotTooltip() {
         'dark:bg-black',
         'dark:text-white',
         'text-xs',
+        'sm:text-sm',
         'rounded',
         'border',
         'border-gray-300',
-        'px-2',
-        'py-1',
+        'px-1',
+        'py-0.5',
+        'sm:px-2',
+        'sm:py-1',
         'absolute',
         'opacity-0',
-        'z-50'
+        'z-40',
+        'max-w-xs',
+        'sm:max-w-sm',
+        'break-words',
+        'leading-tight',
+        'sm:leading-normal'
       );
       document.body.appendChild(tooltip);
       tooltipRef.current = tooltip;
@@ -56,8 +64,10 @@ export function useSnakePlotTooltip() {
         target.getAttribute('data-snake-tooltip') ||
         target.getAttribute('data-original-title')
       ) {
-        const x = mouseEvent.pageX + 12;
-        const y = mouseEvent.pageY + 12;
+        const tooltipWidth = 200; // Estimated tooltip width
+        const tooltipHeight = 120; // Estimated tooltip height
+        const x = Math.min(mouseEvent.pageX + 12, window.innerWidth - tooltipWidth);
+        const y = Math.min(Math.max(mouseEvent.pageY + 12, 10), window.innerHeight - tooltipHeight);
         tooltip.style.transform = `translate3d(${x}px, ${y}px, 0)`;
       }
     }

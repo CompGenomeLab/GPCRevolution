@@ -513,24 +513,18 @@ useEffect(() => {
       </div>
 
 
-      {/* ─── Tooltip overlay ──────────────────────────────────────── */}
+      {/* ───── Tooltip overlay (mobile-friendly) ───── */}
       {tooltip.visible && (
         <div
+          className="fixed z-40 pointer-events-none bg-white dark:bg-black dark:text-white text-xs sm:text-sm rounded border border-gray-300 px-1 py-0.5 sm:px-2 sm:py-1 max-w-xs sm:max-w-sm break-words leading-tight sm:leading-normal"
           style={{
-            position: 'fixed',
-            top: tooltip.y + 8,
-            left: tooltip.x + 8,
-            background: 'rgba(0, 0, 0, 0.8)',
-            color: 'white',
-            padding: '6px 10px',
-            borderRadius: 4,
-            pointerEvents: 'none',
-            whiteSpace: 'pre',
-            fontSize: 12,
-            zIndex: 2000,
+            left: Math.min(tooltip.x + 10, window.innerWidth - 200),
+            top: Math.max(tooltip.y - 40, 10),
           }}
         >
-          {tooltip.lines.join('\n')}
+          {tooltip.lines.map((line, i) => (
+            <div key={i} dangerouslySetInnerHTML={{ __html: line }} />
+          ))}
         </div>
       )}
     </div>
