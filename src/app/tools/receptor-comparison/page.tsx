@@ -913,8 +913,8 @@ export default function ReceptorComparisonPage() {
       }
 
       // Load conservation data
-      const gene1Data = await readConservationData(rec1.conservationFile);
-      const gene2Data = await readConservationData(rec2.conservationFile);
+      const gene1Data = await readConservationData(`/${rec1.conservationFile}`);
+      const gene2Data = await readConservationData(`/${rec2.conservationFile}`);
 
       // Map and categorize
       const { resNums1, resNums2, percList1, percList2, aaList1, aaList2 } = mapAllData(
