@@ -74,23 +74,28 @@ export function MSAViewer({
   if (!alignmentPath) return null;
 
   return (
-    <div className="bg-card text-card-foreground rounded-lg p-6 shadow-md select-none">
-      <h2 className="text-lg font-medium">Multiple Sequence Alignment of Orthologs</h2>
-      {isLoading ? (
-        <div className="flex items-center justify-center p-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-foreground"></div>
-        </div>
-      ) : sequences.length === 0 ? (
-        <div className="text-center text-muted-foreground p-4">No alignment data available</div>
-      ) : (
-        <div className="py-4">
+    <div className="bg-card text-card-foreground rounded-lg shadow-md select-none overflow-x-auto">
+      {/* Header */}
+      <div className="p-6 border-b border-border">
+        <h2 className="text-lg font-medium">Multiple Sequence Alignment of Orthologs</h2>
+      </div>
+
+      {/* Body */}
+      <div className="p-6">
+        {isLoading ? (
+          <div className="flex items-center justify-center p-8">
+            <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-foreground"></div>
+          </div>
+        ) : sequences.length === 0 ? (
+          <div className="p-4 text-center text-muted-foreground">No alignment data available</div>
+        ) : (
           <MSAVisualization
             sequences={cleanedSequences}
             className="border-0"
             conservationFile={conservationFile}
           />
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
