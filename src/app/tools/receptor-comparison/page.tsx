@@ -107,21 +107,26 @@ async function readFastaFile(fastaFilePath: string): Promise<Record<string, stri
 
 async function readConservationData(
   conservationFilePath: string
-): Promise<Record<string, { conservation: number; aa: string }>> {
+): Promise<Record<string, { conservation: number; aa: string; region: string; gpcrdb: string }>> {
   const response = await fetch(conservationFilePath);
   if (!response.ok) {
     throw new Error(`Failed to fetch conservation file: ${response.status}`);
   }
   
   const data = await response.text();
-  const conservationData: Record<string, { conservation: number; aa: string }> = {};
+  const conservationData: Record<string, { conservation: number; aa: string; region: string; gpcrdb: string }> = {};
 
   data.split('\n').forEach(line => {
-    const [resNum, conservation, aa] = line.split('\t');
-    if (resNum && conservation && aa) {
-      conservationData[resNum.trim()] = {
-        conservation: parseFloat(conservation.trim()),
-        aa: aa.trim(),
+    const parts = line.split('\t');
+    if (parts[0] && parts[0].trim().toLowerCase() === 'residue_number') return;
+
+    if (parts.length >= 6) {
+      const resNum = parts[0].trim();
+      conservationData[resNum] = {
+        conservation: parseFloat(parts[1].trim()),
+        aa: parts[3].trim(),
+        region: parts[4].trim(),
+        gpcrdb: parts[5].trim(),
       };
     }
   });
@@ -161,8 +166,8 @@ function mapResidues(seq1: string, seq2: string): Array<{ resNum1: string; resNu
 }
 
 function mapAllData(
-  gene1Data: Record<string, { conservation: number; aa: string }>,
-  gene2Data: Record<string, { conservation: number; aa: string }>,
+  gene1Data: Record<string, { conservation: number; aa: string; region: string; gpcrdb: string }>,
+  gene2Data: Record<string, { conservation: number; aa: string; region: string; gpcrdb: string }>,
   seq1: string,
   seq2: string
 ) {
@@ -173,18 +178,28 @@ function mapAllData(
   const percList2: number[] = [];
   const aaList1: string[] = [];
   const aaList2: string[] = [];
+  const regionList1: string[] = [];
+  const regionList2: string[] = [];
+  const gpcrdbList1: string[] = [];
+  const gpcrdbList2: string[] = [];
 
   mappedResidues.forEach(({ resNum1, resNum2 }) => {
     let perc1 = 0;
     let perc2 = 0;
     let aa1 = '-';
     let aa2 = '-';
+    let region1 = '-';
+    let region2 = '-';
+    let gpcrdb1 = '-';
+    let gpcrdb2 = '-';
 
     if (resNum1 !== 'gap') {
       const data1 = gene1Data[resNum1];
       if (data1) {
         perc1 = data1.conservation;
         aa1 = data1.aa;
+        region1 = data1.region;
+        gpcrdb1 = data1.gpcrdb;
       }
     }
     if (resNum2 !== 'gap') {
@@ -192,6 +207,8 @@ function mapAllData(
       if (data2) {
         perc2 = data2.conservation;
         aa2 = data2.aa;
+        region2 = data2.region;
+        gpcrdb2 = data2.gpcrdb;
       }
     }
 
@@ -201,9 +218,13 @@ function mapAllData(
     percList2.push(perc2);
     aaList1.push(aa1);
     aaList2.push(aa2);
+    regionList1.push(region1);
+    regionList2.push(region2);
+    gpcrdbList1.push(gpcrdb1);
+    gpcrdbList2.push(gpcrdb2);
   });
 
-  return { resNums1, resNums2, percList1, percList2, aaList1, aaList2 };
+  return { resNums1, resNums2, percList1, percList2, aaList1, aaList2, regionList1, regionList2, gpcrdbList1, gpcrdbList2 };
 }
 
 function categorizeResidues(
@@ -213,6 +234,10 @@ function categorizeResidues(
   percList2: number[],
   aaList1: string[],
   aaList2: string[],
+  regionList1: string[],
+  regionList2: string[],
+  gpcrdbList1: string[],
+  gpcrdbList2: string[],
   threshold: number
 ) {
   const categorizedResidues: Array<{
@@ -223,6 +248,10 @@ function categorizeResidues(
     resNum2: string;
     aa2: string;
     perc2: number;
+    region1: string;
+    region2: string;
+    gpcrdb1: string;
+    gpcrdb2: string;
   }> = [];
 
   for (let i = 0; i < percList1.length; i++) {
@@ -246,6 +275,10 @@ function categorizeResidues(
             resNum2: resNums2[i],
             aa2: aaList2[i],
             perc2: percList2[i],
+            region1: regionList1[i],
+            region2: regionList2[i],
+            gpcrdb1: gpcrdbList1[i],
+            gpcrdb2: gpcrdbList2[i],
           });
         } else {
           categorizedResidues.push({
@@ -256,6 +289,10 @@ function categorizeResidues(
             resNum2: resNums2[i],
             aa2: aaList2[i],
             perc2: percList2[i],
+            region1: regionList1[i],
+            region2: regionList2[i],
+            gpcrdb1: gpcrdbList1[i],
+            gpcrdb2: gpcrdbList2[i],
           });
         }
       } else if (conserved1 && !conserved2) {
@@ -267,6 +304,10 @@ function categorizeResidues(
           resNum2: resNums2[i],
           aa2: aaList2[i],
           perc2: percList2[i],
+          region1: regionList1[i],
+          region2: regionList2[i],
+          gpcrdb1: gpcrdbList1[i],
+          gpcrdb2: gpcrdbList2[i],
         });
       } else if (!conserved1 && conserved2) {
         categorizedResidues.push({
@@ -277,6 +318,10 @@ function categorizeResidues(
           resNum2: resNums2[i],
           aa2: aaList2[i],
           perc2: percList2[i],
+          region1: regionList1[i],
+          region2: regionList2[i],
+          gpcrdb1: gpcrdbList1[i],
+          gpcrdb2: gpcrdbList2[i],
         });
       }
     } else if (!isGap1 && isGap2) {
@@ -289,6 +334,10 @@ function categorizeResidues(
           resNum2: 'gap',
           aa2: '-',
           perc2: 0,
+          region1: regionList1[i],
+          region2: '-',
+          gpcrdb1: gpcrdbList1[i],
+          gpcrdb2: '-',
         });
       }
     } else if (isGap1 && !isGap2) {
@@ -301,6 +350,10 @@ function categorizeResidues(
           resNum2: resNums2[i],
           aa2: aaList2[i],
           perc2: percList2[i],
+          region1: '-',
+          region2: regionList2[i],
+          gpcrdb1: '-',
+          gpcrdb2: gpcrdbList2[i],
         });
       }
     }
@@ -336,6 +389,10 @@ interface CategorizedResidue {
   resNum2: string;
   aa2: string;
   perc2: number;
+  region1: string;
+  region2: string;
+  gpcrdb1: string;
+  gpcrdb2: string;
 }
 
 interface ComparisonResult {
@@ -411,6 +468,50 @@ const [tooltip, setTooltip] = useState<{
 
 // Where the fetched SVG goes
 const snakeWrapperRef = useRef<HTMLDivElement>(null);
+
+// Download SVG function
+const downloadSVG = () => {
+  const svgElement = snakeWrapperRef.current?.querySelector('svg');
+  if (!svgElement) {
+    console.error('SVG element not found');
+    return;
+  }
+
+  const clonedSvg = svgElement.cloneNode(true) as SVGElement;
+  
+  // Apply current category colors to the cloned SVG
+  if (result) {
+    result.categorizedResidues.forEach(row => {
+      const pos = showReceptor === 1 ? row.resNum1 : row.resNum2;
+      if (pos === 'gap') return;
+      const label = categoryLabels[row.category as keyof typeof categoryLabels];
+      const fill = colorMap[label];
+      const circle = clonedSvg.querySelector<SVGCircleElement>(`circle[id="${pos}"]`);
+      if (circle) {
+        circle.setAttribute('fill', fill);
+      }
+    });
+  }
+
+  const serializer = new XMLSerializer();
+  const svgString = serializer.serializeToString(clonedSvg);
+  const svgWithDeclaration = `<?xml version="1.0" encoding="UTF-8"?>\n${svgString}`;
+
+  const blob = new Blob([svgWithDeclaration], { type: 'image/svg+xml' });
+  const url = URL.createObjectURL(blob);
+
+  const receptorName = showReceptor === 1 ? result?.receptor1.geneName : result?.receptor2.geneName;
+  const fileName = `${receptorName}_comparison_snakeplot.svg`;
+
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+
+  URL.revokeObjectURL(url);
+};
 
 // Re-fetch / recolour plot whenever inputs change
 useEffect(() => {
@@ -516,6 +617,28 @@ useEffect(() => {
 }, [result, showReceptor, colorMap]);
 
   const columns = [
+    columnHelper.accessor('region1', {
+      header: () => <div className="text-center font-medium">Region</div>,
+      cell: info => (
+        <div className="font-mono text-center">
+          {info.row.original.resNum1 !== 'gap' ? info.getValue() : '-'}
+        </div>
+      ),
+      meta: {
+        parentColumn: result?.receptor1.geneName,
+      } as ColumnMeta,
+    }),
+    columnHelper.accessor('gpcrdb1', {
+      header: () => <div className="text-center font-medium">GPCRdb #</div>,
+      cell: info => (
+        <div className="font-mono text-center">
+          {info.row.original.resNum1 !== 'gap' ? info.getValue() : '-'}
+        </div>
+      ),
+      meta: {
+        parentColumn: result?.receptor1.geneName,
+      } as ColumnMeta,
+    }),
     columnHelper.accessor('resNum1', {
       header: () => <div className="text-center font-medium">Residue</div>,
       cell: info => (
@@ -545,6 +668,28 @@ useEffect(() => {
       cell: info => <div className="text-center">{info.getValue().toFixed(2)}%</div>,
       meta: {
         parentColumn: result?.receptor1.geneName,
+      } as ColumnMeta,
+    }),
+    columnHelper.accessor('region2', {
+      header: () => <div className="text-center font-medium">Region</div>,
+      cell: info => (
+        <div className="font-mono text-center">
+          {info.row.original.resNum2 !== 'gap' ? info.getValue() : '-'}
+        </div>
+      ),
+      meta: {
+        parentColumn: result?.receptor2.geneName,
+      } as ColumnMeta,
+    }),
+    columnHelper.accessor('gpcrdb2', {
+      header: () => <div className="text-center font-medium">GPCRdb #</div>,
+      cell: info => (
+        <div className="font-mono text-center">
+          {info.row.original.resNum2 !== 'gap' ? info.getValue() : '-'}
+        </div>
+      ),
+      meta: {
+        parentColumn: result?.receptor2.geneName,
       } as ColumnMeta,
     }),
     columnHelper.accessor('resNum2', {
@@ -601,10 +746,13 @@ useEffect(() => {
   });
 
   return (
-    <div className="bg-card text-card-foreground rounded-lg p-6 shadow-md">
-      <h2 className="text-xl font-semibold mb-4">Results</h2>
-      {/* ─── Export buttons (place just above the <Table> element) ───────────────── */}
-        <div className="flex justify-end gap-2 mb-4">
+    <div className="space-y-6">
+      {/* ─── Card 1: Results Table ─────────────────────────────────── */}
+      <div className="bg-card text-card-foreground rounded-lg p-6 shadow-md">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-semibold">Comparison Results</h2>
+          {/* ─── Export buttons ───────────────── */}
+          <div className="flex gap-2">
           {(['tsv', 'csv'] as const).map(ext => (
             <Button
               key={ext}
@@ -617,9 +765,13 @@ useEffect(() => {
 
                 // Header row
                 const headers = [
+                  'Region1',
+                  'GPCRdb1',
                   'Residue1',
                   'AA1',
                   'Perc1',
+                  'Region2',
+                  'GPCRdb2',
                   'Residue2',
                   'AA2',
                   'Perc2',
@@ -628,9 +780,13 @@ useEffect(() => {
 
                 // Body rows
                 const rows = result.categorizedResidues.map(r => [
+                  r.region1,
+                  r.gpcrdb1,
                   r.resNum1,
                   r.aa1,
                   r.perc1.toFixed(2),
+                  r.region2,
+                  r.gpcrdb2,
                   r.resNum2,
                   r.aa2,
                   r.perc2.toFixed(2),
@@ -657,8 +813,10 @@ useEffect(() => {
               {`Download ${ext.toUpperCase()}`}
             </Button>
           ))}
+          </div>
         </div>
-      <div className="overflow-x-auto overflow-y-auto max-h-[400px]">
+        
+        <div className="overflow-x-auto overflow-y-auto max-h-[400px]">
         
         <Table>
           <TableHeader>
@@ -727,15 +885,23 @@ useEffect(() => {
             ))}
           </TableBody>
         </Table>
+        </div>
       </div>
 
-      
-
-      {/* ─── Snake-plot title + toggles ────────────────────────────── */}
-      <div className="flex flex-wrap items-center justify-between pt-4 mb-4 gap-2">
-        <h2 className="text-xl font-semibold">Snake Plot Visualization</h2>
+      {/* ─── Card 2: Snake Plot Visualization ─────────────────────────────────── */}
+      <div className="bg-card text-card-foreground rounded-lg p-6 shadow-md">
+        {/* ─── Snake-plot title + toggles ────────────────────────────── */}
+        <div className="flex flex-wrap items-center justify-between mb-4 gap-2">
+          <h2 className="text-xl font-semibold">Snake Plot Visualization</h2>
 
         <div className="flex gap-2">
+          {/* Download SVG button */}
+          {result && (
+            <Button onClick={downloadSVG} variant="outline" size="sm">
+              Download SVG
+            </Button>
+          )}
+
           {/* Receptor 1 toggle */}
           <Button
             /* 👇  ACTIVE = secondary  |  INACTIVE = default  */
@@ -758,22 +924,66 @@ useEffect(() => {
 
 
       {/* ─── Color customization panel ─────────────────────── */}
-      <div className="flex flex-wrap gap-4 p-4 bg-muted/50 rounded-lg mb-4">
-        {Object.entries(colorMap).map(([label, col]) => (
-          <div key={label} className="flex items-center gap-2">
-            <label htmlFor={`color-${label}`} className="text-sm font-medium whitespace-nowrap">
-              {label}:
-            </label>
+      <div className="p-4 bg-muted/50 rounded-lg mb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Top row - Common and Both categories */}
+          <div className="flex items-center gap-3">
             <input
               type="color"
-              id={`color-${label}`}
-              value={col}
-              onChange={e => setColorMap(m => ({ ...m, [label]: e.target.value }))}
-              className="w-8 h-6 rounded cursor-pointer"
-              title={label}
+              id="color-common"
+              value={colorMap['Common Residues']}
+              onChange={e => setColorMap(m => ({ ...m, 'Common Residues': e.target.value }))}
+              className="w-8 h-6 rounded cursor-pointer flex-shrink-0"
+              title="Common Residues"
             />
+            <label htmlFor="color-common" className="text-sm font-medium">
+              Common Residues
+            </label>
           </div>
-        ))}
+          
+          <div className="flex items-center gap-3">
+            <input
+              type="color"
+              id="color-both"
+              value={colorMap['Specifically Conserved for Both']}
+              onChange={e => setColorMap(m => ({ ...m, 'Specifically Conserved for Both': e.target.value }))}
+              className="w-8 h-6 rounded cursor-pointer flex-shrink-0"
+              title="Specifically Conserved for Both"
+            />
+            <label htmlFor="color-both" className="text-sm font-medium">
+              Specifically Conserved for Both
+            </label>
+          </div>
+          
+          {/* Bottom row - Receptor-specific categories */}
+          <div className="flex items-center gap-3">
+            <input
+              type="color"
+              id="color-receptor1"
+              value={colorMap['Specifically Conserved for Receptor 1']}
+              onChange={e => setColorMap(m => ({ ...m, 'Specifically Conserved for Receptor 1': e.target.value }))}
+              className="w-8 h-6 rounded cursor-pointer flex-shrink-0"
+              title="Specifically Conserved for Receptor 1"
+            />
+            <label htmlFor="color-receptor1" className="text-sm font-medium">
+              Specifically Conserved for Receptor 1
+            </label>
+          </div>
+          
+          <div className="flex items-center gap-3">
+            <input
+              type="color"
+              id="color-receptor2"
+              value={colorMap['Specifically Conserved for Receptor 2']}
+              onChange={e => setColorMap(m => ({ ...m, 'Specifically Conserved for Receptor 2': e.target.value }))}
+              className="w-8 h-6 rounded cursor-pointer flex-shrink-0"
+              title="Specifically Conserved for Receptor 2"
+            />
+            <label htmlFor="color-receptor2" className="text-sm font-medium">
+              Specifically Conserved for Receptor 2
+            </label>
+          </div>
+        </div>
       </div>
 
       {/* ─── Snake‐plot container ─────────────────────────────────── */}
@@ -785,6 +995,8 @@ useEffect(() => {
         </div>
       </div>
 
+
+      </div>
 
       {/* ───── Tooltip overlay (mobile-friendly) ───── */}
       {tooltip.visible && (
@@ -927,7 +1139,7 @@ export default function ReceptorComparisonPage() {
       const gene2Data = await readConservationData(`/${rec2.conservationFile}`);
 
       // Map and categorize
-      const { resNums1, resNums2, percList1, percList2, aaList1, aaList2 } = mapAllData(
+      const { resNums1, resNums2, percList1, percList2, aaList1, aaList2, regionList1, regionList2, gpcrdbList1, gpcrdbList2 } = mapAllData(
         gene1Data,
         gene2Data,
         seq1,
@@ -940,6 +1152,10 @@ export default function ReceptorComparisonPage() {
         percList2,
         aaList1,
         aaList2,
+        regionList1,
+        regionList2,
+        gpcrdbList1,
+        gpcrdbList2,
         threshold ?? 90
       );
 
@@ -979,7 +1195,7 @@ export default function ReceptorComparisonPage() {
       <p className="text-lg text-muted-foreground text-left">
         Enter two GPCR gene names from the same class and set a conservation threshold (0–100%).
         This tool will identify residues that are commonly and specifically conserved in each
-        receptor, and render both an interactive results table and a snake plot visualization.
+        receptor, and render both an interactive results table (including receptor region and GPCRdb numbering) and a snake plot visualization.
       </p>
       <div className="bg-card text-card-foreground rounded-lg p-6 shadow-md">
         <Form {...form}>
