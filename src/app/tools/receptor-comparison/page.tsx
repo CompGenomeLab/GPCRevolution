@@ -629,14 +629,41 @@ export default function ReceptorComparisonPage() {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to compare receptors');
+        let errorMessage = 'Failed to compare receptors';
+        
+        // Check if response is JSON or HTML
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          try {
+            const errorData = await response.json();
+            errorMessage = errorData.error || errorMessage;
+          } catch {
+            // If JSON parsing fails, use the default message
+            errorMessage = `Server error (${response.status}): ${response.statusText}`;
+          }
+        } else {
+          // If it's not JSON (probably HTML error page), show status info
+          errorMessage = `Server error (${response.status}): ${response.statusText}`;
+        }
+        
+        throw new Error(errorMessage);
+      }
+
+      // Check if response is JSON before parsing
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error('Server returned unexpected response format. Expected JSON but got HTML or other format.');
       }
 
       const data = await response.json();
       setInitialResult(data);
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'An error occurred');
+      console.error('Fetch error:', error);
+      if (error instanceof Error) {
+        setError(error.message);
+      } else {
+        setError('An unexpected error occurred');
+      }
     } finally {
       if (showLoading) {
         setIsLoading(false);
