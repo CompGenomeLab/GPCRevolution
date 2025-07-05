@@ -268,11 +268,17 @@ interface Receptor {
 }
 
 export async function POST(request: Request) {
+  console.log('POST request received at /api/receptor-comparison');
+  
   try {
     // read the same keys your client is sending
-    const { receptor1, receptor2, threshold } = await request.json();
+    const body = await request.json();
+    console.log('Request body:', body);
+    
+    const { receptor1, receptor2, threshold } = body;
 
     if (!receptor1 || !receptor2) {
+      console.log('Missing required parameters:', { receptor1, receptor2 });
       return NextResponse.json(
         { error: 'Both receptor1 and receptor2 parameters are required' },
         { status: 400 }
@@ -337,14 +343,40 @@ export async function POST(request: Request) {
       threshold ?? 0.8
     );
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       receptor1: rec1,
       receptor2: rec2,
       categorizedResidues,
     });
+    
+    // Add CORS headers for development
+    response.headers.set('Access-Control-Allow-Origin', '*');
+    response.headers.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    response.headers.set('Access-Control-Allow-Headers', 'Content-Type');
+    
+    return response;
   } catch (error) {
     console.error('Error processing request:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    const errorResponse = NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    
+    // Add CORS headers to error response too
+    errorResponse.headers.set('Access-Control-Allow-Origin', '*');
+    errorResponse.headers.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    errorResponse.headers.set('Access-Control-Allow-Headers', 'Content-Type');
+    
+    return errorResponse;
   }
+}
+
+// Add OPTIONS handler for CORS preflight
+export async function OPTIONS() {
+  return new Response(null, {
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+    },
+  });
 }
 
