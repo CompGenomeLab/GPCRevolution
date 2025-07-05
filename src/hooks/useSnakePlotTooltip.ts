@@ -26,7 +26,7 @@ export function useSnakePlotTooltip() {
         'py-0.5',
         'sm:px-2',
         'sm:py-1',
-        'absolute',
+        'fixed',
         'opacity-0',
         'z-40',
         'max-w-xs',
@@ -71,8 +71,13 @@ export function useSnakePlotTooltip() {
       ) {
         const tooltipWidth = 200; // Estimated tooltip width
         const tooltipHeight = 120; // Estimated tooltip height
-        const x = Math.min(mouseEvent.pageX + 12, window.innerWidth - tooltipWidth);
-        const y = Math.min(Math.max(mouseEvent.pageY + 12, 10), window.innerHeight - tooltipHeight);
+        
+        // Use clientX/clientY for viewport-relative positioning
+        const x = Math.min(mouseEvent.clientX + 12, window.innerWidth - tooltipWidth);
+        const y = Math.min(Math.max(mouseEvent.clientY + 12, 10), window.innerHeight - tooltipHeight);
+        
+        // Update tooltip to use fixed positioning
+        tooltip.style.position = 'fixed';
         tooltip.style.left = `${x}px`;
         tooltip.style.top = `${y}px`;
         tooltip.style.transform = '';
