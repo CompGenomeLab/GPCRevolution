@@ -64,17 +64,6 @@ export default function Home() {
       <section className="bg-gradient-to-br from-[#424874] via-[#434E71] to-[#424874] text-white py-12 sm:py-20 px-4 sm:px-0">
         <RootContainer className="text-center">
           <div className="max-w-4xl mx-auto">
-            <h1 className="text-3xl sm:text-5xl font-bold mb-4 sm:mb-6">
-              GPCR Evolution Database
-            </h1>
-            <p className="text-lg sm:text-xl mb-6 sm:mb-8 opacity-90">
-              Precision evolutionary insights for human G-protein-coupled receptors
-            </p>
-            <p className="text-sm sm:text-lg mb-8 sm:mb-12 opacity-80 max-w-3xl mx-auto hidden sm:block">
-              Rigorously curated, residue-level evolutionary information for every human GPCR, 
-              built from high-quality multiple-sequence alignments and phylogenetic trees.
-            </p>
-            
             {/* Search Section */}
             <div className="max-w-2xl mx-auto mb-8 sm:mb-12">
               <h2 className="text-2xl sm:text-4xl font-semibold mb-4 sm:mb-6">Find your receptor</h2>
@@ -169,6 +158,16 @@ export default function Home() {
       <section className="py-12 sm:py-16 bg-muted/50 px-4 sm:px-0">
         <RootContainer>
           <div className="max-w-4xl mx-auto text-center">
+            <h1 className="text-3xl sm:text-5xl font-bold mb-4 sm:mb-6 text-foreground">
+              GPCR Evolution Database
+            </h1>
+            <p className="text-lg sm:text-xl mb-6 sm:mb-8 text-muted-foreground">
+              Precision evolutionary insights for human G-protein-coupled receptors
+            </p>
+            <p className="text-sm sm:text-lg mb-8 sm:mb-12 text-muted-foreground max-w-3xl mx-auto hidden sm:block">
+              Rigorously curated, residue-level evolutionary information for every human GPCR, 
+              built from high-quality multiple-sequence alignments and phylogenetic trees.
+            </p>
             <h2 className="text-2xl sm:text-3xl font-bold mb-6 sm:mb-8 text-foreground">Accelerating GPCR Research Through Evolution</h2>
             <p className="text-base sm:text-lg text-muted-foreground mb-6 sm:mb-8 hidden sm:block">
               G-protein-coupled receptors (GPCRs) represent the largest protein family in the human genome 
