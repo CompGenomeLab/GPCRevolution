@@ -95,10 +95,10 @@ export default function Home() {
                           <CommandItem
                             key={index}
                             value={`${receptor.geneName} ${receptor.name}`}
-                            className="cursor-pointer"
+                            className="cursor-pointer text-left"
                             onSelect={() => handleSelect(receptor.geneName)}
                           >
-                            <div className="flex flex-col">
+                            <div className="flex flex-col items-start w-full">
                               <span className="font-medium">{`${receptor.geneName} - ${receptor.name}`}</span>
                               <span className="text-sm text-muted-foreground">
                                 Class: {receptor.class} | Orthologs: {receptor.numOrthologs} | LCA: {receptor.lca}
@@ -128,10 +128,10 @@ export default function Home() {
                           <CommandItem
                             key={index}
                             value={`${receptor.geneName} ${receptor.name}`}
-                            className="cursor-pointer"
+                            className="cursor-pointer text-left"
                             onSelect={() => handleSelect(receptor.geneName)}
                           >
-                            <div className="flex flex-col">
+                            <div className="flex flex-col items-start w-full">
                               <span className="font-medium">{`${receptor.geneName} - ${receptor.name}`}</span>
                               <span className="text-sm text-muted-foreground">
                                 Class: {receptor.class} | Orthologs: {receptor.numOrthologs} | LCA: {receptor.lca}
