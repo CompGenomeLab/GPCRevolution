@@ -13,7 +13,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import receptors from '../../../../public/receptors.json';
 import { useFastaSequences } from '@/hooks/useFastaSequences';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -84,6 +84,16 @@ export default function CombineOrthologsPage() {
       receptorNames: [],
     },
   }) as UseFormReturn<FormValues>;
+
+  // Show success message after visualization is ready
+  useEffect(() => {
+    if (visualizationSequences.length > 0) {
+      const receptorCount = form.getValues('receptorNames').length;
+      toast.success(
+        `Successfully combined ${visualizationSequences.length} sequences from ${receptorCount} receptors`
+      );
+    }
+  }, [visualizationSequences, form]);
 
   const filterSuggestions = (query: string) => {
     if (!query.trim()) {
@@ -242,10 +252,6 @@ export default function CombineOrthologsPage() {
 
         setDownloadUrl(url);
         setDownloadFilename(filename);
-
-        toast.success(
-          `Successfully combined ${combinedSequences.length} sequences from ${values.receptorNames.length} receptors`
-        );
 
         setTimeout(() => {
           URL.revokeObjectURL(url);
