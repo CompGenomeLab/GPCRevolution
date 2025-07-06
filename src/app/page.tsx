@@ -61,7 +61,7 @@ export default function Home() {
   return (
     <div className="min-h-screen">
       {/* Hero Section */}
-      <section className="bg-gradient-to-br from-[#424874] via-[#434E71] to-[#424874] text-white py-12 sm:py-20">
+      <section className="bg-gradient-to-br from-[#424874] via-[#434E71] to-[#424874] text-white py-12 sm:py-20 px-4 sm:px-0">
         <RootContainer className="text-center">
           <div className="max-w-4xl mx-auto">
             <h1 className="text-3xl sm:text-5xl font-bold mb-4 sm:mb-6">
@@ -78,12 +78,46 @@ export default function Home() {
             {/* Search Section */}
             <div className="max-w-2xl mx-auto mb-8 sm:mb-12">
               <h2 className="text-2xl sm:text-4xl font-semibold mb-4 sm:mb-6">Find your receptor</h2>
-                            <Command shouldFilter={false} className="rounded-lg border-2 border-[#424874] shadow-none">
-                                                                        <CommandInput
-                        placeholder="Search for a receptor (e.g., 5HT1A)..."
-                        onValueChange={handleSearch}
-                        className="h-12 sm:h-14 text-base sm:text-lg px-2"
-                      />
+                                                        {/* Mobile Search */}
+              <Command shouldFilter={false} className="rounded-lg border-2 border-[#424874] shadow-none block sm:hidden">
+                <CommandInput
+                  placeholder="Search for a receptor (e.g., 5HT1A) ..."
+                  onValueChange={handleSearch}
+                  className="h-10 text-sm px-2"
+                />
+                {hasSearched && (
+                  <CommandList className={searchResults.length > 5 ? 'max-h-[300px] overflow-y-auto' : ''}>
+                    {searchResults.length === 0 ? (
+                      <CommandEmpty>No results found.</CommandEmpty>
+                    ) : (
+                      <CommandGroup>
+                        {searchResults.map((receptor, index) => (
+                          <CommandItem
+                            key={index}
+                            value={`${receptor.geneName} ${receptor.name}`}
+                            className="cursor-pointer"
+                            onSelect={() => handleSelect(receptor.geneName)}
+                          >
+                            <div className="flex flex-col">
+                              <span className="font-medium">{`${receptor.geneName} - ${receptor.name}`}</span>
+                              <span className="text-sm text-muted-foreground">
+                                Class: {receptor.class} | Orthologs: {receptor.numOrthologs} | LCA: {receptor.lca}
+                              </span>
+                            </div>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    )}
+                  </CommandList>
+                )}
+              </Command>
+              {/* Desktop Search */}
+              <Command shouldFilter={false} className="rounded-lg border-2 border-[#424874] shadow-none hidden sm:block">
+                <CommandInput
+                  placeholder="Search for a receptor (e.g., 5HT1A - 5-hydroxytryptamine receptor 1A) ..."
+                  onValueChange={handleSearch}
+                  className="h-14 text-lg px-2"
+                />
                 {hasSearched && (
                   <CommandList className={searchResults.length > 5 ? 'max-h-[300px] overflow-y-auto' : ''}>
                     {searchResults.length === 0 ? (
@@ -132,7 +166,7 @@ export default function Home() {
       </section>
 
       {/* About Section */}
-      <section className="py-12 sm:py-16 bg-muted/50">
+      <section className="py-12 sm:py-16 bg-muted/50 px-4 sm:px-0">
         <RootContainer>
           <div className="max-w-4xl mx-auto text-center">
             <h2 className="text-2xl sm:text-3xl font-bold mb-6 sm:mb-8 text-foreground">Accelerating GPCR Research Through Evolution</h2>
