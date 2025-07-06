@@ -147,16 +147,16 @@ export default function Home() {
             </div>
 
             {/* Key Statistics */}
-            <div className="grid grid-cols-3 gap-4 sm:gap-8 text-center">
-              <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 sm:p-6 border border-white/20">
+            <div className="grid grid-cols-3 gap-4 sm:gap-8">
+              <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 sm:p-6 border border-white/20 flex flex-col items-center justify-center text-center">
                 <div className="text-2xl sm:text-3xl font-bold text-white">800+</div>
                 <div className="text-xs sm:text-sm text-white/80">Human GPCRs</div>
               </div>
-              <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 sm:p-6 border border-white/20">
+              <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 sm:p-6 border border-white/20 flex flex-col items-center justify-center text-center">
                 <div className="text-2xl sm:text-3xl font-bold text-white">{totalOrthologs.toLocaleString()}</div>
                 <div className="text-xs sm:text-sm text-white/80">Ortholog Sequences</div>
               </div>
-              <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 sm:p-6 border border-white/20">
+              <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 sm:p-6 border border-white/20 flex flex-col items-center justify-center text-center">
                 <div className="text-2xl sm:text-3xl font-bold text-white">3</div>
                 <div className="text-xs sm:text-sm text-white/80">Integrated Tools</div>
               </div>
