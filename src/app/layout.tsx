@@ -11,7 +11,7 @@ const openSans = Open_Sans({
 });
 
 export const metadata: Metadata = {
-  title: 'GPCR Evolution',
+  title: 'GPCR Evolution DB',
   description: 'Tools for analyzing GPCR evolution',
 };
 
@@ -32,7 +32,7 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <TheHeader className="flex-none sticky top-0 z-50" />
-          <main className="p-4 grow">{children}</main>
+          <main className="grow">{children}</main>
         </ThemeProvider>
         <Toaster />
       </body>
