@@ -12,7 +12,14 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
 import { useState, useEffect } from 'react';
 import receptors from '../../../../public/receptors.json';
 import { useFastaSequences } from '@/hooks/useFastaSequences';
@@ -33,6 +40,7 @@ interface Receptor {
   numOrthologs: number;
   lca: string;
   gpcrdbId: string;
+  name: string;
   alignment?: string;
 }
 
@@ -58,6 +66,8 @@ interface ReceptorOption {
   geneName: string;
   class: string;
   numOrthologs: number;
+  name: string;
+  lca: string;
 }
 
 export default function CombineOrthologsPage() {
@@ -110,7 +120,8 @@ export default function CombineOrthologsPage() {
 
     const filtered = receptors
       .filter((receptor: Receptor) =>
-        receptor.geneName.toLowerCase().includes(lastValue.toLowerCase())
+        receptor.geneName.toLowerCase().includes(lastValue.toLowerCase()) ||
+        receptor.name.toLowerCase().includes(lastValue.toLowerCase())
       )
       .slice(0, 10) as ReceptorOption[];
 
@@ -317,35 +328,43 @@ export default function CombineOrthologsPage() {
                 <FormItem>
                   <FormLabel>Select Receptors</FormLabel>
                   <FormControl>
-                    <div className="relative">
-                      <Input
+                    <Command shouldFilter={false} className="rounded-lg border shadow-md">
+                      <CommandInput
                         placeholder="Type receptor names (comma-separated)..."
                         value={inputValue}
-                        onChange={e => handleInputChange(e.target.value)}
-                        onFocus={() => {
-                          setSuggestions([]);
-                          setShowSuggestions(false);
-                        }}
-                        onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-                        className="w-full"
+                        onValueChange={handleInputChange}
                       />
-                      {showSuggestions && suggestions.length > 0 && (
-                        <div className="absolute z-10 w-full mt-1 bg-popover border border-border rounded-md shadow-lg max-h-60 overflow-y-auto">
-                          {suggestions.map(receptor => (
-                            <div
-                              key={receptor.geneName}
-                              className="px-4 py-2 hover:bg-accent cursor-pointer text-sm"
-                              onMouseDown={() => handleSuggestionClick(receptor)}
-                            >
-                              <div className="font-medium">{receptor.geneName}</div>
-                              <div className="text-muted-foreground text-xs">
-                                Class: {receptor.class} | Orthologs: {receptor.numOrthologs}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
+                      {showSuggestions && (
+                        <CommandList
+                          className={
+                            suggestions.length > 5 ? 'max-h-[300px] overflow-y-auto' : ''
+                          }
+                        >
+                          {suggestions.length === 0 ? (
+                            <CommandEmpty>No results found.</CommandEmpty>
+                          ) : (
+                            <CommandGroup>
+                              {suggestions.map(receptor => (
+                                <CommandItem
+                                  key={receptor.geneName}
+                                  value={`${receptor.geneName} ${receptor.name}`}
+                                  className="cursor-pointer"
+                                  onSelect={() => handleSuggestionClick(receptor)}
+                                >
+                                  <div className="flex flex-col">
+                                    <span className="font-medium">{`${receptor.geneName} - ${receptor.name}`}</span>
+                                    <span className="text-sm text-muted-foreground">
+                                      Class: {receptor.class} | Orthologs: {receptor.numOrthologs} |
+                                      LCA: {receptor.lca}
+                                    </span>
+                                  </div>
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          )}
+                        </CommandList>
                       )}
-                    </div>
+                    </Command>
                   </FormControl>
 
                   <FormMessage />
