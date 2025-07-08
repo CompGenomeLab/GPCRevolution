@@ -17,9 +17,10 @@ type RegionGroup = { region: string; startResidue: number; endResidue: number };
 
 interface ConservationChartProps {
   data: ConservationDatum[];
+  height?: number;
 }
 
-const ConservationChart: React.FC<ConservationChartProps> = ({ data }) => {
+const ConservationChart: React.FC<ConservationChartProps> = ({ data, height = 242 }) => {
   const yAxisContainerRef = useRef<HTMLDivElement>(null);
   const chartContainerRef = useRef<HTMLDivElement>(null);
 
@@ -37,7 +38,7 @@ const ConservationChart: React.FC<ConservationChartProps> = ({ data }) => {
     /* ---------- Layout constants ---------- */
     const margin = { top: 20, right: 20, bottom: 20, left: 20 };
     const yAxisWidth = 80;
-    const totalHeight = 242;
+    const totalHeight = height;
     const barWidthEstimate = 12.35;
     const totalWidth = data.length * barWidthEstimate + margin.left + margin.right;
     const infoRowHeight = 20;

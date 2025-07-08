@@ -12,6 +12,7 @@ import receptors from '../../../public/receptors.json';
 
 const ConservationChartAsync = lazy(() => import('@/components/ConservationChartAsync'));
 const OptimizedSnakePlot   = lazy(() => import('@/components/OptimizedSnakePlot'));
+const SequenceLogoChart    = lazy(() => import('@/components/SequenceLogoChart'));
 const OptimizedSVGTree     = lazy(() => import('@/components/OptimizedSVGTree'));
 const MSAViewer            = lazy(() =>
   import('@/components/MSAViewer').then(m => ({ default: m.MSAViewer })),
@@ -147,38 +148,51 @@ function SequentialSections({ receptor }: { receptor: Receptor }) {
         <Suspense fallback={<ConservationSkeleton />}>
           <ConservationChartAsync
             conservationFile={receptor.conservationFile}
+            height={280}
             onLoaded={next(1)}
           />
         </Suspense>
       )}
 
       {sectionIndex >= 1 && (
-        <Suspense fallback={<SectionSpinner title="Residue Conservation Snake Plot" />}>
-          <OptimizedSnakePlot
-            svgPath={receptor.snakePlot}
+        <Suspense fallback={<SectionSpinner title="Sequence Logo" />}>
+          <SequenceLogoChart
+            sequences={[]} // Will be loaded from alignment file
             conservationFile={receptor.conservationFile}
+            alignmentPath={receptor.alignment}
+            height={280}
             onLoaded={next(2)}
           />
         </Suspense>
       )}
 
       {sectionIndex >= 2 && (
-        <Suspense fallback={<SectionSpinner title="Phylogenetic Tree of Orthologs" />}>
-          <OptimizedSVGTree svgPath={receptor.svgTree} onLoaded={next(3)} />
-        </Suspense>
-      )}
-
-      {sectionIndex >= 3 && (
-        <Suspense fallback={<SectionSpinner title="Multiple Sequence Alignment of Orthologs" />}>
-          <MSAViewer
-            alignmentPath={receptor.alignment}
+        <Suspense fallback={<SectionSpinner title="Residue Conservation Snake Plot" />}>
+          <OptimizedSnakePlot
+            svgPath={receptor.snakePlot}
             conservationFile={receptor.conservationFile}
-            onLoaded={next(4)}
+            onLoaded={next(3)}
           />
         </Suspense>
       )}
 
+      {sectionIndex >= 3 && (
+        <Suspense fallback={<SectionSpinner title="Phylogenetic Tree of Orthologs" />}>
+          <OptimizedSVGTree svgPath={receptor.svgTree} onLoaded={next(4)} />
+        </Suspense>
+      )}
+
       {sectionIndex >= 4 && (
+        <Suspense fallback={<SectionSpinner title="Multiple Sequence Alignment of Orthologs" />}>
+          <MSAViewer
+            alignmentPath={receptor.alignment}
+            conservationFile={receptor.conservationFile}
+            onLoaded={next(5)}
+          />
+        </Suspense>
+      )}
+
+      {sectionIndex >= 5 && (
         <DownloadableFiles
           tree={receptor.tree}
           alignment={receptor.alignment}

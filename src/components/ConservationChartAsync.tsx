@@ -7,9 +7,10 @@ interface ConservationChartAsyncProps {
   conservationFile: string | null;
   /** Callback fired once the chart data has loaded (success or error). */
   onLoaded?: () => void;
+  height?: number;
 }
 
-export default function ConservationChartAsync({ conservationFile, onLoaded }: ConservationChartAsyncProps) {
+export default function ConservationChartAsync({ conservationFile, onLoaded, height }: ConservationChartAsyncProps) {
   const [conservationData, setConservationData] = useState<ConservationDatum[] | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -103,5 +104,5 @@ export default function ConservationChartAsync({ conservationFile, onLoaded }: C
     );
   }
 
-  return <ConservationChart data={conservationData} />;
+  return <ConservationChart data={conservationData} height={height} />;
 }
