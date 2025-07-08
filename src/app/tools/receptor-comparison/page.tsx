@@ -538,7 +538,8 @@ export default function ReceptorComparisonPage() {
       <p className="text-lg text-muted-foreground text-left">
         Enter two GPCR gene names from the same class and set a conservation threshold (0–100%).
         This tool will identify residues that are commonly and specifically conserved in each
-        receptor, and render both an interactive results table (including receptor region and GPCRdb numbering) and a snake plot visualization.
+        receptor, and provide comprehensive visualizations including: (1) an interactive results table,
+        (2) a dual sequence logo, and (3) snake plot visualizations with category-based coloring.
       </p>
       
       <ReceptorSelectionForm 
