@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import * as d3 from 'd3';
 import { Button } from '@/components/ui/button';
 import useCleanedSequences from '@/hooks/useCleanedSequence';
@@ -95,6 +95,14 @@ const DualSequenceLogoChart: React.FC<DualSequenceLogoChartProps> = ({
   const [receptor1Sequences, setReceptor1Sequences] = useState<{ header: string; sequence: string }[]>([]);
   const [receptor2Sequences, setReceptor2Sequences] = useState<{ header: string; sequence: string }[]>([]);
   
+  // State for tooltip
+  const [tooltip, setTooltip] = useState<{
+    visible: boolean;
+    x: number;
+    y: number;
+    content: string;
+  }>({ visible: false, x: 0, y: 0, content: '' });
+  
   // Cleaned sequences using the hook
   const cleanedReceptor1Sequences = useCleanedSequences(receptor1Sequences);
   const cleanedReceptor2Sequences = useCleanedSequences(receptor2Sequences);
@@ -180,7 +188,7 @@ const DualSequenceLogoChart: React.FC<DualSequenceLogoChartProps> = ({
   const svgPathCache = useRef<Record<string, { path: string; viewBox: string; transformAttr?: string }>>({});
 
   // Function to get residue color based on amino acid groups
-  const getResidueColor = (residue: string): string => {
+  const getResidueColor = useCallback((residue: string): string => {
     const char = residue.toUpperCase();
     for (const [groupKey, group] of Object.entries(aminoAcidGroups)) {
       if (group.residues.includes(char)) {
@@ -191,7 +199,7 @@ const DualSequenceLogoChart: React.FC<DualSequenceLogoChartProps> = ({
       }
     }
     return '#000000';
-  };
+  }, [groupColors, isDarkMode]);
 
   // Function to handle color changes
   const handleColorChange = (groupKey: string, newColor: string) => {
@@ -421,13 +429,23 @@ const DualSequenceLogoChart: React.FC<DualSequenceLogoChartProps> = ({
         .attr('viewBox', `0 0 ${totalWidth} ${totalHeight}`)
         .style('max-height', `${totalHeight}px`);
 
-      // Tooltip
-      let tooltip = d3.select('body').select<HTMLDivElement>('.dual-logo-tooltip');
-      if (tooltip.empty()) {
-        tooltip = d3.select('body')
-          .append('div')
-          .attr('class', 'dual-logo-tooltip pointer-events-none bg-white dark:bg-black dark:text-white text-xs sm:text-sm rounded border border-gray-300 px-0.5 py-0.5 sm:px-1 sm:py-0.5 absolute opacity-0 z-40 max-w-44 sm:max-w-48 break-words leading-tight sm:leading-normal');
-      }
+      // Tooltip helper functions
+      const showTooltip = (event: MouseEvent, content: string) => {
+        setTooltip({
+          visible: true,
+          x: event.clientX,
+          y: event.clientY,
+          content
+        });
+      };
+
+      const hideTooltip = () => {
+        setTooltip(prev => ({ ...prev, visible: false }));
+      };
+
+      const updateTooltipPosition = (event: MouseEvent) => {
+        setTooltip(prev => ({ ...prev, x: event.clientX, y: event.clientY }));
+      };
 
       // Scales
       const x = d3.scaleBand<string>()
@@ -608,37 +626,25 @@ const DualSequenceLogoChart: React.FC<DualSequenceLogoChartProps> = ({
                 path.attr('transform', svgData.transformAttr);
               }
 
-              // Add hover interactions with improved mobile tooltip positioning
-              const showTooltip = (event: any) => {
+              // Add hover interactions with React state-based tooltip
+              const createTooltipContent = () => {
                 const frequency = logoData.residueCounts[residue] / logoData.totalSequences;
                 const resNum = receptor === 'receptor1' ? residueData.resNum1 : residueData.resNum2;
                 const gpcrdb = receptor === 'receptor1' ? residueData.gpcrdb1 : residueData.gpcrdb2;
                 
-                tooltip
-                  .html(
-                    `<strong>${receptor === 'receptor1' ? receptor1Name : receptor2Name}</strong><br/>` +
-                    `<strong>Position:</strong> ${resNum}<br/>` +
-                    `<strong>Residue:</strong> ${residue}<br/>` +
-                    `<strong>Frequency:</strong> ${(frequency * 100).toFixed(1)}%<br/>` +
-                    `<strong>Information:</strong> ${height.toFixed(2)} bits<br/>` +
-                    `<strong>GPCRdb #:</strong> ${gpcrdb}`
-                  )
-                  .style('opacity', 1);
+                return `<strong>${receptor === 'receptor1' ? receptor1Name : receptor2Name}</strong><br/>` +
+                       `<strong>Position:</strong> ${resNum}<br/>` +
+                       `<strong>Residue:</strong> ${residue}<br/>` +
+                       `<strong>Frequency:</strong> ${(frequency * 100).toFixed(1)}%<br/>` +
+                       `<strong>Information:</strong> ${height.toFixed(2)} bits<br/>` +
+                       `<strong>GPCRdb #:</strong> ${gpcrdb}`;
               };
 
-              const hideTooltip = () => tooltip.style('opacity', 0);
-
               nestedSvg
-                .on('mouseover', showTooltip)
-                .on('mousemove', (event) => {
-                  const tooltipWidth = 200;
-                  const tooltipHeight = 120;
-                  const pageX = event.pageX ?? (event.clientX + window.scrollX);
-                  const pageY = event.pageY ?? (event.clientY + window.scrollY);
-                  const x = Math.min(pageX + 10, window.innerWidth - tooltipWidth);
-                  const y = Math.min(Math.max(pageY - 40, 10), window.innerHeight - tooltipHeight);
-                  tooltip.style('left', `${x}px`).style('top', `${y}px`);
+                .on('mouseover', (event) => {
+                  showTooltip(event, createTooltipContent());
                 })
+                .on('mousemove', updateTooltipPosition)
                 .on('mouseout', hideTooltip);
             }
 
@@ -718,26 +724,18 @@ const DualSequenceLogoChart: React.FC<DualSequenceLogoChartProps> = ({
         .attr('fill', d => colorMap[categoryLabels[d.category as keyof typeof categoryLabels]])
         .style('cursor', 'pointer')
         .on('mouseover', (event, d) => {
-          tooltip
-            .html(`<strong>Category:</strong> ${categoryLabels[d.category as keyof typeof categoryLabels]}`)
-            .style('opacity', 1);
+          const content = `<strong>Category:</strong> ${categoryLabels[d.category as keyof typeof categoryLabels]}`;
+          showTooltip(event, content);
         })
-        .on('mousemove', (event) => {
-          const tooltipWidth = 200;
-          const tooltipHeight = 40;
-          const pageX = event.pageX ?? (event.clientX + window.scrollX);
-          const pageY = event.pageY ?? (event.clientY + window.scrollY);
-          const x = Math.min(pageX + 10, window.innerWidth - tooltipWidth);
-          const y = Math.min(Math.max(pageY - 40, 10), window.innerHeight - tooltipHeight);
-          tooltip.style('left', `${x}px`).style('top', `${y}px`);
-        })
-        .on('mouseout', () => tooltip.style('opacity', 0));
+        .on('mousemove', updateTooltipPosition)
+        .on('mouseout', hideTooltip);
 
 
     }
 
     return () => {
-      d3.select('body').select('.dual-logo-tooltip').remove();
+      // Cleanup - hide tooltip if component unmounts
+      setTooltip(prev => ({ ...prev, visible: false }));
     };
   }, [categorizedResidues, receptor1Name, receptor2Name, colorMap, cleanedReceptor1Sequences, cleanedReceptor2Sequences, isDarkMode, groupColors, getResidueColor, height, onLoaded]);
 
@@ -840,6 +838,19 @@ const DualSequenceLogoChart: React.FC<DualSequenceLogoChartProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Tooltip overlay */}
+      {tooltip.visible && (
+        <div
+          className="fixed z-40 pointer-events-none bg-white text-black dark:bg-black dark:text-white text-xs sm:text-sm rounded border border-gray-300 dark:border-gray-600 px-1 py-0.5 sm:px-2 sm:py-1 max-w-xs sm:max-w-sm break-words leading-tight sm:leading-normal shadow-lg"
+          style={{
+            left: Math.min(tooltip.x + 10, window.innerWidth - 200),
+            top: Math.max(tooltip.y - 40, 10),
+          }}
+        >
+          <div dangerouslySetInnerHTML={{ __html: tooltip.content }} />
+        </div>
+      )}
     </div>
   );
 };

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 
 interface MemoryCleanupOptions {
   enabled?: boolean;
@@ -10,7 +10,7 @@ export function useMemoryCleanup(options: MemoryCleanupOptions = {}) {
   const cleanupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isActiveRef = useRef(true);
 
-  const scheduleCleanup = () => {
+  const scheduleCleanup = useCallback(() => {
     if (!enabled) return;
 
     if (cleanupTimeoutRef.current) {
@@ -42,12 +42,12 @@ export function useMemoryCleanup(options: MemoryCleanupOptions = {}) {
         }
       });
     }, cleanupDelay);
-  };
+  }, [enabled, cleanupDelay]);
 
-  const markAsActive = () => {
+  const markAsActive = useCallback(() => {
     isActiveRef.current = true;
     scheduleCleanup();
-  };
+  }, [scheduleCleanup]);
 
   const markAsInactive = () => {
     isActiveRef.current = false;

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import * as d3 from 'd3';
 import useCleanedSequences from '@/hooks/useCleanedSequence';
 import { Button } from '@/components/ui/button';
@@ -138,7 +138,7 @@ const SequenceLogoChart: React.FC<SequenceLogoChartProps> = ({ sequences, conser
   });
 
   // Function to get residue color based on current group colors
-  const getResidueColor = (residue: string): string => {
+  const getResidueColor = useCallback((residue: string): string => {
     const char = residue.toUpperCase();
     for (const [groupKey, group] of Object.entries(aminoAcidGroups)) {
       if (group.residues.includes(char)) {
@@ -150,7 +150,7 @@ const SequenceLogoChart: React.FC<SequenceLogoChartProps> = ({ sequences, conser
       }
     }
     return '#000000'; // Default black
-  };
+  }, [groupColors, isDarkMode]);
 
   // Function to handle color changes
   const handleColorChange = (groupKey: string, newColor: string) => {
@@ -238,7 +238,7 @@ const SequenceLogoChart: React.FC<SequenceLogoChartProps> = ({ sequences, conser
   interface LetterSvgData { path: string; viewBox: string; transformAttr?: string }
 
   // Function to load custom SVG letter and return path data
-  const loadCustomSvgLetter = async (letter: string): Promise<LetterSvgData | null> => {
+  const loadCustomSvgLetter = useCallback(async (letter: string): Promise<LetterSvgData | null> => {
     // Check cache first
     if (svgPathCache.current[letter]) {
       return svgPathCache.current[letter];
@@ -282,7 +282,7 @@ const SequenceLogoChart: React.FC<SequenceLogoChartProps> = ({ sequences, conser
       console.warn(`Error loading custom SVG for ${letter}:`, error);
       return null;
     }
-  };
+  }, []);
 
   const calculateLogoData = (cleanedSeqs: Sequence[]): PositionLogoData[] => {
     if (!cleanedSeqs.length) return [];
