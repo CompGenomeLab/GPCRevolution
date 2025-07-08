@@ -481,7 +481,7 @@ export default function ReceptorTablePage() {
         meta: { parentColumn: receptorName } as ColumnMeta,
       });
     });
-  }, [resultColumns, form]);
+  }, [resultColumns]);
 
   const table = useReactTable({
     data: resultData,

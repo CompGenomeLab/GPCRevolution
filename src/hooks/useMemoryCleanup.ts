@@ -79,7 +79,7 @@ export function useMemoryCleanup(options: MemoryCleanupOptions = {}) {
       window.removeEventListener('beforeunload', handleBeforeUnload);
       markAsInactive();
     };
-  }, [enabled, cleanupDelay]);
+  }, [enabled, cleanupDelay, markAsActive, scheduleCleanup]);
 
   return {
     scheduleCleanup,

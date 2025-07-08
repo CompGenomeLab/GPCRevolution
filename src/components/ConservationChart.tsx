@@ -293,7 +293,7 @@ const ConservationChart: React.FC<ConservationChartProps> = ({ data, height = 24
     return () => {
       tooltip.remove();
     };
-  }, [data]);
+  }, [data, height]);
 
   return (
     <div className="bg-card text-card-foreground rounded-lg p-6 shadow-md">

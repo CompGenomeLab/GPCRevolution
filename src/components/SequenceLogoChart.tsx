@@ -247,17 +247,27 @@ const SequenceLogoChart: React.FC<SequenceLogoChartProps> = ({ sequences, conser
     try {
       const response = await fetch(`/tight_caps/${letter}.svg`);
       if (!response.ok) {
-        throw new Error(`Failed to load ${letter}.svg: ${response.status}`);
+        console.warn(`Failed to load ${letter}.svg: ${response.status}`);
+        return null;
       }
 
       const svgContent = await response.text();
       const parser = new DOMParser();
       const svgDoc = parser.parseFromString(svgContent, 'image/svg+xml');
+      
+      // Check for parsing errors
+      const parserError = svgDoc.querySelector('parsererror');
+      if (parserError) {
+        console.warn(`SVG parsing error for ${letter}.svg`);
+        return null;
+      }
+
       const originalSvg = svgDoc.querySelector('svg');
       const pathElement = svgDoc.querySelector('path');
 
       if (!originalSvg || !pathElement) {
-        throw new Error(`Invalid SVG structure for ${letter}.svg`);
+        console.warn(`Invalid SVG structure for ${letter}.svg`);
+        return null;
       }
 
       const viewBox = originalSvg.getAttribute('viewBox') || '0 0 100 100';
@@ -269,7 +279,7 @@ const SequenceLogoChart: React.FC<SequenceLogoChartProps> = ({ sequences, conser
       svgPathCache.current[letter] = result;
       return result;
     } catch (error) {
-      console.error(`Error loading custom SVG for ${letter}:`, error);
+      console.warn(`Error loading custom SVG for ${letter}:`, error);
       return null;
     }
   };
@@ -507,7 +517,13 @@ const SequenceLogoChart: React.FC<SequenceLogoChartProps> = ({ sequences, conser
               const letterX = positionX + positionWidth / 2;
 
               // Attempt to load custom SVG path for this residue
-              const svgData = await loadCustomSvgLetter(residue);
+              let svgData = null;
+              try {
+                svgData = await loadCustomSvgLetter(residue);
+              } catch (error) {
+                console.error(`Error loading SVG for ${residue}:`, error);
+                svgData = null;
+              }
 
               if (svgData) {
                                  /* ------- Use nested SVG with smart width scaling ------- */
@@ -599,7 +615,9 @@ const SequenceLogoChart: React.FC<SequenceLogoChartProps> = ({ sequences, conser
         };
         
         // Execute async stacking function
-        createCustomSvgLetters().catch(console.error);
+        createCustomSvgLetters().catch(error => {
+          console.error('Error in createCustomSvgLetters:', error);
+        });
       });
 
       /* ---------- Information rows ---------- */
@@ -716,7 +734,7 @@ const SequenceLogoChart: React.FC<SequenceLogoChartProps> = ({ sequences, conser
     return () => {
       d3.select('body').select('.logo-tooltip').remove();
     };
-  }, [cleanedSequences, conservationFile, groupColors, isDarkMode]);
+  }, [cleanedSequences, conservationFile, groupColors, isDarkMode, getResidueColor, height, loadCustomSvgLetter]);
 
   return (
     <div className="bg-card text-card-foreground rounded-lg shadow-md">

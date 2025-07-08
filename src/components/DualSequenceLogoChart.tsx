@@ -21,6 +21,23 @@ interface CategorizedResidue {
   gpcrdb2: string;
 }
 
+interface Position {
+  residue1: CategorizedResidue | null;
+  residue2: CategorizedResidue | null;
+  category: string;
+  gpcrdb1: string;
+  gpcrdb2: string;
+  receptor1Column: number;
+  receptor2Column: number;
+}
+
+interface LogoData {
+  informationContent: number;
+  letterHeights: Record<string, number>;
+  residueCounts: Record<string, number>;
+  totalSequences: number;
+}
+
 interface DualSequenceLogoChartProps {
   categorizedResidues: CategorizedResidue[];
   receptor1Name: string;
@@ -373,7 +390,7 @@ const DualSequenceLogoChart: React.FC<DualSequenceLogoChartProps> = ({
 
     renderChart(positions);
 
-    function renderChart(positions: any[]) {
+    function renderChart(positions: Position[]) {
       if (!yAxisContainer || !chartContainer) return;
 
       // Layout constants
@@ -540,12 +557,12 @@ const DualSequenceLogoChart: React.FC<DualSequenceLogoChartProps> = ({
       });
 
       async function renderPositionLogo(
-        logoData: any,
+        logoData: LogoData,
         centerX: number,
         baselineY: number,
         width: number,
-        yScale: any,
-        residueData: any,
+        yScale: d3.ScaleLinear<number, number>,
+        residueData: CategorizedResidue,
         receptor: string
       ) {
         // Sort residues by frequency (smallest to largest for stacking)
@@ -607,50 +624,22 @@ const DualSequenceLogoChart: React.FC<DualSequenceLogoChartProps> = ({
                     `<strong>GPCRdb #:</strong> ${gpcrdb}`
                   )
                   .style('opacity', 1);
-                
-                updateTooltipPosition(event);
-              };
-
-              const updateTooltipPosition = (event: any) => {
-                const tooltipWidth = 200;
-                const tooltipHeight = 120;
-                
-                // Get coordinates from either mouse or touch event
-                let clientX, clientY;
-                if (event.touches && event.touches[0]) {
-                  // Touch event
-                  clientX = event.touches[0].clientX;
-                  clientY = event.touches[0].clientY;
-                } else if (event.changedTouches && event.changedTouches[0]) {
-                  // Touch end event
-                  clientX = event.changedTouches[0].clientX;
-                  clientY = event.changedTouches[0].clientY;
-                } else {
-                  // Mouse event
-                  clientX = event.clientX;
-                  clientY = event.clientY;
-                }
-                
-                const x = Math.min(clientX + 10, window.innerWidth - tooltipWidth);
-                const y = Math.min(Math.max(clientY + window.scrollY - 40, 10), window.innerHeight - tooltipHeight);
-                tooltip.style('left', `${x}px`).style('top', `${y}px`);
               };
 
               const hideTooltip = () => tooltip.style('opacity', 0);
 
               nestedSvg
                 .on('mouseover', showTooltip)
-                .on('mousemove', updateTooltipPosition)
-                .on('mouseout', hideTooltip)
-                .on('touchstart', (event) => {
-                  event.preventDefault(); // Prevent scrolling
-                  showTooltip(event);
+                .on('mousemove', (event) => {
+                  const tooltipWidth = 200;
+                  const tooltipHeight = 120;
+                  const pageX = event.pageX ?? (event.clientX + window.scrollX);
+                  const pageY = event.pageY ?? (event.clientY + window.scrollY);
+                  const x = Math.min(pageX + 10, window.innerWidth - tooltipWidth);
+                  const y = Math.min(Math.max(pageY - 40, 10), window.innerHeight - tooltipHeight);
+                  tooltip.style('left', `${x}px`).style('top', `${y}px`);
                 })
-                .on('touchmove', (event) => {
-                  event.preventDefault(); // Prevent scrolling
-                  updateTooltipPosition(event);
-                })
-                .on('touchend', hideTooltip);
+                .on('mouseout', hideTooltip);
             }
 
             // Update stack position for next letter
@@ -732,50 +721,25 @@ const DualSequenceLogoChart: React.FC<DualSequenceLogoChartProps> = ({
           tooltip
             .html(`<strong>Category:</strong> ${categoryLabels[d.category as keyof typeof categoryLabels]}`)
             .style('opacity', 1);
-          updateCategoryTooltipPosition(event);
         })
-        .on('mousemove', updateCategoryTooltipPosition)
-        .on('mouseout', () => tooltip.style('opacity', 0))
-        .on('touchstart', (event, d) => {
-          event.preventDefault();
-          tooltip
-            .html(`<strong>Category:</strong> ${categoryLabels[d.category as keyof typeof categoryLabels]}`)
-            .style('opacity', 1);
-          updateCategoryTooltipPosition(event);
+        .on('mousemove', (event) => {
+          const tooltipWidth = 200;
+          const tooltipHeight = 40;
+          const pageX = event.pageX ?? (event.clientX + window.scrollX);
+          const pageY = event.pageY ?? (event.clientY + window.scrollY);
+          const x = Math.min(pageX + 10, window.innerWidth - tooltipWidth);
+          const y = Math.min(Math.max(pageY - 40, 10), window.innerHeight - tooltipHeight);
+          tooltip.style('left', `${x}px`).style('top', `${y}px`);
         })
-        .on('touchmove', (event) => {
-          event.preventDefault();
-          updateCategoryTooltipPosition(event);
-        })
-        .on('touchend', () => tooltip.style('opacity', 0));
+        .on('mouseout', () => tooltip.style('opacity', 0));
 
-      function updateCategoryTooltipPosition(event: any) {
-        const tooltipWidth = 200;
-        const tooltipHeight = 40;
-        
-        // Get coordinates from either mouse or touch event
-        let clientX, clientY;
-        if (event.touches && event.touches[0]) {
-          clientX = event.touches[0].clientX;
-          clientY = event.touches[0].clientY;
-        } else if (event.changedTouches && event.changedTouches[0]) {
-          clientX = event.changedTouches[0].clientX;
-          clientY = event.changedTouches[0].clientY;
-        } else {
-          clientX = event.clientX;
-          clientY = event.clientY;
-        }
-        
-        const x = Math.min(clientX + 10, window.innerWidth - tooltipWidth);
-        const y = Math.min(Math.max(clientY + window.scrollY - 40, 10), window.innerHeight - tooltipHeight);
-        tooltip.style('left', `${x}px`).style('top', `${y}px`);
-      }
+
     }
 
     return () => {
       d3.select('body').select('.dual-logo-tooltip').remove();
     };
-  }, [categorizedResidues, receptor1Name, receptor2Name, colorMap, cleanedReceptor1Sequences, cleanedReceptor2Sequences, isDarkMode, groupColors]);
+  }, [categorizedResidues, receptor1Name, receptor2Name, colorMap, cleanedReceptor1Sequences, cleanedReceptor2Sequences, isDarkMode, groupColors, getResidueColor, height, onLoaded]);
 
   return (
     <div className="bg-card text-card-foreground rounded-lg shadow-md">
