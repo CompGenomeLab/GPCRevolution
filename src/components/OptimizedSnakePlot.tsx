@@ -272,9 +272,9 @@ export default function OptimizedSnakePlot({ svgPath, conservationFile, onLoaded
   return (
     <div className="bg-card text-card-foreground rounded-lg shadow-md select-none overflow-x-auto">
       <div className="p-6 border-b border-border">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <h2 className="text-xl font-semibold text-foreground">Residue Conservation Snake Plot</h2>
-          <div className="flex items-center gap-2 pr-10">
+          <div className="flex items-center gap-2 mt-2 sm:mt-0 pr-10">
             {svgContent && !isLoading && !error && (
               <Button onClick={downloadSVG} variant="outline" size="sm">
                 Download SVG

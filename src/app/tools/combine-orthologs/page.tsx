@@ -287,12 +287,12 @@ export default function CombineOrthologsPage() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-8 py-4 px-4 sm:px-6 lg:px-8">
-      <div className="flex justify-between items-center max-w-3xl mx-auto">
+      <div className="flex flex-col sm:flex-row sm:justify-between items-start sm:items-center gap-2 max-w-3xl mx-auto">
         <h1 className="text-3xl font-bold text-left">Combine Orthologs</h1>
         {downloadUrl && downloadFilename && (
           <Button
             variant="outline"
-            className="gap-2"
+            className="gap-2 mt-2 sm:mt-0 w-full sm:w-auto"
             onClick={() => {
               try {
                 const link = document.createElement('a');

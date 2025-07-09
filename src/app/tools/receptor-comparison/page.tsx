@@ -284,10 +284,10 @@ const ResultsTable = memo(function ResultsTable({ initialResult }: ResultsTableP
     <div className="space-y-6">
       {/* ─── Card 1: Results Table ─────────────────────────────────── */}
       <div className="bg-card text-card-foreground rounded-lg p-6 shadow-md">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
           <h2 className="text-xl font-semibold">Comparison Results</h2>
           {/* ─── Export buttons ───────────────── */}
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2 mt-2 sm:mt-0">
           {(['tsv', 'csv'] as const).map(ext => (
             <Button
               key={ext}

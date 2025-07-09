@@ -884,7 +884,7 @@ const MultiReceptorLogoChart: React.FC<MultiReceptorLogoChartProps> = ({
       <div className="max-w-7xl mx-auto">
         <div className="bg-card text-card-foreground rounded-lg shadow-md">
           <div className="p-6 border-b border-border">
-            <h2 className="text-xl font-semibold text-foreground">Multi-Receptor Conservation Logos</h2>
+            <h2 className="text-xl font-semibold text-foreground">Multi-Receptor Sequence Logos</h2>
           </div>
           <div className="p-6 flex items-center justify-center">
             <div className="text-center">
@@ -903,9 +903,9 @@ const MultiReceptorLogoChart: React.FC<MultiReceptorLogoChartProps> = ({
     <div className="max-w-7xl mx-auto">
       <div className="bg-card text-card-foreground rounded-lg shadow-md">
         <div className="p-6 border-b border-border">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-foreground">Multi-Receptor Conservation Logos</h2>
-            <div className="flex items-center gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <h2 className="text-xl font-semibold text-foreground">Multi-Receptor Sequence Logos</h2>
+            <div className="flex items-center gap-2 mt-2 sm:mt-0">
               <Button onClick={downloadSVG} variant="outline" size="sm">
                 Download SVG
               </Button>

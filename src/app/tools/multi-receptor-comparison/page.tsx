@@ -677,7 +677,7 @@ export default function ReceptorTablePage() {
               />
 
               <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? 'Processing...' : 'Map Residues'}
+                {isLoading ? 'Processing...' : 'Compare Receptors'}
               </Button>
             </form>
           </Form>
@@ -686,9 +686,9 @@ export default function ReceptorTablePage() {
 
       {resultData.length > 0 && (
         <div ref={resultRef} className="mt-8 space-y-4">
-          <h2 className="text-2xl font-bold">Mapping Results</h2>
+          <h2 className="text-2xl font-bold">Comparison Results</h2>
 
-          <div className="flex justify-between">
+          <div className="flex flex-col sm:flex-row sm:justify-between gap-2">
             <div>
               <span className="text-sm text-muted-foreground">
                 Showing{' '}
@@ -703,6 +703,7 @@ export default function ReceptorTablePage() {
               </span>
             </div>
             <Button
+              className="mt-2 sm:mt-0 w-full sm:w-auto"
               onClick={() => {
                 const headers = resultColumns.join('\t');
                 const rows = resultData.map(row =>
