@@ -766,7 +766,6 @@ export default function ReceptorTablePage() {
                 resultData={resultData}
                 receptorNames={processedReceptorNames}
                 referenceReceptor={processedReferenceReceptor}
-                height={200}
               />
             )}
           </div>

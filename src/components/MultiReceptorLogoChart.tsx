@@ -40,7 +40,6 @@ interface MultiReceptorLogoChartProps {
   resultData: ResidueMapping[];
   receptorNames: string[];
   referenceReceptor: string;
-  height?: number;
 }
 
 // Define amino acid groups and their default colors
@@ -58,8 +57,7 @@ type RegionGroup = { region: string; startPosition: number; endPosition: number 
 const MultiReceptorLogoChart: React.FC<MultiReceptorLogoChartProps> = ({ 
   resultData, 
   receptorNames, 
-  referenceReceptor, 
-  height = 200 
+  referenceReceptor 
 }) => {
   const yAxisContainerRef = useRef<HTMLDivElement>(null);
   const chartContainerRef = useRef<HTMLDivElement>(null);
@@ -427,7 +425,7 @@ const MultiReceptorLogoChart: React.FC<MultiReceptorLogoChartProps> = ({
       const logoData: PositionLogoData[] = [];
       
       // Process each row in resultData
-      resultData.forEach((row, rowIndex) => {
+      resultData.forEach((row) => {
         const resNum = row[`${receptorName}_resNum`];
         const receptorAA = row[`${receptorName}_AA`];
         const referenceResNum = row[`${referenceReceptor}_resNum`];
