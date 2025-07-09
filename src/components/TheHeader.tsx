@@ -45,7 +45,7 @@ export const navigationItems = [
       {
         title: 'Multi-Receptor Comparison',
         href: '/tools/multi-receptor-comparison',
-        description: 'Compare multiple receptors with conservation tables and sequence logos',
+        description: 'Generate comprehensive tables and sequence logos',
       },
       {
         title: 'Combine Orthologs',
