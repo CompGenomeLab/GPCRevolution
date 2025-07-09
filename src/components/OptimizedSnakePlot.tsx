@@ -33,6 +33,12 @@ export default function OptimizedSnakePlot({ svgPath, conservationFile, onLoaded
     tooltip
   } = useSnakePlotTooltip();
 
+  // Reset function for colors
+  const resetColors = () => {
+    setFillColor('#B7B7EB');
+    setTextColor('#000000');
+  };
+
   const loadSnakePlotContent = useCallback(async () => {
     if (!svgPath) return;
 
@@ -310,34 +316,6 @@ export default function OptimizedSnakePlot({ svgPath, conservationFile, onLoaded
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="flex flex-wrap gap-4 p-4 bg-muted/50 rounded-lg">
-              <div className="flex items-center gap-2">
-                <label htmlFor="fillColor" className="text-sm font-medium">
-                  Circle Fill Color:
-                </label>
-                <input
-                  type="color"
-                  id="fillColor"
-                  value={fillColor}
-                  onChange={e => setFillColor(e.target.value)}
-                  className="w-8 h-6 rounded cursor-pointer"
-                  title="Circle Fill Color"
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <label htmlFor="textColor" className="text-sm font-medium">
-                  Text Color:
-                </label>
-                <input
-                  type="color"
-                  id="textColor"
-                  value={textColor}
-                  onChange={e => setTextColor(e.target.value)}
-                  className="w-8 h-6 rounded cursor-pointer"
-                  title="Text Color"
-                />
-              </div>
-            </div>
             <div className="w-full max-w-full mx-auto rounded-lg bg-card overflow-x-auto text-center">
               <div className="w-full sm:w-auto sm:max-w-none sm:inline-block">
                 {svgContent}
@@ -347,12 +325,47 @@ export default function OptimizedSnakePlot({ svgPath, conservationFile, onLoaded
         )}
       </div>
 
+      {/* Color controls section */}
+      {svgContent && !isLoading && !error && (
+        <div className="p-6 pt-0">
+          <div className="flex flex-wrap gap-4 items-center justify-center">
+            <div className="flex items-center gap-2">
+              <input
+                type="color"
+                value={fillColor}
+                onChange={e => setFillColor(e.target.value)}
+                className="w-5 h-5 rounded cursor-pointer border"
+                title="Circle Fill Color"
+              />
+              <span className="text-base text-foreground">Circle Fill Color</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="color"
+                value={textColor}
+                onChange={e => setTextColor(e.target.value)}
+                className="w-5 h-5 rounded cursor-pointer border"
+                title="Text Color"
+              />
+              <span className="text-base text-foreground">Text Color</span>
+            </div>
+            <button
+              onClick={resetColors}
+              className="ml-2 px-3 py-1 text-xs bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground rounded border transition-colors"
+              title="Reset colors to default"
+            >
+              Reset
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* React-based tooltip rendered using portal */}
       {tooltip.visible && typeof document !== 'undefined' && createPortal(
         <div
-          className="fixed z-50 bg-white dark:bg-black text-black dark:text-white p-2 rounded shadow-lg text-sm pointer-events-none"
+          className="fixed z-50 bg-white dark:bg-black text-black dark:text-white text-xs sm:text-sm rounded border border-gray-300 dark:border-gray-600 px-1 py-0.5 sm:px-2 sm:py-1 max-w-[250px] sm:max-w-sm break-words leading-tight sm:leading-normal shadow-lg pointer-events-none"
           style={{
-            left: Math.min(tooltip.x + 10, window.innerWidth - 200),
+            left: Math.min(tooltip.x + 10, window.innerWidth - 260),
             top: Math.max(tooltip.y - 50, 10),
           }}
           dangerouslySetInnerHTML={{ __html: tooltip.content }}

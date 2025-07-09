@@ -36,12 +36,12 @@ interface ComparisonResult {
   categorizedResidues: CategorizedResidue[];
 }
 
-const categoryLabels = {
+const getCategoryLabels = (receptor1Name?: string, receptor2Name?: string) => ({
   common: 'Common Residues',
   specific_both: 'Specifically Conserved for Both',
-  specific1: 'Specifically Conserved for Receptor 1',
-  specific2: 'Specifically Conserved for Receptor 2',
-};
+  specific1: `Specifically Conserved for ${receptor1Name || 'Receptor 1'}`,
+  specific2: `Specifically Conserved for ${receptor2Name || 'Receptor 2'}`,
+});
 
 interface SnakePlotVisualizationProps {
   result: ComparisonResult;
@@ -94,6 +94,7 @@ export default function SnakePlotVisualization({
     const clonedSvg = svgElement.cloneNode(true) as SVGElement;
     
     // Apply current category colors to the cloned SVG
+    const categoryLabels = getCategoryLabels(result.receptor1.geneName, result.receptor2.geneName);
     result.categorizedResidues.forEach(row => {
       const pos = showReceptor === 1 ? row.resNum1 : row.resNum2;
       if (pos === 'gap') return;
@@ -155,13 +156,31 @@ export default function SnakePlotVisualization({
         container.querySelectorAll('text')
                  .forEach(t => t.setAttribute('pointer-events', 'none'));
 
-        // Make SVG background transparent to inherit card color
+        // Make SVG background transparent to inherit card color and improve mobile responsiveness
         const svgElement = container.querySelector('svg');
         if (svgElement) {
           svgElement.removeAttribute('style');
+          
+          // Add responsive attributes for better mobile scaling
+          const widthAttr = svgElement.getAttribute('width');
+          const heightAttr = svgElement.getAttribute('height');
+          
+          if (!svgElement.hasAttribute('viewBox') && widthAttr && heightAttr) {
+            svgElement.setAttribute('viewBox', `0 0 ${widthAttr} ${heightAttr}`);
+          }
+          
+          svgElement.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+          svgElement.classList.add('w-full', 'sm:w-auto', 'h-auto');
+          
+          if (widthAttr) {
+            svgElement.style.maxWidth = `${widthAttr}px`;
+          }
+          svgElement.style.height = 'auto';
+          svgElement.style.backgroundColor = 'transparent';
         }
 
         // Color circles by category
+        const categoryLabels = getCategoryLabels(result.receptor1.geneName, result.receptor2.geneName);
         result.categorizedResidues.forEach(row => {
           const pos = showReceptor === 1 ? row.resNum1 : row.resNum2;
           if (pos === 'gap') return;
@@ -226,30 +245,39 @@ export default function SnakePlotVisualization({
   return (
     <div className="bg-card text-card-foreground rounded-lg p-6 shadow-md">
       {/* Snake-plot title + toggles */}
-      <div className="flex flex-wrap items-center justify-between mb-4 gap-2">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-2">
         <h2 className="text-xl font-semibold">Snake Plot Visualization</h2>
 
-        <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
           {/* Download SVG button */}
-          <Button onClick={downloadSVG} variant="outline" size="sm">
+          <Button onClick={downloadSVG} variant="outline" size="sm" className="w-full sm:w-auto">
             Download SVG
           </Button>
 
-          {/* Receptor 1 toggle */}
-          <Button
-            variant={showReceptor === 1 ? 'secondary' : 'default'}
-            onClick={() => setShowReceptor(1)}
-          >
-            Show Snake Plot for {result.receptor1.geneName}
-          </Button>
+          {/* Receptor toggle buttons */}
+          <div className="flex gap-1 sm:gap-2">
+            {/* Receptor 1 toggle */}
+            <Button
+              variant={showReceptor === 1 ? 'secondary' : 'default'}
+              onClick={() => setShowReceptor(1)}
+              size="sm"
+              className="flex-1 sm:flex-none text-xs sm:text-sm px-2 sm:px-3"
+            >
+              <span className="sm:hidden">{result.receptor1.geneName}</span>
+              <span className="hidden sm:inline">Show Snake Plot for {result.receptor1.geneName}</span>
+            </Button>
 
-          {/* Receptor 2 toggle */}
-          <Button
-            variant={showReceptor === 2 ? 'secondary' : 'default'}
-            onClick={() => setShowReceptor(2)}
-          >
-            Show Snake Plot for {result.receptor2.geneName}
-          </Button>
+            {/* Receptor 2 toggle */}
+            <Button
+              variant={showReceptor === 2 ? 'secondary' : 'default'}
+              onClick={() => setShowReceptor(2)}
+              size="sm"
+              className="flex-1 sm:flex-none text-xs sm:text-sm px-2 sm:px-3"
+            >
+              <span className="sm:hidden">{result.receptor2.geneName}</span>
+              <span className="hidden sm:inline">Show Snake Plot for {result.receptor2.geneName}</span>
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -278,11 +306,11 @@ export default function SnakePlotVisualization({
               </button>
             </div>
             <div className="flex flex-wrap gap-4 items-center justify-center">
-              {Object.entries(categoryLabels).map(([categoryKey, categoryLabel]) => (
+              {Object.entries(getCategoryLabels(result.receptor1.geneName, result.receptor2.geneName)).map(([categoryKey, categoryLabel]) => (
                 <div key={categoryKey} className="flex items-center gap-2">
                   <input
                     type="color"
-                    value={colorMap[categoryLabel]}
+                    value={colorMap[categoryLabel] || '#000000'}
                     onChange={(e) => {
                       const newColorMap = { ...colorMap, [categoryLabel]: e.target.value };
                       setColorMap(newColorMap);

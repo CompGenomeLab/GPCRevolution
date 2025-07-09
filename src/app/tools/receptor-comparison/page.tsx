@@ -73,12 +73,12 @@ interface ComparisonResult {
   categorizedResidues: CategorizedResidue[];
 }
 
-const categoryLabels = {
+const getCategoryLabels = (receptor1Name?: string, receptor2Name?: string) => ({
   common: 'Common Residues',
   specific_both: 'Specifically Conserved for Both',
-  specific1: 'Specifically Conserved for Receptor 1',
-  specific2: 'Specifically Conserved for Receptor 2',
-};
+  specific1: `Specifically Conserved for ${receptor1Name || 'Receptor 1'}`,
+  specific2: `Specifically Conserved for ${receptor2Name || 'Receptor 2'}`,
+});
 
 const categoryOrder = {
   common: 0,
@@ -102,7 +102,7 @@ const ResultsTable = memo(function ResultsTable({ initialResult }: ResultsTableP
   const [result, setResult] = useState<ComparisonResult | null>(initialResult);
   const [sorting, setSorting] = useState<SortingState>([
     {
-      id: 'category',
+      id: 'resNum1',
       desc: false,
     },
   ]);
@@ -143,6 +143,21 @@ const ResultsTable = memo(function ResultsTable({ initialResult }: ResultsTableP
             : '-'}
         </div>
       ),
+      sortingFn: (rowA, rowB) => {
+        const resA = rowA.getValue('resNum1') as string;
+        const resB = rowB.getValue('resNum1') as string;
+        
+        // Handle gap cases
+        if (resA === 'gap' && resB === 'gap') return 0;
+        if (resA === 'gap') return 1;
+        if (resB === 'gap') return -1;
+        
+        // Parse as numbers for proper numerical sorting
+        const numA = parseInt(resA, 10);
+        const numB = parseInt(resB, 10);
+        
+        return numA - numB;
+      },
       meta: {
         parentColumn: result?.receptor1.geneName,
       } as ColumnMeta,
@@ -242,7 +257,10 @@ const ResultsTable = memo(function ResultsTable({ initialResult }: ResultsTableP
     }),
     columnHelper.accessor('category', {
       header: 'Category',
-      cell: info => categoryLabels[info.getValue() as keyof typeof categoryLabels],
+      cell: info => {
+        const categoryLabels = getCategoryLabels(result?.receptor1.geneName, result?.receptor2.geneName);
+        return categoryLabels[info.getValue() as keyof typeof categoryLabels];
+      },
       sortingFn: (rowA, rowB) => {
         const categoryA = rowA.getValue('category') as keyof typeof categoryOrder;
         const categoryB = rowB.getValue('category') as keyof typeof categoryOrder;
@@ -298,6 +316,7 @@ const ResultsTable = memo(function ResultsTable({ initialResult }: ResultsTableP
                 ];
 
                 // Body rows
+                const categoryLabels = getCategoryLabels(result.receptor1.geneName, result.receptor2.geneName);
                 const rows = result.categorizedResidues.map(r => [
                   r.region1,
                   r.gpcrdb1,
@@ -358,10 +377,12 @@ const ResultsTable = memo(function ResultsTable({ initialResult }: ResultsTableP
                         <div className="text-xs text-muted-foreground">{parentColumn}</div>
                         <div className="flex items-center justify-center gap-2">
                           {flexRender(header.column.columnDef.header, header.getContext())}
-                          {{
-                            asc: ' 🔼',
-                            desc: ' 🔽',
-                          }[header.column.getIsSorted() as string] ?? null}
+                          {header.column.getIsSorted() === 'asc' && (
+                            <span className="text-xs">↑</span>
+                          )}
+                          {header.column.getIsSorted() === 'desc' && (
+                            <span className="text-xs">↓</span>
+                          )}
                         </div>
                       </div>
                     </TableHead>
@@ -382,10 +403,12 @@ const ResultsTable = memo(function ResultsTable({ initialResult }: ResultsTableP
                     >
                       <div className="flex items-center justify-center gap-2">
                         {flexRender(header.column.columnDef.header, header.getContext())}
-                        {{
-                          asc: ' 🔼',
-                          desc: ' 🔽',
-                        }[header.column.getIsSorted() as string] ?? null}
+                        {header.column.getIsSorted() === 'asc' && (
+                          <span className="text-xs">↑</span>
+                        )}
+                        {header.column.getIsSorted() === 'desc' && (
+                          <span className="text-xs">↓</span>
+                        )}
                       </div>
                     </TableHead>
                   );
@@ -423,6 +446,45 @@ export default function ReceptorComparisonPage() {
     'Specifically Conserved for Receptor 1': '#FFF9C2',
     'Specifically Conserved for Receptor 2': '#8F9871',
   });
+
+  // Update color map keys with actual gene names when result is available
+  useEffect(() => {
+    if (initialResult) {
+      const { receptor1, receptor2 } = initialResult;
+      setColorMap(prev => {
+        const newColorMap = { ...prev };
+        
+        // Update keys with actual gene names
+        const oldKey1 = 'Specifically Conserved for Receptor 1';
+        const newKey1 = `Specifically Conserved for ${receptor1.geneName}`;
+        const oldKey2 = 'Specifically Conserved for Receptor 2';
+        const newKey2 = `Specifically Conserved for ${receptor2.geneName}`;
+        
+        if (prev[oldKey1] && !newColorMap[newKey1]) {
+          newColorMap[newKey1] = prev[oldKey1];
+          delete newColorMap[oldKey1];
+        }
+        if (prev[oldKey2] && !newColorMap[newKey2]) {
+          newColorMap[newKey2] = prev[oldKey2];
+          delete newColorMap[oldKey2];
+        }
+        
+        // Ensure all required keys exist with default values
+        const categoryLabels = getCategoryLabels(receptor1.geneName, receptor2.geneName);
+        Object.values(categoryLabels).forEach(label => {
+          if (!newColorMap[label]) {
+            // Provide default colors for missing keys
+            if (label === 'Common Residues') newColorMap[label] = '#E6E6FA';
+            else if (label === 'Specifically Conserved for Both') newColorMap[label] = '#A85638';
+            else if (label === newKey1) newColorMap[label] = '#FFF9C2';
+            else if (label === newKey2) newColorMap[label] = '#8F9871';
+          }
+        });
+        
+        return newColorMap;
+      });
+    }
+  }, [initialResult]);
   const scrollPositionRef = useRef(0);
 
   useEffect(() => {
@@ -533,26 +595,28 @@ export default function ReceptorComparisonPage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto space-y-8 py-4">
-      <h1 className="text-3xl font-bold text-left">Differential Residue Conservation</h1>
-      <p className="text-lg text-muted-foreground text-left">
-        Enter two GPCR gene names from the same class and set a conservation threshold (0–100%).
-        This tool will identify residues that are commonly and specifically conserved in each
-        receptor, and provide comprehensive visualizations including: (1) an interactive results table,
-        (2) a dual sequence logo, and (3) snake plot visualizations with category-based coloring.
-      </p>
-      
-      <ReceptorSelectionForm 
-        onSubmit={onSubmit}
-        onThresholdChange={updateThreshold}
-        isLoading={isLoading}
-      />
-      
-      {error && (
-        <Alert variant="destructive">
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
+    <div className="max-w-7xl mx-auto space-y-8 py-4 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-3xl mx-auto space-y-4">
+        <h1 className="text-3xl font-bold text-left">Differential Residue Conservation</h1>
+        <p className="text-base text-muted-foreground text-left">
+          Enter two GPCR gene names from the same class and set a conservation threshold (0–100%).
+          This tool will identify residues that are commonly and specifically conserved in each
+          receptor, and provide comprehensive visualizations including: (1) an interactive results table,
+          (2) a dual sequence logo, and (3) snake plot visualizations with category-based coloring.
+        </p>
+        
+        <ReceptorSelectionForm 
+          onSubmit={onSubmit}
+          onThresholdChange={updateThreshold}
+          isLoading={isLoading}
+        />
+        
+        {error && (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+      </div>
       
       {initialResult && (
         <div className="space-y-6">

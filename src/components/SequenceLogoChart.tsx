@@ -802,7 +802,7 @@ const SequenceLogoChart: React.FC<SequenceLogoChartProps> = ({ sequences, conser
                   className="w-5 h-5 rounded cursor-pointer border"
                   title={`Color for ${group.label}`}
                 />
-                <span className="text-sm text-foreground">{group.label}</span>
+                <span className="text-base text-foreground">{group.label}</span>
               </div>
             );
           })}

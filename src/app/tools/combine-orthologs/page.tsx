@@ -79,6 +79,7 @@ export default function CombineOrthologsPage() {
   const [inputValue, setInputValue] = useState('');
   const [suggestions, setSuggestions] = useState<ReceptorOption[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [highlightIndex, setHighlightIndex] = useState<number>(-1);
 
   const {
     trimGapsInAllSequences,
@@ -127,11 +128,13 @@ export default function CombineOrthologsPage() {
 
     setSuggestions(filtered);
     setShowSuggestions(filtered.length > 0);
+    setHighlightIndex(filtered.length>0?0:-1);
   };
 
   const handleInputChange = (value: string) => {
     setInputValue(value);
     filterSuggestions(value);
+    setHighlightIndex(0);
 
     const receptorNames = value
       .split(',')
@@ -283,8 +286,8 @@ export default function CombineOrthologsPage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto space-y-8 py-4">
-      <div className="flex justify-between items-center max-w-2xl mx-auto">
+    <div className="max-w-7xl mx-auto space-y-8 py-4 px-4 sm:px-6 lg:px-8">
+      <div className="flex justify-between items-center max-w-3xl mx-auto">
         <h1 className="text-3xl font-bold text-left">Combine Orthologs</h1>
         {downloadUrl && downloadFilename && (
           <Button
@@ -312,13 +315,13 @@ export default function CombineOrthologsPage() {
           </Button>
         )}
       </div>
-      <p className="text-lg text-muted-foreground text-left max-w-2xl mx-auto">
+      <p className="text-base text-muted-foreground text-left max-w-3xl mx-auto">
         Select one or more receptor gene names from the same class to fetch and merge their
         orthologous alignments. Columns that human sequences contain gaps are not included. You can
         preview the combined alignment and download as a FASTA file.
       </p>
 
-      <div className="bg-card text-card-foreground rounded-lg p-6 shadow-md max-w-2xl mx-auto">
+      <div className="bg-card text-card-foreground rounded-lg p-6 shadow-md max-w-3xl mx-auto">
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <FormField
@@ -333,6 +336,11 @@ export default function CombineOrthologsPage() {
                         placeholder="Type receptor names (comma-separated)..."
                         value={inputValue}
                         onValueChange={handleInputChange}
+                        onKeyDown={e=>{
+                          if(showSuggestions && suggestions.length>0){
+                           if(e.key==='ArrowDown'){e.preventDefault();setHighlightIndex((prev)=>(prev+1)%suggestions.length);}else if(e.key==='ArrowUp'){e.preventDefault();setHighlightIndex((prev)=>(prev-1+suggestions.length)%suggestions.length);}else if(e.key==='Enter'){e.preventDefault();if(highlightIndex>=0&&highlightIndex<suggestions.length){handleSuggestionClick(suggestions[highlightIndex]);}}
+                          }
+                        }}
                       />
                       {showSuggestions && (
                         <CommandList
@@ -344,11 +352,11 @@ export default function CombineOrthologsPage() {
                             <CommandEmpty>No results found.</CommandEmpty>
                           ) : (
                             <CommandGroup>
-                              {suggestions.map(receptor => (
+                              {suggestions.map((receptor, index) => (
                                 <CommandItem
                                   key={receptor.geneName}
                                   value={`${receptor.geneName} ${receptor.name}`}
-                                  className="cursor-pointer"
+                                  className={`px-4 py-2 cursor-pointer text-sm ${index===highlightIndex?'bg-accent':'hover:bg-accent'}`}
                                   onSelect={() => handleSuggestionClick(receptor)}
                                 >
                                   <div className="flex flex-col">

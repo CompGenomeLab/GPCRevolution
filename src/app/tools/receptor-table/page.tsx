@@ -12,7 +12,6 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
   Command,
   CommandEmpty,
@@ -42,11 +41,17 @@ import {
 import { Input } from '@/components/ui/input';
 import React from 'react';
 import { toast } from 'sonner';
+import dynamic from 'next/dynamic';
+
+const MultiReceptorLogoChart = dynamic(
+  () => import('@/components/MultiReceptorLogoChart'),
+  { ssr: false }
+);
+
 const formSchema = z.object({
   receptorClass: z.string().min(1, 'Required'),
   minOrthologs: z.array(z.string()).min(1, 'Required'),
   maxOrthologs: z.string().optional(),
-  includeInactive: z.boolean().default(false),
 });
 
 interface Receptor {
@@ -84,12 +89,15 @@ export default function ReceptorTablePage() {
   const [resultColumns, setResultColumns] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [processedReceptorNames, setProcessedReceptorNames] = useState<string[]>([]);
+  const [processedReferenceReceptor, setProcessedReferenceReceptor] = useState<string>('');
   const resultRef = useRef<HTMLDivElement>(null);
   const [sorting, setSorting] = useState<SortingState>([]);
 
   const [targetInputValue, setTargetInputValue] = useState('');
   const [targetSuggestions, setTargetSuggestions] = useState<Receptor[]>([]);
   const [showTargetSuggestions, setShowTargetSuggestions] = useState(false);
+  const [highlightIndex, setHighlightIndex] = useState<number>(-1);
 
   const form = useForm({
     resolver: zodResolver(formSchema),
@@ -97,7 +105,6 @@ export default function ReceptorTablePage() {
       receptorClass: '',
       minOrthologs: [],
       maxOrthologs: '',
-      includeInactive: false,
     },
   });
 
@@ -144,6 +151,7 @@ export default function ReceptorTablePage() {
 
     setTargetSuggestions(filtered);
     setShowTargetSuggestions(filtered.length > 0);
+    setHighlightIndex(filtered.length > 0 ? 0 : -1);
   };
 
   const handleTargetInputChange = (value: string) => {
@@ -156,6 +164,7 @@ export default function ReceptorTablePage() {
       .filter(name => name && receptors.some((r: Receptor) => r.geneName === name));
 
     form.setValue('minOrthologs', receptorNames);
+    setHighlightIndex(showTargetSuggestions && targetSuggestions.length>0 ? 0 : -1);
   };
 
   const handleTargetSuggestionClick = (receptor: Receptor) => {
@@ -326,13 +335,19 @@ export default function ReceptorTablePage() {
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
     setError(null);
+    
+    // Clear previous results to ensure proper re-rendering
+    setResultData([]);
+    setResultColumns([]);
+    setProcessedReceptorNames([]);
+    setProcessedReferenceReceptor('');
 
     try {
       const referenceGene = values.receptorClass.trim();
       const targetGenes = values.minOrthologs;
 
       const residueNumbersInput = values.maxOrthologs?.trim() || '';
-      const includeConservation = values.includeInactive;
+      const includeConservation = true; // Always include conservation data
 
       let residueNumbers: number[] = [];
       if (residueNumbersInput) {
@@ -435,6 +450,8 @@ export default function ReceptorTablePage() {
 
       setResultData(mappingData);
       setResultColumns(columns);
+      setProcessedReceptorNames(receptorNames);
+      setProcessedReferenceReceptor(referenceGene);
 
       if (resultRef.current) {
         resultRef.current.scrollIntoView({ behavior: 'smooth' });
@@ -449,6 +466,18 @@ export default function ReceptorTablePage() {
   const columns = React.useMemo(() => {
     if (resultColumns.length === 0) return [];
 
+    const getColumnLabel = (colType: string) => {
+      const labelMap: Record<string, string> = {
+        resNum: 'Residue #',
+        AA: 'Amino Acid',
+        Conservation: 'Conservation %',
+        Conserved_AA: 'Conserved AA',
+        region: 'Region',
+        gpcrdb: 'GPCRdb #'
+      };
+      return labelMap[colType] || colType;
+    };
+
     return resultColumns.map(colKey => {
       const [receptorName, colType] = colKey.split('_');
 
@@ -458,19 +487,7 @@ export default function ReceptorTablePage() {
           <div className="flex flex-col items-center gap-1">
             <div className="text-xs text-muted-foreground">{receptorName}</div>
             <div className="text-center font-medium">
-              {colType === 'resNum'
-                ? 'Residue #'
-                : colType === 'AA'
-                  ? 'Amino Acid'
-                  : colType === 'Conservation'
-                    ? 'Conservation %'
-                    : colType === 'Conserved_AA'
-                      ? 'Conserved AA'
-                      : colType === 'region'
-                        ? 'Region'
-                        : colType === 'gpcrdb'
-                          ? 'GPCRdb #'
-                          : colType}
+              {getColumnLabel(colType)}
             </div>
           </div>
         ),
@@ -493,15 +510,15 @@ export default function ReceptorTablePage() {
   });
 
   return (
-    <div className="max-w-7xl mx-auto space-y-8 py-4">
-      <div className="max-w-2xl mx-auto space-y-4">
+    <div className="max-w-7xl mx-auto space-y-8 py-4 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-3xl mx-auto space-y-4">
         <h1 className="text-3xl font-bold text-left">Receptor Table Generator</h1>
-        <p className="text-lg text-muted-foreground text-left">
+        <p className="text-base text-muted-foreground text-left">
           Enter a reference receptor and one or more target receptors from the same class to
           generate a residue‐by‐residue alignment table. Optionally specify a comma‐separated list
-          of residue numbers to filter the results. Check &quot;Include Conservation Data&quot; to
-          pull in per‐position conservation %, conserved amino acid(s), receptor region and GPCRdb
-          numbering for your reference GPCR.
+          of residue numbers to filter the results. Conservation data including per‐position
+          conservation %, conserved amino acid(s), receptor region and GPCRdb numbering will be
+          automatically included, along with sequence logos for each receptor.
         </p>
 
         {error && (
@@ -600,14 +617,30 @@ export default function ReceptorTablePage() {
                             setShowTargetSuggestions(false);
                           }}
                           onBlur={() => setTimeout(() => setShowTargetSuggestions(false), 200)}
+                          onKeyDown={e=>{
+                            if(showTargetSuggestions && targetSuggestions.length>0){
+                              if(e.key==='ArrowDown'){
+                                e.preventDefault();
+                                setHighlightIndex((prev)=> (prev+1)%targetSuggestions.length);
+                              }else if(e.key==='ArrowUp'){
+                                e.preventDefault();
+                                setHighlightIndex((prev)=> (prev-1+targetSuggestions.length)%targetSuggestions.length);
+                              }else if(e.key==='Enter'){
+                                e.preventDefault();
+                                if(highlightIndex>=0 && highlightIndex<targetSuggestions.length){
+                                  handleTargetSuggestionClick(targetSuggestions[highlightIndex]);
+                                }
+                              }
+                            }
+                          }}
                           className="w-full"
                         />
                         {showTargetSuggestions && targetSuggestions.length > 0 && (
                           <div className="absolute z-10 w-full mt-1 bg-popover border border-border rounded-md shadow-lg max-h-60 overflow-y-auto">
-                            {targetSuggestions.map(receptor => (
+                            {targetSuggestions.map((receptor, index) => (
                               <div
                                 key={receptor.geneName}
-                                className="px-4 py-2 hover:bg-accent cursor-pointer text-sm"
+                                className={`px-4 py-2 cursor-pointer text-sm ${index===highlightIndex?'bg-accent':'hover:bg-accent'}`}
                                 onMouseDown={() => handleTargetSuggestionClick(receptor)}
                               >
                                 <div className="font-medium">{`${receptor.geneName} - ${receptor.name}`}</div>
@@ -643,21 +676,6 @@ export default function ReceptorTablePage() {
                       </Command>
                     </FormControl>
                     <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="includeInactive"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-start space-x-1 space-y-0">
-                    <FormControl>
-                      <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-                    </FormControl>
-                    <div className="space-y-1 leading-none">
-                      <FormLabel>Include Conservation Data</FormLabel>
-                    </div>
                   </FormItem>
                 )}
               />
@@ -743,6 +761,18 @@ export default function ReceptorTablePage() {
                 ))}
               </TableBody>
             </Table>
+          </div>
+
+          {/* Multi-Receptor Logo Chart */}
+          <div className="mt-8">
+            {processedReceptorNames.length > 0 && (
+              <MultiReceptorLogoChart
+                resultData={resultData}
+                receptorNames={processedReceptorNames}
+                referenceReceptor={processedReferenceReceptor}
+                height={200}
+              />
+            )}
           </div>
         </div>
       )}

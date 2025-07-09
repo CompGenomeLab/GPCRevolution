@@ -60,12 +60,12 @@ const aminoAcidGroups = {
   hydrophobic: { residues: ['V', 'C', 'I', 'M', 'L'], color: '#B4B4B4', label: 'Hydrophobic (VCIML)' }
 };
 
-const categoryLabels = {
+const getCategoryLabels = (receptor1Name?: string, receptor2Name?: string) => ({
   common: 'Common Residues',
   specific_both: 'Specifically Conserved for Both',
-  specific1: 'Specifically Conserved for Receptor 1',
-  specific2: 'Specifically Conserved for Receptor 2',
-};
+  specific1: `Specifically Conserved for ${receptor1Name || 'Receptor 1'}`,
+  specific2: `Specifically Conserved for ${receptor2Name || 'Receptor 2'}`,
+});
 
 const DualSequenceLogoChart: React.FC<DualSequenceLogoChartProps> = ({ 
   categorizedResidues, 
@@ -221,11 +221,12 @@ const DualSequenceLogoChart: React.FC<DualSequenceLogoChartProps> = ({
   // Function to reset category colors to defaults
   const resetCategoryColors = () => {
     if (onColorMapChange) {
+      const categoryLabels = getCategoryLabels(receptor1Name, receptor2Name);
       const defaultCategoryColors = {
-        'Common Residues': '#E6E6FA',
-        'Specifically Conserved for Both': '#A85638',
-        'Specifically Conserved for Receptor 1': '#FFF9C2',
-        'Specifically Conserved for Receptor 2': '#8F9871',
+        [categoryLabels.common]: '#E6E6FA',
+        [categoryLabels.specific_both]: '#A85638',
+        [categoryLabels.specific1]: '#FFF9C2',
+        [categoryLabels.specific2]: '#8F9871',
       };
       onColorMapChange(defaultCategoryColors);
     }
@@ -721,9 +722,13 @@ const DualSequenceLogoChart: React.FC<DualSequenceLogoChartProps> = ({
         .attr('y', categoryY)
         .attr('width', d => x(d.end.toString())! + x.bandwidth() - x(d.start.toString())!)
         .attr('height', categoryRowHeight)
-        .attr('fill', d => colorMap[categoryLabels[d.category as keyof typeof categoryLabels]])
+        .attr('fill', d => {
+          const categoryLabels = getCategoryLabels(receptor1Name, receptor2Name);
+          return colorMap[categoryLabels[d.category as keyof typeof categoryLabels]];
+        })
         .style('cursor', 'pointer')
         .on('mouseover', (event, d) => {
+          const categoryLabels = getCategoryLabels(receptor1Name, receptor2Name);
           const content = `<strong>Category:</strong> ${categoryLabels[d.category as keyof typeof categoryLabels]}`;
           showTooltip(event, content);
         })
@@ -817,11 +822,11 @@ const DualSequenceLogoChart: React.FC<DualSequenceLogoChartProps> = ({
               </button>
             </div>
             <div className="flex flex-wrap gap-4 items-center justify-center">
-              {Object.entries(categoryLabels).map(([categoryKey, categoryLabel]) => (
+              {Object.entries(getCategoryLabels(receptor1Name, receptor2Name)).map(([categoryKey, categoryLabel]) => (
                 <div key={categoryKey} className="flex items-center gap-2">
                   <input
                     type="color"
-                    value={colorMap[categoryLabel]}
+                    value={colorMap[categoryLabel] || '#000000'}
                     onChange={(e) => {
                       if (onColorMapChange) {
                         const newColorMap = { ...colorMap, [categoryLabel]: e.target.value };
