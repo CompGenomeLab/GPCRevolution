@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useRef, useEffect, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import * as d3 from 'd3';
 import useCleanedSequences from '@/hooks/useCleanedSequence';
 import { Button } from '@/components/ui/button';
@@ -46,6 +47,14 @@ const SequenceLogoChart: React.FC<SequenceLogoChartProps> = ({ sequences, conser
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const [loadedSequences, setLoadedSequences] = useState<Sequence[]>([]);
   const [isDarkMode, setIsDarkMode] = useState(false);
+  
+  // State for tooltip
+  const [tooltip, setTooltip] = useState<{
+    visible: boolean;
+    x: number;
+    y: number;
+    content: string;
+  }>({ visible: false, x: 0, y: 0, content: '' });
 
   // Function to parse FASTA content
   const parseFasta = (fastaText: string): Sequence[] => {
@@ -168,6 +177,28 @@ const SequenceLogoChart: React.FC<SequenceLogoChartProps> = ({ sequences, conser
     });
     setGroupColors(defaultColors);
   };
+
+  // Tooltip helper functions
+  const showTooltip = useCallback((event: Event, content: string) => {
+    const mouseEvent = event as MouseEvent;
+    
+    setTooltip({
+      visible: true,
+      x: mouseEvent.clientX,
+      y: mouseEvent.clientY,
+      content
+    });
+  }, []);
+
+  const hideTooltip = useCallback(() => {
+    setTooltip(prev => ({ ...prev, visible: false }));
+  }, []);
+
+  const updateTooltipPosition = useCallback((event: Event) => {
+    const mouseEvent = event as MouseEvent;
+    
+    setTooltip(prev => ({ ...prev, x: mouseEvent.clientX, y: mouseEvent.clientY }));
+  }, []);
 
   // Download SVG function
   const downloadSVG = () => {
@@ -355,7 +386,9 @@ const SequenceLogoChart: React.FC<SequenceLogoChartProps> = ({ sequences, conser
 
     if (!yAxisContainer || !chartContainer) return;
 
-    // Remove demo - using color controls instead
+    // Clean up any old D3 tooltips that might be lingering in the DOM
+    const oldTooltips = document.querySelectorAll('.logo-tooltip, .conservation-tooltip');
+    oldTooltips.forEach(tooltip => tooltip.remove());
 
     // Clear any previous SVG content
     yAxisContainer.innerHTML = '';
@@ -449,16 +482,7 @@ const SequenceLogoChart: React.FC<SequenceLogoChartProps> = ({ sequences, conser
         .attr('height', totalHeight);
 
       /* ---------- Tooltip ---------- */
-      let tooltip = d3.select('body').select<HTMLDivElement>('.logo-tooltip');
-      if (tooltip.empty()) {
-        tooltip = d3
-          .select('body')
-          .append('div')
-          .attr(
-            'class',
-            'logo-tooltip pointer-events-none bg-white dark:bg-black dark:text-white text-xs sm:text-sm rounded border border-gray-300 px-0.5 py-0.5 sm:px-1 sm:py-0.5 absolute opacity-0 z-40 max-w-44 sm:max-w-48 break-words leading-tight sm:leading-normal'
-          );
-      }
+      // The tooltip element is now managed by React state
 
       /* ---------- Scales ---------- */
       const x = d3
@@ -569,28 +593,22 @@ const SequenceLogoChart: React.FC<SequenceLogoChartProps> = ({ sequences, conser
 
                 // Hover interactions on nestedSVG
                 nestedSvg
-                  .on('mouseover', () => {
+                  .on('mouseover', (event) => {
                     const frequency = d.residueCounts[residue] / d.totalSequences;
-                    tooltip
-                      .html(
-                        `<strong>Position:</strong> ${d.position}<br/>` +
-                          `<strong>Residue:</strong> ${residue}<br/>` +
-                          `<strong>Frequency:</strong> ${(frequency * 100).toFixed(1)}%<br/>` +
-                          `<strong>Information:</strong> ${height.toFixed(2)} bits<br/>` +
-                          `<strong>Human AA:</strong> ${d.humanAA}<br/>` +
-                          `<strong>GPCRdb #:</strong> ${d.gpcrdb}<br/>` +
-                          `<strong>Region:</strong> ${d.region}`
-                      )
-                      .style('opacity', 1);
+                    showTooltip(event,
+                      `<strong>Position:</strong> ${d.position}<br/>` +
+                        `<strong>Residue:</strong> ${residue}<br/>` +
+                        `<strong>Frequency:</strong> ${(frequency * 100).toFixed(1)}%<br/>` +
+                        `<strong>Information:</strong> ${height.toFixed(2)} bits<br/>` +
+                        `<strong>Human AA:</strong> ${d.humanAA}<br/>` +
+                        `<strong>GPCRdb #:</strong> ${d.gpcrdb}<br/>` +
+                        `<strong>Region:</strong> ${d.region}`
+                    );
                   })
                   .on('mousemove', (event) => {
-                    const tooltipWidth = 200;
-                    const tooltipHeight = 140;
-                    const x = Math.min(event.pageX + 10, window.innerWidth - tooltipWidth);
-                    const y = Math.min(Math.max(event.pageY - 40, 10), window.innerHeight - tooltipHeight);
-                    tooltip.style('left', `${x}px`).style('top', `${y}px`);
+                    updateTooltipPosition(event);
                   })
-                  .on('mouseout', () => tooltip.style('opacity', 0));
+                  .on('mouseout', () => hideTooltip());
 
               } else {
                 /* ------- SVG failed, fallback to text ------- */
@@ -677,22 +695,16 @@ const SequenceLogoChart: React.FC<SequenceLogoChartProps> = ({ sequences, conser
           d3.select(event.currentTarget as SVGRectElement)
             .style('stroke', '#000')
             .style('stroke-width', 1);
-          tooltip
-            .html(
-              `<strong>Region:</strong> ${d.region}<br/>Positions ${d.startResidue} - ${d.endResidue}`
-            )
-            .style('opacity', 1);
+          showTooltip(event,
+            `<strong>Region:</strong> ${d.region}<br/>Positions ${d.startResidue} - ${d.endResidue}`
+          );
         })
         .on('mousemove', (event) => {
-          const tooltipWidth = 200;
-          const tooltipHeight = 60;
-          const x = Math.min(event.pageX + 10, window.innerWidth - tooltipWidth);
-          const y = Math.min(Math.max(event.pageY - 40, 10), window.innerHeight - tooltipHeight);
-          tooltip.style('left', `${x}px`).style('top', `${y}px`);
+          updateTooltipPosition(event);
         })
         .on('mouseout', (event) => {
           d3.select(event.currentTarget as SVGRectElement).style('stroke', 'none');
-          tooltip.style('opacity', 0);
+          hideTooltip();
         });
 
       chartSvg
@@ -732,9 +744,18 @@ const SequenceLogoChart: React.FC<SequenceLogoChartProps> = ({ sequences, conser
     }
 
     return () => {
-      d3.select('body').select('.logo-tooltip').remove();
+      // Hide tooltip when component unmounts or data changes
+      setTooltip(prev => ({ ...prev, visible: false }));
     };
-  }, [cleanedSequences, conservationFile, groupColors, isDarkMode, getResidueColor, height, loadCustomSvgLetter]);
+  }, [cleanedSequences, conservationFile, groupColors, isDarkMode, getResidueColor, height, loadCustomSvgLetter, showTooltip, hideTooltip, updateTooltipPosition]);
+
+  // Additional cleanup effect to remove any lingering tooltips on unmount
+  useEffect(() => {
+    return () => {
+      const oldTooltips = document.querySelectorAll('.logo-tooltip, .conservation-tooltip');
+      oldTooltips.forEach(tooltip => tooltip.remove());
+    };
+  }, []);
 
   return (
     <div className="bg-card text-card-foreground rounded-lg shadow-md">
@@ -794,6 +815,20 @@ const SequenceLogoChart: React.FC<SequenceLogoChartProps> = ({ sequences, conser
           </button>
         </div>
       </div>
+
+              {/* Tooltip rendered via portal */}
+        {tooltip.visible && typeof window !== 'undefined' && createPortal(
+          <div
+            className="fixed z-50 pointer-events-none bg-white text-black dark:bg-black dark:text-white text-xs sm:text-sm rounded border border-gray-300 dark:border-gray-600 px-1 py-0.5 sm:px-2 sm:py-1 max-w-xs sm:max-w-sm break-words leading-tight sm:leading-normal shadow-lg"
+            style={{
+              left: Math.min(tooltip.x + 10, window.innerWidth - 200),
+              top: Math.max(tooltip.y - 60, 10),
+            }}
+          >
+            <div dangerouslySetInnerHTML={{ __html: tooltip.content }} />
+          </div>,
+          document.body
+        )}
     </div>
   );
 };

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import * as d3 from 'd3';
 import type { NumberValue } from 'd3';
 
@@ -23,12 +23,44 @@ interface ConservationChartProps {
 const ConservationChart: React.FC<ConservationChartProps> = ({ data, height = 242 }) => {
   const yAxisContainerRef = useRef<HTMLDivElement>(null);
   const chartContainerRef = useRef<HTMLDivElement>(null);
+  
+  // State for tooltip
+  const [tooltip, setTooltip] = useState<{
+    visible: boolean;
+    x: number;
+    y: number;
+    content: string;
+  }>({ visible: false, x: 0, y: 0, content: '' });
+
+  // Tooltip helper functions
+  const showTooltip = useCallback((event: Event, content: string) => {
+    const mouseEvent = event as MouseEvent;
+    setTooltip({
+      visible: true,
+      x: mouseEvent.clientX,
+      y: mouseEvent.clientY,
+      content
+    });
+  }, []);
+
+  const hideTooltip = useCallback(() => {
+    setTooltip(prev => ({ ...prev, visible: false }));
+  }, []);
+
+  const updateTooltipPosition = useCallback((event: Event) => {
+    const mouseEvent = event as MouseEvent;
+    setTooltip(prev => ({ ...prev, x: mouseEvent.clientX, y: mouseEvent.clientY }));
+  }, []);
 
   useEffect(() => {
     const yAxisContainer = yAxisContainerRef.current;
     const chartContainer = chartContainerRef.current;
 
     if (!yAxisContainer || !chartContainer) return;
+
+    // Clean up any old D3 tooltips that might be lingering in the DOM
+    const oldTooltips = document.querySelectorAll('.logo-tooltip, .conservation-tooltip');
+    oldTooltips.forEach(tooltip => tooltip.remove());
 
     // Clear any previous SVG content
     yAxisContainer.innerHTML = '';
@@ -79,18 +111,6 @@ const ConservationChart: React.FC<ConservationChartProps> = ({ data, height = 24
       .attr('width', totalWidth)
       .attr('height', totalHeight);
 
-    /* ---------- Tooltip ---------- */
-    let tooltip = d3.select('body').select<HTMLDivElement>('.conservation-tooltip');
-    if (tooltip.empty()) {
-      tooltip = d3
-        .select('body')
-        .append('div')
-        .attr(
-          'class',
-          'conservation-tooltip pointer-events-none bg-white dark:bg-black dark:text-white text-xs sm:text-sm rounded border border-gray-300 px-1 py-0.5 sm:px-2 sm:py-1 absolute opacity-0 z-40 max-w-xs sm:max-w-sm break-words leading-tight sm:leading-normal'
-        );
-    }
-
     /* ---------- Scales ---------- */
     const x = d3
       .scaleBand<string>()
@@ -136,26 +156,20 @@ const ConservationChart: React.FC<ConservationChartProps> = ({ data, height = 24
       .attr('width', x.bandwidth())
       .attr('height', (d: ConservationDatum) => y(0) - y(d.conservation))
       .on('mouseover', (event: PointerEvent, d: ConservationDatum) => {
-        tooltip
-          .html(
-            `<strong>Residue #:</strong> ${d.residue}<br/>` +
-              `<strong>Conservation %:</strong> ${d.conservation}%<br/>` +
-              `<strong>Conserved AA:</strong> ${d.conservedAA}<br/>` +
-              `<strong>Human AA:</strong> ${d.humanAA}<br/>` +
-              `<strong>Region:</strong> ${d.region}<br/>` +
-              `<strong>GPCRdb #:</strong> ${d.gpcrdb}`
-          )
-          .style('opacity', 1);
+        showTooltip(event,
+          `<strong>Residue #:</strong> ${d.residue}<br/>` +
+            `<strong>Conservation %:</strong> ${d.conservation}%<br/>` +
+            `<strong>Conserved AA:</strong> ${d.conservedAA}<br/>` +
+            `<strong>Human AA:</strong> ${d.humanAA}<br/>` +
+            `<strong>Region:</strong> ${d.region}<br/>` +
+            `<strong>GPCRdb #:</strong> ${d.gpcrdb}`
+        );
       })
       .on('mousemove', (event: PointerEvent) => {
-        const tooltipWidth = 200; // Estimated tooltip width
-        const tooltipHeight = 120; // Estimated tooltip height
-        const x = Math.min(event.pageX + 10, window.innerWidth - tooltipWidth);
-        const y = Math.min(Math.max(event.pageY - 40, 10), window.innerHeight - tooltipHeight);
-        tooltip.style('left', `${x}px`).style('top', `${y}px`);
+        updateTooltipPosition(event);
       })
       .on('mouseout', () => {
-        tooltip.style('opacity', 0);
+        hideTooltip();
       });
 
     /* ---------- Bar Outlines for Dark Mode Visibility ---------- */
@@ -237,22 +251,16 @@ const ConservationChart: React.FC<ConservationChartProps> = ({ data, height = 24
         d3.select(event.currentTarget as SVGRectElement)
           .style('stroke', '#000')
           .style('stroke-width', 1);
-        tooltip
-          .html(
-            `<strong>Region:</strong> ${d.region}<br/>Residues ${d.startResidue} - ${d.endResidue}`
-          )
-          .style('opacity', 1);
+        showTooltip(event,
+          `<strong>Region:</strong> ${d.region}<br/>Residues ${d.startResidue} - ${d.endResidue}`
+        );
       })
       .on('mousemove', (event: PointerEvent) => {
-        const tooltipWidth = 200; // Estimated tooltip width
-        const tooltipHeight = 120; // Estimated tooltip height
-        const x = Math.min(event.pageX + 10, window.innerWidth - tooltipWidth);
-        const y = Math.min(Math.max(event.pageY - 40, 10), window.innerHeight - tooltipHeight);
-        tooltip.style('left', `${x}px`).style('top', `${y}px`);
+        updateTooltipPosition(event);
       })
       .on('mouseout', (event: PointerEvent) => {
         d3.select(event.currentTarget as SVGRectElement).style('stroke', 'none');
-        tooltip.style('opacity', 0);
+        hideTooltip();
       });
 
     chartSvg
@@ -291,9 +299,18 @@ const ConservationChart: React.FC<ConservationChartProps> = ({ data, height = 24
       .text((d: ConservationDatum) => d.gpcrdb);
 
     return () => {
-      tooltip.remove();
+      // Hide tooltip when component unmounts or data changes
+      setTooltip(prev => ({ ...prev, visible: false }));
     };
-  }, [data, height]);
+  }, [data, height, showTooltip, hideTooltip, updateTooltipPosition]);
+
+  // Additional cleanup effect to remove any lingering tooltips on unmount
+  useEffect(() => {
+    return () => {
+      const oldTooltips = document.querySelectorAll('.logo-tooltip, .conservation-tooltip');
+      oldTooltips.forEach(tooltip => tooltip.remove());
+    };
+  }, []);
 
   return (
     <div className="bg-card text-card-foreground rounded-lg p-6 shadow-md">
@@ -304,6 +321,19 @@ const ConservationChart: React.FC<ConservationChartProps> = ({ data, height = 24
           <div ref={chartContainerRef} className="h-full" />
         </div>
       </div>
+      
+      {/* Tooltip */}
+      {tooltip.visible && (
+        <div
+          className="fixed z-40 pointer-events-none bg-white text-black dark:bg-black dark:text-white text-xs sm:text-sm rounded border border-gray-300 dark:border-gray-600 px-1 py-0.5 sm:px-2 sm:py-1 max-w-xs sm:max-w-sm break-words leading-tight sm:leading-normal shadow-lg"
+          style={{
+            left: Math.min(tooltip.x + 10, window.innerWidth - 200),
+            top: Math.max(tooltip.y - 40, 10),
+          }}
+        >
+          <div dangerouslySetInnerHTML={{ __html: tooltip.content }} />
+        </div>
+      )}
     </div>
   );
 };

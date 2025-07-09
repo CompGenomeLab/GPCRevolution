@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { Parser as HtmlToReactParser } from 'html-to-react';
+import { createPortal } from 'react-dom';
 import { useSnakePlotTooltip } from '../hooks/useSnakePlotTooltip';
 import { Button } from './ui/button';
 import { toast } from 'sonner';
@@ -23,8 +24,14 @@ export default function OptimizedSnakePlot({ svgPath, conservationFile, onLoaded
   const abortControllerRef = useRef<AbortController | null>(null);
   const hasCalledLoadedRef = useRef(false);
 
-  const { updateSnakeplotConservation, fillColor, setFillColor, textColor, setTextColor } =
-    useSnakePlotTooltip();
+  const { 
+    updateSnakeplotConservation, 
+    fillColor, 
+    setFillColor, 
+    textColor, 
+    setTextColor,
+    tooltip
+  } = useSnakePlotTooltip();
 
   const loadSnakePlotContent = useCallback(async () => {
     if (!svgPath) return;
@@ -339,6 +346,19 @@ export default function OptimizedSnakePlot({ svgPath, conservationFile, onLoaded
           </div>
         )}
       </div>
+
+      {/* React-based tooltip rendered using portal */}
+      {tooltip.visible && typeof document !== 'undefined' && createPortal(
+        <div
+          className="fixed z-50 bg-white dark:bg-black text-black dark:text-white p-2 rounded shadow-lg text-sm pointer-events-none"
+          style={{
+            left: Math.min(tooltip.x + 10, window.innerWidth - 200),
+            top: Math.max(tooltip.y - 50, 10),
+          }}
+          dangerouslySetInnerHTML={{ __html: tooltip.content }}
+        />,
+        document.body
+      )}
     </div>
   );
 }

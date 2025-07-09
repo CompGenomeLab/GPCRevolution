@@ -499,7 +499,7 @@ const DualSequenceLogoChart: React.FC<DualSequenceLogoChartProps> = ({
 
       // GPCRdb row labels
       const gpcrdb1Y = margin.top + logoAreaHeight * 2 + gapBetweenRows * 2 + 4;
-      const gpcrdb2Y = gpcrdb1Y + infoRowHeight + gapBetweenRows;
+      const gpcrdb2Y = gpcrdb1Y + infoRowHeight + gapBetweenRows + 8; // Added 8px extra space
       const categoryY = gpcrdb2Y + infoRowHeight + gapBetweenRows;
 
       yAxisSvg.append('text')
