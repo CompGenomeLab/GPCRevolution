@@ -512,13 +512,9 @@ export default function ReceptorTablePage() {
   return (
     <div className="max-w-7xl mx-auto space-y-8 py-4 px-4 sm:px-6 lg:px-8">
       <div className="max-w-3xl mx-auto space-y-4">
-        <h1 className="text-3xl font-bold text-left">Receptor Table Generator</h1>
+        <h1 className="text-3xl font-bold text-left">Multi-Receptor Comparison</h1>
         <p className="text-base text-muted-foreground text-left">
-          Enter a reference receptor and one or more target receptors from the same class to
-          generate a residue‐by‐residue alignment table. Optionally specify a comma‐separated list
-          of residue numbers to filter the results. Conservation data including per‐position
-          conservation %, conserved amino acid(s), receptor region and GPCRdb numbering will be
-          automatically included, along with sequence logos for each receptor.
+          Compare multiple receptors side-by-side with detailed residue-level analysis. Enter a reference receptor and one or more target receptors from the same class to generate a comprehensive comparison table. Optionally specify specific residue numbers to focus your analysis. The results include conservation data, amino acid sequences, receptor regions, GPCRdb numbering, and interactive sequence logos for each receptor.
         </p>
 
         {error && (

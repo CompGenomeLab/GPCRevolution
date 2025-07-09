@@ -233,12 +233,12 @@ export default function Home() {
 
             <Card 
               className="cursor-pointer hover:shadow-lg transition-all duration-300 border-2 hover:border-[#424874]/20 dark:hover:border-[#E6E6FA]/20 group" 
-              onClick={() => handleToolNavigation('receptor-table')}
+              onClick={() => handleToolNavigation('multi-receptor-comparison')}
             >
               <CardHeader className="pb-3 sm:pb-6">
                 <div className="flex items-center space-x-2">
                   <Table className="h-5 w-5 sm:h-6 sm:w-6 group-hover:scale-110 transition-transform text-[#424874] dark:text-[#E6E6FA]" />
-                  <CardTitle className="text-foreground text-base sm:text-lg">Receptor Table Generator</CardTitle>
+                  <CardTitle className="text-foreground text-base sm:text-lg">Multi-Receptor Comparison</CardTitle>
                 </div>
                 <CardDescription className="text-sm">
                   Generate conservation tables to compare multiple receptors side-by-side

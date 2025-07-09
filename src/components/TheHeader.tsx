@@ -43,9 +43,9 @@ export const navigationItems = [
         description: 'Analyze residue conservation patterns across species',
       },
       {
-        title: 'Receptor Table Generator',
-        href: '/tools/receptor-table',
-        description: 'Generate comprehensive receptor tables',
+        title: 'Multi-Receptor Comparison',
+        href: '/tools/multi-receptor-comparison',
+        description: 'Compare multiple receptors with conservation tables and sequence logos',
       },
       {
         title: 'Combine Orthologs',
