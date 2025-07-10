@@ -10,10 +10,10 @@ import DownloadableFiles from '@/components/DownloadableFiles';
 
 import receptors from '../../../public/receptors.json';
 
-const ConservationChartAsync = lazy(() => import('@/components/ConservationChartAsync'));
-const OptimizedSnakePlot   = lazy(() => import('@/components/OptimizedSnakePlot'));
+const ConservationChart = lazy(() => import('@/components/ConservationChart'));
+const SnakePlot   = lazy(() => import('@/components/SnakePlot'));
 const SequenceLogoChart    = lazy(() => import('@/components/SequenceLogoChart'));
-const OptimizedSVGTree     = lazy(() => import('@/components/OptimizedSVGTree'));
+const SVGTree     = lazy(() => import('@/components/SVGTree'));
 const MSAViewer            = lazy(() =>
   import('@/components/MSAViewer').then(m => ({ default: m.MSAViewer })),
 );
@@ -146,7 +146,7 @@ function SequentialSections({ receptor }: { receptor: Receptor }) {
     <>
       {sectionIndex >= 0 && (
         <Suspense fallback={<ConservationSkeleton />}>
-          <ConservationChartAsync
+          <ConservationChart
             conservationFile={receptor.conservationFile}
             height={280}
             onLoaded={next(1)}
@@ -168,7 +168,7 @@ function SequentialSections({ receptor }: { receptor: Receptor }) {
 
       {sectionIndex >= 2 && (
         <Suspense fallback={<SectionSpinner title="Residue Conservation Snake Plot" />}>
-          <OptimizedSnakePlot
+          <SnakePlot
             svgPath={receptor.snakePlot}
             conservationFile={receptor.conservationFile}
             onLoaded={next(3)}
@@ -178,7 +178,7 @@ function SequentialSections({ receptor }: { receptor: Receptor }) {
 
       {sectionIndex >= 3 && (
         <Suspense fallback={<SectionSpinner title="Phylogenetic Tree of Orthologs" />}>
-          <OptimizedSVGTree svgPath={receptor.svgTree} onLoaded={next(4)} />
+          <SVGTree svgPath={receptor.svgTree} onLoaded={next(4)} />
         </Suspense>
       )}
 

@@ -200,7 +200,7 @@ export default function MSAVisualization({
                     return (
                       <TableCell
                         key={cell.id}
-                        className="sticky left-0 w-[120px] sm:w-[200px] p-0 bg-white dark:bg-white"
+                        className="sticky left-0 z-10 w-[120px] sm:w-[200px] h-6 p-0 bg-white dark:bg-white"
                       >
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </TableCell>
@@ -208,7 +208,7 @@ export default function MSAVisualization({
                   }
 
                   const colIndex = parseInt(cell.column.id.slice(3), 10);
-                  const bgClass = colIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50';
+                  const bgClass = colIndex % 2 === 0 ? 'bg-white' : 'bg-gray-100';
 
                   return (
                     <TableCell key={cell.id} className={`w-[4px] p-0 ${bgClass}`}>

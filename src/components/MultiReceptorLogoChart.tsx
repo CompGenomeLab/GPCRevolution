@@ -881,18 +881,14 @@ const MultiReceptorLogoChart: React.FC<MultiReceptorLogoChartProps> = ({
   const hasAlignmentData = receptorNames.some(name => cleanedAlignmentData[name]?.length > 0);
   if (!hasAlignmentData) {
     return (
-      <div className="max-w-7xl mx-auto">
-        <div className="bg-card text-card-foreground rounded-lg shadow-md">
-          <div className="p-6 border-b border-border">
-            <h2 className="text-xl font-semibold text-foreground">Multi-Receptor Sequence Logos</h2>
-          </div>
-          <div className="p-6 flex items-center justify-center">
-            <div className="text-center">
-              <p className="text-muted-foreground">No alignment data available for the selected receptors.</p>
-              <p className="text-sm text-muted-foreground mt-2">
-                Please ensure that ortholog alignment files are available for: {receptorNames.join(', ')}
-              </p>
-            </div>
+      <div className="max-w-7xl mx-auto bg-card text-card-foreground rounded-lg p-6 shadow-md">
+        <h2 className="text-2xl font-bold mb-4">Multi-Receptor Sequence Logos</h2>
+        <div className="flex items-center justify-center">
+          <div className="text-center">
+            <p className="text-muted-foreground">No alignment data available for the selected receptors.</p>
+            <p className="text-sm text-muted-foreground mt-2">
+              Please ensure that ortholog alignment files are available for: {receptorNames.join(', ')}
+            </p>
           </div>
         </div>
       </div>
@@ -900,67 +896,60 @@ const MultiReceptorLogoChart: React.FC<MultiReceptorLogoChartProps> = ({
   }
 
   return (
-    <div className="max-w-7xl mx-auto">
-      <div className="bg-card text-card-foreground rounded-lg shadow-md">
-        <div className="p-6 border-b border-border">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-            <h2 className="text-xl font-semibold text-foreground">Multi-Receptor Sequence Logos</h2>
-            <div className="flex items-center gap-2 mt-2 sm:mt-0">
-              <Button onClick={downloadSVG} variant="outline" size="sm">
-                Download SVG
-              </Button>
-            </div>
-          </div>
-        </div>
-      
-      <div className="p-6">
-        <div 
-          className="relative w-full flex overflow-hidden" 
-          style={{ 
-            height: `${(150 + 15) * receptorNames.length - 15 + 40 + 22 + 40 + 8}px`,
-            visibility: isLoadingAlignments || isLoadingConservation ? 'hidden' : 'visible',
-            opacity: 1,
-          }}
-        >
-          <div ref={yAxisContainerRef} className="flex-shrink-0 z-10 bg-card" />
-          <div className="flex-grow overflow-x-auto">
-            <div ref={chartContainerRef} className="h-full" />
-          </div>
+    <div className="max-w-7xl mx-auto bg-card text-card-foreground rounded-lg p-6 shadow-md">
+      <h2 className="text-2xl font-bold mb-4">Multi-Receptor Sequence Logos</h2>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
+        <div className="flex items-center gap-2 mt-2 sm:mt-0">
+          <Button onClick={downloadSVG} variant="outline" size="sm">
+            Download SVG
+          </Button>
         </div>
       </div>
-      
-      {/* Color legend controls */}
-      <div className="p-6 pt-0">
-        <div className="flex flex-wrap gap-4 items-center justify-center">
-          {Object.entries(aminoAcidGroups).map(([groupKey, group]) => {
-            const getDisplayColor = () => {
-              if (groupKey === 'small' && groupColors[groupKey] === '#231F20') {
-                return isDarkMode ? '#FFFFFF' : '#231F20';
-              }
-              return groupColors[groupKey];
-            };
-            
-            return (
-              <div key={groupKey} className="flex items-center gap-2">
-                <input
-                  type="color"
-                  value={getDisplayColor()}
-                  onChange={(e) => handleColorChange(groupKey, e.target.value)}
-                  className="w-5 h-5 rounded cursor-pointer border"
-                  title={`Color for ${group.label}`}
-                />
-                <span className="text-base text-foreground">{group.label}</span>
-              </div>
-            );
-          })}
-          <button
-            onClick={resetColors}
-            className="ml-2 px-3 py-1 text-xs bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground rounded border transition-colors"
-            title="Reset colors to default"
-          >
-            Reset
-          </button>
+    
+      <div 
+        className="relative w-full flex overflow-hidden mb-4" 
+        style={{ 
+          height: `${(150 + 15) * receptorNames.length - 15 + 40 + 22 + 40 + 8}px`,
+          visibility: isLoadingAlignments || isLoadingConservation ? 'hidden' : 'visible',
+          opacity: 1,
+        }}
+      >
+        <div ref={yAxisContainerRef} className="flex-shrink-0 z-10 bg-card" />
+        <div className="flex-grow overflow-x-auto">
+          <div ref={chartContainerRef} className="h-full" />
         </div>
+      </div>
+    
+      {/* Color legend controls */}
+      <div className="flex flex-wrap gap-4 items-center justify-center">
+        {Object.entries(aminoAcidGroups).map(([groupKey, group]) => {
+          const getDisplayColor = () => {
+            if (groupKey === 'small' && groupColors[groupKey] === '#231F20') {
+              return isDarkMode ? '#FFFFFF' : '#231F20';
+            }
+            return groupColors[groupKey];
+          };
+          
+          return (
+            <div key={groupKey} className="flex items-center gap-2">
+              <input
+                type="color"
+                value={getDisplayColor()}
+                onChange={(e) => handleColorChange(groupKey, e.target.value)}
+                className="w-5 h-5 rounded cursor-pointer border"
+                title={`Color for ${group.label}`}
+              />
+              <span className="text-base text-foreground">{group.label}</span>
+            </div>
+          );
+        })}
+        <button
+          onClick={resetColors}
+          className="ml-2 px-3 py-1 text-xs bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground rounded border transition-colors"
+          title="Reset colors to default"
+        >
+          Reset
+        </button>
       </div>
 
       {/* Tooltip rendered via portal */}
@@ -976,7 +965,6 @@ const MultiReceptorLogoChart: React.FC<MultiReceptorLogoChartProps> = ({
         </div>,
         document.body
       )}
-      </div>
     </div>
   );
 };
