@@ -277,29 +277,44 @@ const MultiReceptorLogoChart: React.FC<MultiReceptorLogoChartProps> = ({
     totalSequences: number;
   } => {
     const residueCounts: Record<string, number> = {};
-    let totalSequences = 0;
+    let gapCount = 0;
+    let nonGapSequences = 0;
     
+    // Count residues at this position (including gaps)
     const standardAA = 'ACDEFGHIKLMNPQRSTVWY';
+    const totalSequencesInAlignment = sequences.length;
+    
     sequences.forEach(seq => {
       const residue = seq[position]?.toUpperCase();
       if (residue && standardAA.includes(residue)) {
         residueCounts[residue] = (residueCounts[residue] || 0) + 1;
-        totalSequences++;
+        nonGapSequences++;
+      } else {
+        // Count as gap (dash, missing, or non-standard)
+        gapCount++;
       }
     });
     
-    if (totalSequences === 0) return { 
+    // Skip positions with no amino acids at all
+    if (nonGapSequences === 0) return { 
       informationContent: 0, 
       letterHeights: {}, 
       residueCounts: {},
-      totalSequences: 0
+      totalSequences: totalSequencesInAlignment
     };
     
+    // Calculate frequencies against ALL sequences (including gaps)
     const frequencies: Record<string, number> = {};
     Object.keys(residueCounts).forEach(residue => {
-      frequencies[residue] = residueCounts[residue] / totalSequences;
+      frequencies[residue] = residueCounts[residue] / totalSequencesInAlignment;
     });
     
+    // Add gap frequency if there are gaps
+    if (gapCount > 0) {
+      frequencies['-'] = gapCount / totalSequencesInAlignment;
+    }
+    
+    // Calculate Shannon entropy (including gaps)
     let entropy = 0;
     Object.values(frequencies).forEach(freq => {
       if (freq > 0) {
@@ -307,15 +322,16 @@ const MultiReceptorLogoChart: React.FC<MultiReceptorLogoChartProps> = ({
       }
     });
     
-    const maxBits = Math.log2(20);
+    // Calculate information content (max bits for 21 characters: 20 AA + gaps)
+    const maxBits = Math.log2(21);
     const informationContent = Math.max(0, maxBits - entropy);
     
     const letterHeights: Record<string, number> = {};
-    Object.keys(frequencies).forEach(residue => {
+    Object.keys(residueCounts).forEach(residue => {
       letterHeights[residue] = frequencies[residue] * informationContent;
     });
     
-    return { informationContent, letterHeights, residueCounts, totalSequences };
+    return { informationContent, letterHeights, residueCounts, totalSequences: totalSequencesInAlignment };
   }, []);
 
   // Function to parse conservation data

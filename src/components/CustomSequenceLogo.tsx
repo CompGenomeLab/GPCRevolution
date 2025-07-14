@@ -442,28 +442,37 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
     totalSequences: number;
   } => {
     const residueCounts: Record<string, number> = {};
-    let totalSequences = 0;
+    let nonGapSequences = 0;
+    const totalSequencesInAlignment = sequences.length; // Include gaps in total
     
     const standardAA = 'ACDEFGHIKLMNPQRSTVWY';
     sequences.forEach(seq => {
       const residue = seq[position]?.toUpperCase();
       if (residue && standardAA.includes(residue)) {
         residueCounts[residue] = (residueCounts[residue] || 0) + 1;
-        totalSequences++;
+        nonGapSequences++;
       }
+      // Gaps are implicitly counted as reducing conservation
     });
     
-    if (totalSequences === 0) return { 
-      informationContent: 0, 
-      letterHeights: {}, 
-      residueCounts: {},
-      totalSequences: 0
-    };
+    // Skip positions with no amino acids at all
+    if (nonGapSequences === 0) {
+      return { 
+        informationContent: 0, 
+        letterHeights: {}, 
+        residueCounts: {},
+        totalSequences: totalSequencesInAlignment
+      };
+    }
     
+    // Calculate frequencies against ALL sequences (including gaps)
     const frequencies: Record<string, number> = {};
     Object.keys(residueCounts).forEach(residue => {
-      frequencies[residue] = residueCounts[residue] / totalSequences;
+      frequencies[residue] = residueCounts[residue] / totalSequencesInAlignment; // Changed to include gaps
     });
+    
+    // Add gap frequency for entropy calculation
+    const gapFrequency = (totalSequencesInAlignment - nonGapSequences) / totalSequencesInAlignment;
     
     let entropy = 0;
     Object.values(frequencies).forEach(freq => {
@@ -472,15 +481,20 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
       }
     });
     
-    const maxBits = Math.log2(20);
+    // Include gap contribution to entropy
+    if (gapFrequency > 0) {
+      entropy -= gapFrequency * Math.log2(gapFrequency);
+    }
+    
+    const maxBits = Math.log2(21); // 20 amino acids + gaps
     const informationContent = Math.max(0, maxBits - entropy);
     
     const letterHeights: Record<string, number> = {};
-    Object.keys(frequencies).forEach(residue => {
+    Object.keys(residueCounts).forEach(residue => {
       letterHeights[residue] = frequencies[residue] * informationContent;
     });
     
-    return { informationContent, letterHeights, residueCounts, totalSequences };
+    return { informationContent, letterHeights, residueCounts, totalSequences: totalSequencesInAlignment };
   }, []);
 
   // Simple conservation calculation with enhanced matching rules
@@ -492,21 +506,24 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
     matchCounts: Record<string, number>;
   } => {
     const residueCounts: Record<string, number> = {};
-    let totalSequences = 0;
+    let nonGapSequences = 0;
+    const totalSequencesInAlignment = sequences.length; // Include gaps in total
     
     const standardAA = 'ACDEFGHIKLMNPQRSTVWY';
     sequences.forEach(seq => {
       const residue = seq[position]?.toUpperCase();
       if (residue && standardAA.includes(residue)) {
         residueCounts[residue] = (residueCounts[residue] || 0) + 1;
-        totalSequences++;
+        nonGapSequences++;
       }
+      // Gaps are implicitly counted as reducing conservation
     });
     
-    if (totalSequences === 0) return { 
+    // Skip positions with no amino acids at all
+    if (nonGapSequences === 0) return { 
       matchPercentage: 0, 
       residueCounts: {},
-      totalSequences: 0,
+      totalSequences: totalSequencesInAlignment,
       mostConservedAA: '',
       matchCounts: {}
     };
@@ -550,14 +567,14 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
       }
     });
 
-    // Calculate match percentage based on the most conserved amino acid
+    // Calculate match percentage based on ALL sequences (including gaps)
     const totalMatches = matchCounts[mostConservedAA] || residueCounts[mostConservedAA] || 0;
-    const matchPercentage = totalSequences > 0 ? (totalMatches / totalSequences) * 100 : 0;
+    const matchPercentage = totalSequencesInAlignment > 0 ? (totalMatches / totalSequencesInAlignment) * 100 : 0;
 
     return {
       matchPercentage,
       residueCounts,
-      totalSequences,
+      totalSequences: totalSequencesInAlignment,
       mostConservedAA,
       matchCounts
     };
@@ -721,7 +738,12 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
       for (let pos = 0; pos < maxLength; pos++) {
         const calculatedData = calculateEnhancedPositionLogoData(pos, sequences);
         
-        if (calculatedData.totalSequences > 0) {
+        // Only include positions that have meaningful data (information content > 0 OR match percentage > 0)
+        const hasMeaningfulData = calculatedData.informationContent > 0 || 
+                                 (calculatedData.matchPercentage && calculatedData.matchPercentage > 0) ||
+                                 Object.keys(calculatedData.letterHeights).length > 0;
+        
+        if (calculatedData.totalSequences > 0 && hasMeaningfulData) {
           positionData[pos] = {
             position: pos + 1, // 1-based position (will be renumbered later)
             msaColumn: pos, // Original MSA column position (0-based)

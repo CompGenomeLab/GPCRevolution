@@ -2,6 +2,7 @@
 
 import React from 'react';
 import CustomSequenceLogo from '@/components/CustomSequenceLogo';
+import PairwiseOverlapMatrix from '@/components/PairwiseOverlapMatrix';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 export default function CustomSequenceLogoPage() {
@@ -53,6 +54,12 @@ export default function CustomSequenceLogoPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Pairwise Overlap Matrix */}
+      <PairwiseOverlapMatrix
+        fastaNames={fastaNames}
+        folder={folder}
+      />
 
       {/* File List */}
       <Card className="mb-8">

@@ -327,27 +327,39 @@ const SequenceLogoChart: React.FC<SequenceLogoChartProps> = ({ sequences, conser
       if (!humanResidue) continue;
 
       const residueCounts: Record<string, number> = {};
-      let totalSequences = 0;
+      let gapCount = 0;
+      let nonGapSequences = 0;
 
-      // Count residues at this position (only standard amino acids)
+      // Count residues at this position (including gaps)
       const standardAA = 'ACDEFGHIKLMNPQRSTVWY';
+      const totalSequencesInAlignment = cleanedSeqs.length;
+      
       cleanedSeqs.forEach(seq => {
         const residue = seq.sequence[pos]?.toUpperCase();
         if (residue && standardAA.includes(residue)) {
           residueCounts[residue] = (residueCounts[residue] || 0) + 1;
-          totalSequences++;
+          nonGapSequences++;
+        } else {
+          // Count as gap (dash, missing, or non-standard)
+          gapCount++;
         }
       });
 
-      if (totalSequences === 0) continue;
+      // Skip positions with no amino acids at all
+      if (nonGapSequences === 0) continue;
 
-      // Calculate frequencies
+      // Calculate frequencies against ALL sequences (including gaps)
       const frequencies: Record<string, number> = {};
       Object.keys(residueCounts).forEach(residue => {
-        frequencies[residue] = residueCounts[residue] / totalSequences;
+        frequencies[residue] = residueCounts[residue] / totalSequencesInAlignment;
       });
+      
+      // Add gap frequency for entropy calculation (but don't render gaps)
+      if (gapCount > 0) {
+        frequencies['-'] = gapCount / totalSequencesInAlignment;
+      }
 
-      // Calculate Shannon entropy
+      // Calculate Shannon entropy (including gaps)
       let entropy = 0;
       Object.values(frequencies).forEach(freq => {
         if (freq > 0) {
@@ -355,20 +367,20 @@ const SequenceLogoChart: React.FC<SequenceLogoChartProps> = ({ sequences, conser
         }
       });
 
-      // Calculate information content (max 4.32 bits for 20 amino acids)
-      const maxBits = Math.log2(20);
+      // Calculate information content (max bits for 21 characters: 20 AA + gaps)
+      const maxBits = Math.log2(21);
       const informationContent = Math.max(0, maxBits - entropy);
 
-      // Calculate letter heights
+      // Calculate letter heights (only for amino acids, not gaps)
       const letterHeights: Record<string, number> = {};
-      Object.keys(frequencies).forEach(residue => {
+      Object.keys(residueCounts).forEach(residue => {
         letterHeights[residue] = frequencies[residue] * informationContent;
       });
 
       logoData.push({
         position: pos + 1,
         residueCounts,
-        totalSequences,
+        totalSequences: totalSequencesInAlignment,
         informationContent,
         letterHeights,
         humanAA: humanResidue,
