@@ -86,6 +86,41 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
   // State: hide masked columns completely
   const [hideMaskedColumns, setHideMaskedColumns] = useState(false);
 
+  /* ─── NEW: HRH2 residue filter ──────────────────────────────── */
+  // Raw text entered by the user
+  const [filterInput, setFilterInput] = useState('');
+  // Parsed, active tokens (upper-cased) used for filtering
+  const [filterTokens, setFilterTokens] = useState<string[]>([]);
+  // Mapping residue number → GPCRdb number for HRH2
+  const [hrh2ResToGpcrdb, setHrh2ResToGpcrdb] = useState<Record<string, string>>({});
+
+  // Apply the filter whenever the user presses Enter / clicks the button
+  const applyFilter = useCallback(() => {
+    const inputTokens = filterInput
+      .split(',')
+      .map(t => t.trim().toUpperCase())
+      .filter(t => t.length > 0);
+
+    const combined: string[] = [];
+    inputTokens.forEach(tok => {
+      combined.push(tok); // original residue number
+      const gpcr = hrh2ResToGpcrdb[tok];
+      if (gpcr) {
+        combined.push(gpcr.toUpperCase());
+      }
+    });
+
+    // Deduplicate
+    const unique = Array.from(new Set(combined));
+    setFilterTokens(unique);
+  }, [filterInput, hrh2ResToGpcrdb]);
+
+  // Clear the current filter
+  const clearFilter = () => {
+    setFilterInput('');
+    setFilterTokens([]);
+  };
+
   /* ─── Reference GPCRdb info rows ─────────────────────────────── */
   const [showReferenceRows, setShowReferenceRows] = useState(false);
   const [referenceDataLoaded, setReferenceDataLoaded] = useState(false);
@@ -144,7 +179,8 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
     return colors;
   });
 
-
+  /* ─── HRH2 residue→GPCRdb mapping ─────────────────────────────── */
+  // (moved above to avoid forward-reference linting error)
 
   // Function to get residue color based on current group colors
   const getResidueColor = useCallback((residue: string): string => {
@@ -389,6 +425,20 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
               }
               
               maps[gene] = gpcrdbMap;
+
+              // Store HRH2 residue→gpcrdb mapping for filter use
+              if (gene === 'HRH2') {
+                const mapping: Record<string, string> = {};
+                type ConsEntry = { gpcrdb?: string };
+                const typedCons = consData as Record<string, ConsEntry>;
+                Object.entries(typedCons).forEach(([resNum, d]) => {
+                  const gpcr = d.gpcrdb || '';
+                  if (gpcr) {
+                    mapping[resNum.toUpperCase()] = gpcr.toUpperCase();
+                  }
+                });
+                setHrh2ResToGpcrdb(mapping);
+              }
             } catch (err) {
               console.warn('Error loading conservation data for', gene, err);
               // Create empty map as fallback
@@ -718,6 +768,19 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
   const processReceptorData = useCallback((): ReceptorLogoData[] => {
     if (!dataLoaded || !allData.length) return [];
 
+    /* ── Build HRH2-based filter set, if any ── */
+    const filterActive = filterTokens.length > 0 && !!referenceMaps['HRH2'];
+    const filterMsaColumns = new Set<number>();
+    if (filterActive) {
+      const hrh2Map = referenceMaps['HRH2']; // msaCol -> gpcrdb or residue number string
+      hrh2Map.forEach((val: string, colIdx: number) => {
+        if (!val) return;
+        if (filterTokens.includes(val.toUpperCase())) {
+          filterMsaColumns.add(colIdx);
+        }
+      });
+    }
+
     // First pass: collect all possible positions and their data for each alignment
     const alignmentPositionData: Record<string, Record<number, PositionLogoData>> = {};
     let globalMaxPosition = 0;
@@ -847,8 +910,13 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
 
       // Get all positions and sort them
       const allPositions = Object.keys(positionData).map(Number).sort((a, b) => a - b);
+
+      // NEW: apply HRH2 filter if active
+      const positionsToInclude = filterActive
+        ? allPositions.filter(pos => filterMsaColumns.has(pos))
+        : allPositions;
       
-      allPositions.forEach((pos, index) => {
+      positionsToInclude.forEach((pos, index) => {
         const data = positionData[pos];
         logoData.push({
           ...data,
@@ -858,7 +926,7 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
 
       return { receptorName: name, logoData };
     });
-  }, [dataLoaded, allData, selectedAlignments, calculateEnhancedPositionLogoData, conservationThreshold, useSimpleConservation, calculateCrossAlignmentConservation]);
+  }, [dataLoaded, allData, selectedAlignments, calculateEnhancedPositionLogoData, conservationThreshold, useSimpleConservation, calculateCrossAlignmentConservation, filterTokens, referenceMaps]);
 
   // Calculate display statistics
   const getDisplayStats = useCallback(() => {
@@ -1067,13 +1135,13 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
       const logoAreaHeight = rowHeight;
       const conservationBarHeight = useSimpleConservation ? 60 : 0; // Only show if using simple conservation
       // UpSet-style dot plot settings
-      const dotTopPadding = 10; // extra padding above dot plot
+      const dotTopPadding = 5; // reduced from 10
       const dotRowHeight = 16;
-      const dotPlotHeight = dotTopPadding + (dotRowHeight * data.length) + (gapBetweenReceptors * (data.length - 1)) + 20; // 20px extra buffer
+      const dotPlotHeight = dotTopPadding + (dotRowHeight * data.length) + (gapBetweenReceptors * (data.length - 1)) + 8; // reduced buffer for tighter spacing
 
       // Reference gpcrdb rows (optional)
       const referenceRowHeight = 30; // Increased from 16 to better fit GPCRdb numbers
-      const referenceAreaHeight = (showReferenceRows && referenceDataLoaded) ? (referenceInfo.length * referenceRowHeight + 10) : 0;
+      const referenceAreaHeight = (showReferenceRows && referenceDataLoaded) ? (referenceInfo.length * referenceRowHeight + 4) : 0; // tighter padding
 
       // Total chart height: logos + dot plot + optional reference rows + conservation bar + margins
       const totalHeight = (logoAreaHeight * data.length) + (gapBetweenReceptors * (data.length - 1)) + dotPlotHeight + referenceAreaHeight + conservationBarHeight + margin.top + margin.bottom + 20;
@@ -1551,7 +1619,7 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
 
       /* ─── Reference GPCRdb rows ───────────────────────────── */
       if (showReferenceRows && referenceDataLoaded) {
-        const referencePlotOffset = margin.top + (logoAreaHeight * data.length) + (gapBetweenReceptors * (data.length - 1)) + dotPlotHeight + 10;
+        const referencePlotOffset = margin.top + (logoAreaHeight * data.length) + (gapBetweenReceptors * (data.length - 1)) + dotPlotHeight + 2; // tighter padding
 
         // Background stripes for readability
         referenceInfo.forEach((_, idx) => {
@@ -1740,7 +1808,7 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
             <label className="text-sm font-medium">Row Height:</label>
             <input
               type="range"
-              min="50"
+              min="20"
               max="200"
               value={rowHeight}
               onChange={(e) => setRowHeight(Number(e.target.value))}
@@ -1845,6 +1913,31 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
         </div>
         <div className="mt-3 text-sm text-muted-foreground">
           Selected: {selectedAlignments.length} / {fastaNames.length} alignments
+        </div>
+
+        {/* HRH2 filter input on its own line below checkboxes */}
+        <div className="flex items-center gap-2 mt-4">
+          <label className="text-sm font-medium">Filter HRH2 Residues:</label>
+          <input
+            type="text"
+            value={filterInput}
+            onChange={(e) => setFilterInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                applyFilter();
+              }
+            }}
+            placeholder="e.g. 45, 49, 110"
+            className="border rounded px-2 py-1 text-sm"
+          />
+          <Button variant="outline" size="sm" onClick={applyFilter}>
+            Apply
+          </Button>
+          {filterTokens.length > 0 && (
+            <Button variant="outline" size="sm" onClick={clearFilter}>
+              Clear
+            </Button>
+          )}
         </div>
 
         {/* Display statistics */}
