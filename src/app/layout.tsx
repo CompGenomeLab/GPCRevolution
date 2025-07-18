@@ -12,7 +12,7 @@ const openSans = Open_Sans({
 
 export const metadata: Metadata = {
   title: 'GPCR Evolution DB',
-  description: 'Tools for analyzing GPCR evolution',
+  description: 'Comprehensive database for evolution of human G-protein-coupled receptors',
 };
 
 export default function RootLayout({
