@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import * as d3 from 'd3';
 import { Button } from '@/components/ui/button';
@@ -21,6 +21,7 @@ interface PositionLogoData {
   matchPercentage?: number;
   mostConservedAA?: string;
   matchCounts?: Record<string, number>;
+  gpcrdb?: string; // GPCRdb numbering for class-wide alignments
   crossAlignmentData?: {
     alignmentAAs: Record<string, string>;
     matchCount: number;
@@ -58,6 +59,18 @@ const aminoAcidGroups = {
   hydrophobic: { residues: ['V', 'C', 'I', 'M', 'L'], color: '#B4B4B4', label: 'Hydrophobic (VCIML)' }
 };
 
+// Class to representative sequence mapping
+const classToRepresentative: Record<string, string> = {
+  'ClassA': 'HRH2',
+  'ClassB1': 'PTH1R',
+  'ClassB2': 'AGRL3', 
+  'ClassC': 'CASR',
+  'ClassF': 'FZD7',
+  'ClassT': 'T2R39'
+};
+
+
+
 const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
   const yAxisContainerRef = useRef<HTMLDivElement>(null);
   const chartContainerRef = useRef<HTMLDivElement>(null);
@@ -85,6 +98,29 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
 
   // State: hide masked columns completely
   const [hideMaskedColumns, setHideMaskedColumns] = useState(false);
+
+  // State for class-wide alignments
+  const [selectedClassAlignments, setSelectedClassAlignments] = useState<string[]>([]);
+  const [humanRefSequences, setHumanRefSequences] = useState<Sequence[]>([]);
+  
+  // Pre-loaded class-wide alignment data (similar to allData for custom alignments)
+  const [classWideData, setClassWideData] = useState<Record<string, {
+    familySequences: Sequence[];
+    conservationData: Record<string, {
+      conservation: number;
+      conservedAA: string;
+      aa: string;
+      region: string;
+      gpcrdb: string;
+    }>;
+  }>>({});
+  const [classDataLoaded, setClassDataLoaded] = useState(false);
+
+  // Available class-wide alignments (moved outside component to prevent re-creation)
+  const availableClassAlignments = useMemo(() => ['ClassA', 'ClassB1', 'ClassB2', 'ClassC', 'ClassF', 'ClassT'], []);
+  
+  // State to track selection order (both custom and class-wide)
+  const [selectionOrder, setSelectionOrder] = useState<string[]>([]);
 
   /* ─── NEW: HRH2 residue filter ──────────────────────────────── */
   // Raw text entered by the user
@@ -152,6 +188,10 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
     y: number;
     content: string;
   }>({ visible: false, x: 0, y: 0, content: '' });
+
+  // State for processed receptor data
+  const [processedReceptorData, setProcessedReceptorData] = useState<ReceptorLogoData[]>([]);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   // Track theme changes
   useEffect(() => {
@@ -224,14 +264,27 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
         return [...prev, alignmentName];
       }
     });
+    
+    // Update selection order
+    setSelectionOrder(prev => {
+      if (prev.includes(alignmentName)) {
+        // Remove from selection order
+        return prev.filter(name => name !== alignmentName);
+      } else {
+        // Add to selection order
+        return [...prev, alignmentName];
+      }
+    });
   };
 
   const selectAll = () => {
     setSelectedAlignments([...fastaNames]);
+    setSelectionOrder(prev => [...prev.filter(name => !fastaNames.includes(name)), ...fastaNames]);
   };
 
   const selectNone = () => {
     setSelectedAlignments([]);
+    setSelectionOrder(prev => prev.filter(name => !fastaNames.includes(name)));
   };
 
   // Tooltip helper functions
@@ -462,10 +515,23 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
   useEffect(() => {
     if (!referenceDataLoaded) return;
 
-    // Determine classes present in selected alignments
+    // Determine classes present in selected alignments AND selected class-wide alignments
     const neededGenes: string[] = [];
+    
+    // Check custom alignments
     selectedAlignments.forEach(name => {
       const match = classReferenceOrder.find(cls => name.startsWith(cls));
+      if (match) {
+        const gene = classToGene[match];
+        if (gene && !neededGenes.includes(gene.toUpperCase())) {
+          neededGenes.push(gene.toUpperCase());
+        }
+      }
+    });
+
+    // Check class-wide alignments
+    selectedClassAlignments.forEach(className => {
+      const match = classReferenceOrder.find(cls => className === cls);
       if (match) {
         const gene = classToGene[match];
         if (gene && !neededGenes.includes(gene.toUpperCase())) {
@@ -482,7 +548,138 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
     });
 
     setReferenceInfo(newRefInfo);
-  }, [selectedAlignments, referenceDataLoaded, referenceMaps]);
+  }, [selectedAlignments, selectedClassAlignments, referenceDataLoaded, referenceMaps]);
+
+  // Load human reference sequences and pre-load all class-wide alignment data (runs only once)
+  useEffect(() => {
+    console.log('🔄 useEffect for class-wide data loading triggered - should only run once!');
+    const loadAllClassWideData = async () => {
+      try {
+        console.log('🚀 Pre-loading all class-wide alignment data...');
+        
+        // Load human reference sequences
+        const humanRefResponse = await fetch('/custom_msa/human_refs.fasta');
+        if (!humanRefResponse.ok) {
+          console.warn('Failed to load human_refs.fasta:', humanRefResponse.status);
+          return;
+        }
+        const humanRefText = await humanRefResponse.text();
+        const humanRefSeqs = parseFasta(humanRefText);
+        setHumanRefSequences(humanRefSeqs);
+
+                 // Pre-load all class-wide alignments and their conservation data
+         const classData: Record<string, {
+           familySequences: Sequence[];
+           conservationData: Record<string, {
+             conservation: number;
+             conservedAA: string;
+             aa: string;
+             region: string;
+             gpcrdb: string;
+           }>;
+         }> = {};
+         
+         await Promise.all(availableClassAlignments.map(async (className: string) => {
+           try {
+             const representativeName = classToRepresentative[className];
+             const classIdentifier = className.replace('Class', '');
+             
+             // Load family alignment
+             const familyAlignmentPath = `/alignments/class${classIdentifier}_humans_MSA.fasta`;
+             const familyResponse = await fetch(familyAlignmentPath);
+             
+             if (!familyResponse.ok) {
+               console.warn(`Failed to pre-load ${className} family alignment: ${familyResponse.status}`);
+               return;
+             }
+             
+             const familyFastaText = await familyResponse.text();
+             const familySequences = parseFasta(familyFastaText);
+             
+             // Load conservation data
+             const conservationData: Record<string, {
+               conservation: number;
+               conservedAA: string;
+               aa: string;
+               region: string;
+               gpcrdb: string;
+             }> = {};
+            try {
+              const conservationResponse = await fetch(`/conservation_files/${representativeName}_conservation.txt`);
+              if (conservationResponse.ok) {
+                const conservationText = await conservationResponse.text();
+                conservationText.split('\n').forEach(line => {
+                  const parts = line.split('\t');
+                  if (parts[0] && parts[0].trim().toLowerCase() !== 'residue_number' && parts.length >= 6) {
+                    const resNum = parts[0].trim();
+                    conservationData[resNum] = {
+                      conservation: parseFloat(parts[1].trim()),
+                      conservedAA: parts[2].trim(),
+                      aa: parts[3].trim(),
+                      region: parts[4].trim(),
+                      gpcrdb: parts[5].trim(),
+                    };
+                  }
+                });
+              }
+            } catch (error) {
+              console.warn(`Could not pre-load conservation data for ${representativeName}:`, error);
+            }
+            
+            classData[className] = {
+              familySequences,
+              conservationData
+            };
+            
+            console.log(`✅ Pre-loaded ${className} data (${familySequences.length} sequences)`);
+          } catch (error) {
+            console.error(`Error pre-loading ${className}:`, error);
+          }
+        }));
+
+        setClassWideData(classData);
+        setClassDataLoaded(true);
+        console.log('🎉 All class-wide alignment data pre-loaded!');
+        
+      } catch (error) {
+        console.error('Error loading class-wide alignment data:', error);
+      }
+    };
+
+         loadAllClassWideData();
+   }, []); // Empty dependency array since availableClassAlignments never changes
+
+  // Class alignment selection functions
+  const handleClassAlignmentToggle = (className: string) => {
+    setSelectedClassAlignments(prev => {
+      if (prev.includes(className)) {
+        return prev.filter(name => name !== className);
+      } else {
+        return [...prev, className];
+      }
+    });
+    
+    // Update selection order
+    setSelectionOrder(prev => {
+      if (prev.includes(className)) {
+        // Remove from selection order
+        return prev.filter(name => name !== className);
+      } else {
+        // Add to selection order
+        return [...prev, className];
+      }
+    });
+  };
+
+  const selectAllClassAlignments = () => {
+    setSelectedClassAlignments([...availableClassAlignments]);
+    setSelectionOrder(prev => [...prev.filter(name => !availableClassAlignments.includes(name)), ...availableClassAlignments]);
+  };
+
+  const selectNoClassAlignments = () => {
+    setSelectedClassAlignments([]);
+    setSelectionOrder(prev => prev.filter(name => !availableClassAlignments.includes(name)));
+  };
 
   // Function to calculate position logo data
   const calculatePositionLogoData = useCallback((position: number, sequences: string[]): {
@@ -688,7 +885,9 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
     const aaFrequency: Record<string, number> = {};
     let totalAlignments = 0;
 
-    selectedAlignments.forEach(alignmentName => {
+    // Process both custom and class-wide alignments
+    const allSelectedAlignments = [...selectedAlignments, ...selectedClassAlignments];
+    allSelectedAlignments.forEach(alignmentName => {
       const positionData = allAlignmentData[alignmentName]?.[position];
       if (positionData && positionData.residueCounts) {
         // Get the most frequent amino acid in this alignment at this position
@@ -752,7 +951,7 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
     });
 
     // Calculate percentage based on TOTAL selected alignments (including gaps)
-    const totalSelectedAlignments = selectedAlignments.length;
+    const totalSelectedAlignments = allSelectedAlignments.length;
     const matchPercentage = totalSelectedAlignments > 0 ? (matchCount / totalSelectedAlignments) * 100 : 0;
 
     return {
@@ -762,179 +961,412 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
       matchCount,
       totalAlignments: totalSelectedAlignments
     };
-  }, [selectedAlignments]);
+  }, [selectedAlignments, selectedClassAlignments]);
 
-  // Process receptor data with cross-alignment conservation
-  const processReceptorData = useCallback((): ReceptorLogoData[] => {
-    if (!dataLoaded || !allData.length) return [];
 
-    /* ── Build HRH2-based filter set, if any ── */
-    const filterActive = filterTokens.length > 0 && !!referenceMaps['HRH2'];
-    const filterMsaColumns = new Set<number>();
-    if (filterActive) {
-      const hrh2Map = referenceMaps['HRH2']; // msaCol -> gpcrdb or residue number string
-      hrh2Map.forEach((val: string, colIdx: number) => {
-        if (!val) return;
-        if (filterTokens.includes(val.toUpperCase())) {
-          filterMsaColumns.add(colIdx);
-        }
-      });
+
+  // Async processing of receptor data
+  useEffect(() => {
+    if (!dataLoaded || !allData.length) {
+      setProcessedReceptorData([]);
+      return;
     }
 
-    // First pass: collect all possible positions and their data for each alignment
-    const alignmentPositionData: Record<string, Record<number, PositionLogoData>> = {};
-    let globalMaxPosition = 0;
-
-    selectedAlignments.forEach(name => {
-      const entry = allData.find(d => d.name === name);
-      if (!entry || !entry.sequences.length) {
-        alignmentPositionData[name] = {};
-        return;
-      }
-
-      const sequences = entry.sequences.map(s => s.sequence);
-      const maxLength = Math.max(...sequences.map(s => s.length));
-      globalMaxPosition = Math.max(globalMaxPosition, maxLength);
-      
-      const positionData: Record<number, PositionLogoData> = {};
-
-      for (let pos = 0; pos < maxLength; pos++) {
-        const calculatedData = calculateEnhancedPositionLogoData(pos, sequences);
-        
-        // Only include positions that have meaningful data (information content > 0 OR match percentage > 0)
-        const hasMeaningfulData = calculatedData.informationContent > 0 || 
-                                 (calculatedData.matchPercentage && calculatedData.matchPercentage > 0) ||
-                                 Object.keys(calculatedData.letterHeights).length > 0;
-        
-        if (calculatedData.totalSequences > 0 && hasMeaningfulData) {
-          positionData[pos] = {
-            position: pos + 1, // 1-based position (will be renumbered later)
-            msaColumn: pos, // Original MSA column position (0-based)
-            residueCounts: calculatedData.residueCounts,
-            totalSequences: calculatedData.totalSequences,
-            informationContent: calculatedData.informationContent,
-            letterHeights: calculatedData.letterHeights,
-            matchPercentage: calculatedData.matchPercentage,
-            mostConservedAA: calculatedData.mostConservedAA,
-            matchCounts: calculatedData.matchCounts
-          };
-        }
-      }
-
-      alignmentPositionData[name] = positionData;
-    });
-
-    // Calculate cross-alignment conservation for all positions
-    const crossAlignmentConservation: Record<number, { 
-      matchPercentage: number; 
-      data: {
-        matchPercentage: number;
-        mostConservedAA: string;
-        alignmentAAs: Record<string, string>;
-        matchCount: number;
-        totalAlignments: number;
-      };
-    }> = {};
-    
-    for (let pos = 0; pos < globalMaxPosition; pos++) {
-      const crossConservation = calculateCrossAlignmentConservation(pos, alignmentPositionData);
-      crossAlignmentConservation[pos] = {
-        matchPercentage: crossConservation.matchPercentage,
-        data: crossConservation
-      };
+    // If class-wide alignments are selected, ensure class-wide data is pre-loaded
+    if (selectedClassAlignments.length > 0 && (!classDataLoaded || humanRefSequences.length === 0)) {
+      console.log('Waiting for class-wide alignment data to load...');
+      setProcessedReceptorData([]);
+      return;
     }
 
-    // Build final data with all positions, marking those below threshold for blurring
-    const processedAlignmentData: Record<string, Record<number, PositionLogoData>> = {};
-    selectedAlignments.forEach(name => {
-      const positionData = alignmentPositionData[name] || {};
-      const processedPositions: Record<number, PositionLogoData> = {};
+    const processData = async () => {
+      console.log('🔄 Processing data for alignments:', [...selectedAlignments, ...selectedClassAlignments]);
+      setIsProcessing(true);
       
-      // Include all positions that have data in any alignment
-      for (let pos = 0; pos < globalMaxPosition; pos++) {
-        // Check if this position has data in any alignment
-        const hasDataInAnyAlignment = selectedAlignments.some(alignmentName => 
-          alignmentPositionData[alignmentName]?.[pos]
-        );
-        
-        if (hasDataInAnyAlignment) {
-          const currentPositionData = positionData[pos];
-          const crossConservation = crossAlignmentConservation[pos];
+      /* ── Build HRH2-based filter set, if any ── */
+      const filterActive = filterTokens.length > 0 && !!referenceMaps['HRH2'];
+      const filterMsaColumns = new Set<number>();
+      if (filterActive) {
+        const hrh2Map = referenceMaps['HRH2']; // msaCol -> gpcrdb or residue number string
+        hrh2Map.forEach((val: string, colIdx: number) => {
+          if (!val) return;
+          if (filterTokens.includes(val.toUpperCase())) {
+            filterMsaColumns.add(colIdx);
+          }
+        });
+      }
+
+      // First pass: collect all possible positions and their data for each alignment
+      const alignmentPositionData: Record<string, Record<number, PositionLogoData>> = {};
+      let globalMaxPosition = 0;
+
+              // Process custom alignments (existing logic)
+        const processAlignment = async (name: string) => {
+          const entry = allData.find(d => d.name === name);
+          if (!entry || !entry.sequences.length) {
+            alignmentPositionData[name] = {};
+            return;
+          }
+
+          // Use existing logic for custom alignments (no class detection)
+          const sequences = entry.sequences.map(s => s.sequence);
+          const maxLength = Math.max(...sequences.map(s => s.length));
+          globalMaxPosition = Math.max(globalMaxPosition, maxLength);
           
-          if (currentPositionData) {
-            // Position has data in this alignment
-            const shouldBlur = useSimpleConservation ? 
-              crossConservation.matchPercentage < conservationThreshold :
-              false; // For entropy method, we could add similar logic if needed
+          const positionData: Record<number, PositionLogoData> = {};
+
+          for (let pos = 0; pos < maxLength; pos++) {
+            const calculatedData = calculateEnhancedPositionLogoData(pos, sequences);
             
-            processedPositions[pos] = {
-              ...currentPositionData,
-              msaColumn: pos, // Ensure MSA column is preserved
-              crossAlignmentData: {
-                alignmentAAs: crossConservation.data.alignmentAAs,
-                matchCount: crossConservation.data.matchCount,
-                totalAlignments: crossConservation.data.totalAlignments,
-                conservationPercentage: crossConservation.matchPercentage,
-                shouldBlur
-              }
-            };
+            // Only include positions that have meaningful data
+            const hasMeaningfulData = calculatedData.informationContent > 0 || 
+                                     (calculatedData.matchPercentage && calculatedData.matchPercentage > 0) ||
+                                     Object.keys(calculatedData.letterHeights).length > 0;
+            
+            if (calculatedData.totalSequences > 0 && hasMeaningfulData) {
+              positionData[pos] = {
+                position: pos + 1, // 1-based position (will be renumbered later)
+                msaColumn: pos, // Original MSA column position (0-based)
+                residueCounts: calculatedData.residueCounts,
+                totalSequences: calculatedData.totalSequences,
+                informationContent: calculatedData.informationContent,
+                letterHeights: calculatedData.letterHeights,
+                matchPercentage: calculatedData.matchPercentage,
+                mostConservedAA: calculatedData.mostConservedAA,
+                matchCounts: calculatedData.matchCounts
+              };
+            }
+          }
+
+          alignmentPositionData[name] = positionData;
+        };
+
+      // Process all alignments
+      for (const name of selectedAlignments) {
+        await processAlignment(name);
+      }
+      
+      // Process class-wide alignments using pre-loaded data (same as custom alignments)
+      const processClassAlignment = async (className: string) => {
+        try {
+          // Use pre-loaded data instead of fetching
+          const classData = classWideData[className];
+          if (!classData) {
+            console.warn(`Pre-loaded data not found for ${className}`);
+            return;
+          }
+
+          // Find representative sequence from human refs
+          const representativeName = classToRepresentative[className];
+          const representativeSeq = humanRefSequences.find(seq => 
+            seq.header.includes(`${representativeName}_HUMAN`)
+          );
+          
+          if (!representativeSeq) {
+            console.warn(`Representative sequence ${representativeName}_HUMAN not found in human refs`);
+            return;
+          }
+
+          // Use pre-loaded family sequences
+          const familySequences = classData.familySequences;
+          
+          // Find representative sequence in family alignment
+          const familyRepSeq = familySequences.find(seq => 
+            seq.header.includes(`${representativeName}_HUMAN`)
+          );
+          
+          if (!familyRepSeq) {
+            console.warn(`Representative sequence ${representativeName}_HUMAN not found in family alignment`);
+            return;
+          }
+
+          // Use pre-loaded conservation data
+          const conservationData = classData.conservationData;
+
+          console.log(`\n=== Processing ${className} alignment ===`);
+          console.log(`Representative: ${representativeName}_HUMAN`);
+          console.log(`Human refs sequence length: ${representativeSeq.sequence.length}`);
+          console.log(`Family alignment sequence length: ${familyRepSeq.sequence.length}`);
+          
+          // For class-wide alignments, generate ALL positions with data (independent of custom alignments)
+          const visualizedDisplayPositions: Record<number, number> = {}; // displayPos -> residueNumber
+          
+          console.log('\n--- Generating all meaningful positions for class-wide alignment ---');
+          
+          // If there are custom alignments, use their positions
+          if (Object.keys(alignmentPositionData).length > 0) {
+            console.log('Using positions from existing custom alignments:');
+            Object.entries(alignmentPositionData).forEach(([alignmentName, posData]) => {
+              console.log(`Checking alignment: ${alignmentName}`);
+              Object.keys(posData).forEach(msaColStr => {
+                const displayPos = parseInt(msaColStr);
+                
+                // Find corresponding residue number in human_refs
+                let residueNumber = 0;
+                for (let i = 0; i <= displayPos && i < representativeSeq.sequence.length; i++) {
+                  if (representativeSeq.sequence[i] !== '-') {
+                    residueNumber++;
+                  }
+                }
+                
+                if (displayPos < representativeSeq.sequence.length && representativeSeq.sequence[displayPos] !== '-') {
+                  visualizedDisplayPositions[displayPos] = residueNumber;
+                  console.log(`  Display pos ${displayPos} → residue #${residueNumber} (AA: ${representativeSeq.sequence[displayPos]})`);
+                }
+              });
+            });
           } else {
-            // Position doesn't have data in this alignment, create empty placeholder
-            processedPositions[pos] = {
-              position: pos + 1,
-              msaColumn: pos, // Original MSA column position (0-based)
-              residueCounts: {},
-              totalSequences: 0,
-              informationContent: 0,
-              letterHeights: {},
-              crossAlignmentData: {
-                alignmentAAs: crossConservation.data.alignmentAAs,
-                matchCount: crossConservation.data.matchCount,
-                totalAlignments: crossConservation.data.totalAlignments,
-                conservationPercentage: crossConservation.matchPercentage,
-                shouldBlur: useSimpleConservation ? 
-                  crossConservation.matchPercentage < conservationThreshold : false
+            // No custom alignments - generate ALL meaningful positions from human_refs
+            console.log('No custom alignments, generating all positions from human_refs:');
+            for (let displayPos = 0; displayPos < representativeSeq.sequence.length; displayPos++) {
+              if (representativeSeq.sequence[displayPos] !== '-') {
+                let residueNumber = 0;
+                for (let i = 0; i <= displayPos; i++) {
+                  if (representativeSeq.sequence[i] !== '-') {
+                    residueNumber++;
+                  }
+                }
+                visualizedDisplayPositions[displayPos] = residueNumber;
+                console.log(`  Display pos ${displayPos} → residue #${residueNumber} (AA: ${representativeSeq.sequence[displayPos]})`);
               }
-            };
+            }
+          }
+
+          console.log(`\nVisualized positions:`, Object.entries(visualizedDisplayPositions).map(([pos, res]) => `pos${pos}→res#${res}`).join(', '));
+
+          // Use family alignment sequences for logo generation
+          const sequences = familySequences.map(s => s.sequence);
+          const positionData: Record<number, PositionLogoData> = {};
+
+          console.log('\n--- Mapping to family alignment columns ---');
+          
+          // For each display position that will be visualized
+          Object.entries(visualizedDisplayPositions).forEach(([displayPosStr, residueNumber]) => {
+            const displayPos = parseInt(displayPosStr);
+            console.log(`\nMapping display pos ${displayPos} (residue #${residueNumber}):`);
+            
+            // Find the MSA column in family alignment for this residue number
+            let familyCol = -1;
+            let familyResidueCount = 0;
+            
+            for (let i = 0; i < familyRepSeq.sequence.length; i++) {
+              if (familyRepSeq.sequence[i] !== '-') {
+                familyResidueCount++;
+                if (familyResidueCount === residueNumber) {
+                  familyCol = i;
+                  console.log(`  Found residue #${residueNumber} at family col ${familyCol} (AA: ${familyRepSeq.sequence[i]})`);
+                  break;
+                }
+              }
+            }
+
+            if (familyCol === -1) {
+              console.warn(`  ❌ Could not find family alignment column for residue ${residueNumber}`);
+              return;
+            }
+
+            // Extract column from family alignment
+            const familyColumnSequences = sequences.map(seq => seq[familyCol] || '-');
+            const uniqueAAs = [...new Set(familyColumnSequences.filter(aa => aa !== '-'))];
+            console.log(`  Family col ${familyCol} diversity: [${uniqueAAs.join(', ')}] (${familyColumnSequences.filter(aa => aa !== '-').length}/${familyColumnSequences.length} non-gaps)`);
+            
+            // Since familyColumnSequences is already extracted column data, use position 0
+            const calculatedData = calculateEnhancedPositionLogoData(0, familyColumnSequences);
+            
+            const hasMeaningfulData = calculatedData.informationContent > 0 || 
+                                     (calculatedData.matchPercentage && calculatedData.matchPercentage > 0) ||
+                                     Object.keys(calculatedData.letterHeights).length > 0;
+            
+            console.log(`  Logo data - IC: ${calculatedData.informationContent.toFixed(3)}, meaningful: ${hasMeaningfulData}`);
+            
+            if (calculatedData.totalSequences > 0 && hasMeaningfulData) {
+              // Get GPCRdb number from conservation data
+              const consData = conservationData[residueNumber.toString()];
+              const gpcrdb = consData?.gpcrdb || residueNumber.toString();
+              
+              console.log(`  GPCRdb: residue #${residueNumber} → "${gpcrdb}"`);
+              
+              // Use SAME display position key as custom alignments for consistent visualization
+              positionData[displayPos] = {
+                position: displayPos + 1, // 1-based position (will be renumbered during display)
+                msaColumn: displayPos, // Use display position for consistent alignment
+                residueCounts: calculatedData.residueCounts,
+                totalSequences: calculatedData.totalSequences,
+                informationContent: calculatedData.informationContent,
+                letterHeights: calculatedData.letterHeights,
+                matchPercentage: calculatedData.matchPercentage,
+                mostConservedAA: calculatedData.mostConservedAA,
+                matchCounts: calculatedData.matchCounts,
+                gpcrdb: gpcrdb // Add GPCRdb numbering
+              };
+              
+              console.log(`  ✅ Created logo for display pos ${displayPos} (was family col ${familyCol})`);
+            } else {
+              console.log(`  ⚠️ Skipping - no meaningful data`);
+            }
+          });
+
+          console.log(`\n${className} final position data keys: [${Object.keys(positionData).join(', ')}]`);
+          console.log(`=== End ${className} processing ===\n`);
+
+          alignmentPositionData[className] = positionData;
+          
+          // Update globalMaxPosition for class-wide alignments
+          if (Object.keys(positionData).length > 0) {
+            const maxPos = Math.max(...Object.keys(positionData).map(Number));
+            globalMaxPosition = Math.max(globalMaxPosition, maxPos + 1); // +1 because positions are 0-based
+            console.log(`Updated globalMaxPosition to ${globalMaxPosition} for ${className}`);
+          }
+        } catch (error) {
+          console.error(`Error processing class alignment ${className}:`, error);
+        }
+      };
+
+      // Process all class-wide alignments
+      for (const className of selectedClassAlignments) {
+        await processClassAlignment(className);
+      }
+      
+      // Continue with existing cross-alignment conservation logic...
+      // Calculate cross-alignment conservation for all positions
+      const crossAlignmentConservation: Record<number, { 
+        matchPercentage: number; 
+        data: {
+          matchPercentage: number;
+          mostConservedAA: string;
+          alignmentAAs: Record<string, string>;
+          matchCount: number;
+          totalAlignments: number;
+        };
+      }> = {};
+      
+      for (let pos = 0; pos < globalMaxPosition; pos++) {
+        const crossConservation = calculateCrossAlignmentConservation(pos, alignmentPositionData);
+        crossAlignmentConservation[pos] = {
+          matchPercentage: crossConservation.matchPercentage,
+          data: crossConservation
+        };
+      }
+
+      // Build final data with all positions, marking those below threshold for blurring
+      const processedAlignmentData: Record<string, Record<number, PositionLogoData>> = {};
+      // Use selection order to maintain user's preferred ordering, but ensure all selected alignments are included
+      const allSelected = [...selectedAlignments, ...selectedClassAlignments];
+      const allSelectedAlignments = [
+        ...selectionOrder.filter(name => allSelected.includes(name)), // Ordered selections
+        ...allSelected.filter(name => !selectionOrder.includes(name))  // New selections not yet in order
+      ];
+      
+      allSelectedAlignments.forEach(name => {
+        const positionData = alignmentPositionData[name] || {};
+        const processedPositions: Record<number, PositionLogoData> = {};
+        
+        // Include all positions that have data in any alignment
+        for (let pos = 0; pos < globalMaxPosition; pos++) {
+          // Check if this position has data in any alignment
+          const hasDataInAnyAlignment = allSelectedAlignments.some(alignmentName => 
+            alignmentPositionData[alignmentName]?.[pos]
+          );
+          
+          if (hasDataInAnyAlignment) {
+            const currentPositionData = positionData[pos];
+            const crossConservation = crossAlignmentConservation[pos];
+            
+            if (currentPositionData) {
+              // Position has data in this alignment
+              const shouldBlur = useSimpleConservation ? 
+                crossConservation.matchPercentage < conservationThreshold :
+                false; // For entropy method, we could add similar logic if needed
+              
+              processedPositions[pos] = {
+                ...currentPositionData,
+                msaColumn: pos, // Ensure MSA column is preserved
+                crossAlignmentData: {
+                  alignmentAAs: crossConservation.data.alignmentAAs,
+                  matchCount: crossConservation.data.matchCount,
+                  totalAlignments: crossConservation.data.totalAlignments,
+                  conservationPercentage: crossConservation.matchPercentage,
+                  shouldBlur
+                }
+              };
+            } else {
+              // Position doesn't have data in this alignment, create empty placeholder
+              processedPositions[pos] = {
+                position: pos + 1,
+                msaColumn: pos, // Original MSA column position (0-based)
+                residueCounts: {},
+                totalSequences: 0,
+                informationContent: 0,
+                letterHeights: {},
+                crossAlignmentData: {
+                  alignmentAAs: crossConservation.data.alignmentAAs,
+                  matchCount: crossConservation.data.matchCount,
+                  totalAlignments: crossConservation.data.totalAlignments,
+                  conservationPercentage: crossConservation.matchPercentage,
+                  shouldBlur: useSimpleConservation ? 
+                    crossConservation.matchPercentage < conservationThreshold : false
+                }
+              };
+            }
           }
         }
-      }
-      
-      processedAlignmentData[name] = processedPositions;
-    });
-
-    // Build final logo data (no more column removal, just consecutive numbering)
-    return selectedAlignments.map(name => {
-      const positionData = processedAlignmentData[name] || {};
-      const logoData: PositionLogoData[] = [];
-
-      // Get all positions and sort them
-      const allPositions = Object.keys(positionData).map(Number).sort((a, b) => a - b);
-
-      // NEW: apply HRH2 filter if active
-      const positionsToInclude = filterActive
-        ? allPositions.filter(pos => filterMsaColumns.has(pos))
-        : allPositions;
-      
-      positionsToInclude.forEach((pos, index) => {
-        const data = positionData[pos];
-        logoData.push({
-          ...data,
-          position: index + 1 // Consecutive numbering for display
-        });
+        
+        processedAlignmentData[name] = processedPositions;
       });
 
-      return { receptorName: name, logoData };
-    });
-  }, [dataLoaded, allData, selectedAlignments, calculateEnhancedPositionLogoData, conservationThreshold, useSimpleConservation, calculateCrossAlignmentConservation, filterTokens, referenceMaps]);
+      // Build final logo data
+      const finalData = allSelectedAlignments.map(name => {
+        const positionData = processedAlignmentData[name] || {};
+        const logoData: PositionLogoData[] = [];
+
+        // Get all positions and sort them
+        const allPositions = Object.keys(positionData).map(Number).sort((a, b) => a - b);
+
+        // Apply HRH2 filter if active
+        const positionsToInclude = filterActive
+          ? allPositions.filter(pos => filterMsaColumns.has(pos))
+          : allPositions;
+        
+        positionsToInclude.forEach((pos, index) => {
+          const data = positionData[pos];
+          logoData.push({
+            ...data,
+            position: index + 1 // Consecutive numbering for display
+          });
+        });
+
+        return { receptorName: name, logoData };
+      });
+
+      setProcessedReceptorData(finalData);
+      setIsProcessing(false);
+      console.log('✅ Data processing complete:', finalData.length, 'alignments processed');
+    };
+
+    processData();
+  }, [
+    dataLoaded, 
+    allData, 
+    selectedAlignments, 
+    selectedClassAlignments, 
+    calculateEnhancedPositionLogoData, 
+    conservationThreshold, 
+    useSimpleConservation, 
+    calculateCrossAlignmentConservation, 
+    filterTokens, 
+    referenceMaps, 
+    humanRefSequences,
+    classWideData,
+    classDataLoaded
+  ]);
 
   // Calculate display statistics
   const getDisplayStats = useCallback(() => {
-    if (!dataLoaded || !allData.length || !selectedAlignments.length) {
+    if (!dataLoaded || !allData.length || (!selectedAlignments.length && !selectedClassAlignments.length)) {
       return { totalPositions: 0, displayedPositions: 0, blurredPositions: 0 };
     }
 
-    const receptorData = processReceptorData();
+    const receptorData = processedReceptorData;
     if (!receptorData.length || !receptorData[0].logoData.length) {
       return { totalPositions: 0, displayedPositions: 0, blurredPositions: 0 };
     }
@@ -943,17 +1375,19 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
     let blurredPositions = 0;
 
     if (useSimpleConservation) {
-      receptorData[0].logoData.forEach(position => {
-        if (position.crossAlignmentData?.shouldBlur) {
-          blurredPositions++;
-        }
+      receptorData.forEach(d => {
+        d.logoData.forEach(position => {
+          if (position.crossAlignmentData?.shouldBlur) {
+            blurredPositions++;
+          }
+        });
       });
     }
 
     const displayedPositions = totalPositions;
 
     return { totalPositions, displayedPositions, blurredPositions };
-  }, [dataLoaded, allData, selectedAlignments, processReceptorData, useSimpleConservation]);
+  }, [dataLoaded, allData, selectedAlignments, selectedClassAlignments, processedReceptorData, useSimpleConservation]);
 
   // Download SVG function
   const downloadSVG = () => {
@@ -1018,6 +1452,9 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
     URL.revokeObjectURL(url);
   };
 
+  // Track previous data to avoid unnecessary rebuilds
+  const [previousDataHash, setPreviousDataHash] = useState<string>('');
+
   // Render chart
   useEffect(() => {
     const yAxisContainer = yAxisContainerRef.current;
@@ -1025,19 +1462,47 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
 
     if (!yAxisContainer || !chartContainer) return;
 
-    // Clean up
-    const oldTooltips = document.querySelectorAll('.logo-tooltip');
-    oldTooltips.forEach(tooltip => tooltip.remove());
+    if (!dataLoaded || (selectedAlignments.length === 0 && selectedClassAlignments.length === 0)) {
+      // Clear chart when no selections
+      const oldTooltips = document.querySelectorAll('.logo-tooltip');
+      oldTooltips.forEach(tooltip => tooltip.remove());
+      yAxisContainer.innerHTML = '';
+      chartContainer.innerHTML = '';
+      setPreviousDataHash('');
+      return;
+    }
 
-    yAxisContainer.innerHTML = '';
-    chartContainer.innerHTML = '';
-
-    if (!dataLoaded || selectedAlignments.length === 0) return;
-
-    const receptorData = processReceptorData();
+    const receptorData = processedReceptorData;
     if (!receptorData.length || !receptorData.some(d => d.logoData.length > 0)) return;
 
-    renderChart(receptorData);
+    // Create a hash to detect if data actually changed
+    const currentDataHash = JSON.stringify({
+      receptorNames: receptorData.map(d => d.receptorName).sort(),
+      positionCount: receptorData[0]?.logoData.length || 0,
+      useSimpleConservation,
+      conservationThreshold,
+      rowHeight,
+      hideMaskedColumns,
+      overlapMinRows,
+      dotMinConservation
+    });
+
+    // Only rebuild if data actually changed
+    if (currentDataHash !== previousDataHash) {
+      console.log('Data changed, rebuilding chart...');
+      
+      // Clean up
+      const oldTooltips = document.querySelectorAll('.logo-tooltip');
+      oldTooltips.forEach(tooltip => tooltip.remove());
+
+      yAxisContainer.innerHTML = '';
+      chartContainer.innerHTML = '';
+
+      renderChart(receptorData);
+      setPreviousDataHash(currentDataHash);
+    } else {
+      console.log('Data unchanged, skipping chart rebuild');
+    }
 
     function renderChart(data: ReceptorLogoData[]) {
       if (!yAxisContainer || !chartContainer) return;
@@ -1118,7 +1583,13 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
         });
       }
 
-      const positionsWithData = Array.from(allPositions).filter((pos:number) => !(hideMaskedColumns && maskedSet.has(pos))).sort((a:number, b:number) => a - b);
+      // Apply overlap filtering: always calculate maskedSet, but only hide columns if hideMaskedColumns is true
+      const positionsWithData = Array.from(allPositions).filter((pos:number) => {
+        if (hideMaskedColumns && maskedSet.has(pos)) {
+          return false; // Hide masked columns when hideMaskedColumns is true
+        }
+        return true; // Show all columns when hideMaskedColumns is false (but apply visual indicators)
+      }).sort((a:number, b:number) => a - b);
       
       // Create mapping from display position to original alignment position
       const displayToOriginalPos: Record<number, number> = {};
@@ -1205,6 +1676,23 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
           const positionX = x(d.position.toString());
           if (positionX === undefined) return;
           const positionWidth = x.bandwidth();
+          
+          // Add visual indicator for masked columns when not hiding them
+          const isMasked = maskedSet.has(d.position);
+          if (!hideMaskedColumns && isMasked) {
+            // Add a subtle overlay to indicate this column doesn't meet overlap criteria
+            chartSvg
+              .append('rect')
+              .attr('x', positionX)
+              .attr('y', receptorY)
+              .attr('width', positionWidth)
+              .attr('height', logoAreaHeight)
+              .attr('fill', 'rgba(255, 0, 0, 0.1)')
+              .attr('stroke', 'rgba(255, 0, 0, 0.3)')
+              .attr('stroke-width', 1)
+              .attr('pointer-events', 'none')
+              .style('mix-blend-mode', 'multiply');
+          }
           
           // Determine most-conserved AA for this row at this position
           let topAA = d.mostConservedAA;
@@ -1444,6 +1932,8 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
           if (hideMaskedColumns && maskedSet.has(d.position)) return;
           const posX = x(d.position.toString())! + x.bandwidth() / 2;
           const posY = overlapPlotOffset + rIdx * (dotRowHeight + dotGap) + dotRowHeight / 2;
+          
+          const isMasked = maskedSet.has(d.position);
 
           const topInfo = positionTopAA[d.position];
           let matchesTop = false;
@@ -1478,13 +1968,22 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
 
           const radius = meetsConservation ? (5 * Math.max(0.2, freq)) : 4; // min 0.2 scale to keep visible
 
-          const color = meetsConservation ? '#000000' : '#a3a3a3';
+          let color = meetsConservation ? '#000000' : '#a3a3a3';
+          let strokeColor = 'none';
+          
+          // Add visual indication for masked positions
+          if (!hideMaskedColumns && isMasked) {
+            color = meetsConservation ? '#ff0000' : '#ff6666'; // Red tint for masked
+            strokeColor = '#ff0000';
+          }
 
           chartSvg.append('circle')
             .attr('cx', posX)
             .attr('cy', posY)
             .attr('r', radius)
-            .attr('fill', color);
+            .attr('fill', color)
+            .attr('stroke', strokeColor)
+            .attr('stroke-width', strokeColor !== 'none' ? 1 : 0);
         });
       });
 
@@ -1771,9 +2270,33 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
     return () => {
       setTooltip(prev => ({ ...prev, visible: false }));
     };
-  }, [dataLoaded, selectedAlignments, processReceptorData, getResidueColor, loadCustomSvgLetter, showTooltip, hideTooltip, updateTooltipPosition, rowHeight, useSimpleConservation, conservationThreshold, dotMinConservation, overlapMinRows, hideMaskedColumns, showReferenceRows, referenceDataLoaded, referenceInfo]);
+  }, [
+    dataLoaded, 
+    selectedAlignments, 
+    selectedClassAlignments, 
+    processedReceptorData, 
+    useSimpleConservation, 
+    conservationThreshold, 
+    rowHeight, 
+    hideMaskedColumns, 
+    overlapMinRows, 
+    dotMinConservation,
+    showReferenceRows,
+    referenceDataLoaded,
+    referenceInfo,
+    // Stable function references - these rarely change
+    getResidueColor, 
+    loadCustomSvgLetter, 
+    showTooltip, 
+    hideTooltip, 
+    updateTooltipPosition
+  ]);
 
-  if (!dataLoaded) return <div>Loading alignments...</div>;
+  if (!dataLoaded) return <div>Loading custom alignments...</div>;
+  
+  if (!classDataLoaded) return <div>Loading class-wide alignments...</div>;
+
+  if (isProcessing) return <div>Processing receptor data...</div>;
 
   return (
     <div className="max-w-7xl mx-auto bg-card text-card-foreground rounded-lg p-6 shadow-md">
@@ -1848,7 +2371,7 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
             <input
               type="range"
               min="1"
-              max={Math.max(1, selectedAlignments.length)}
+              max={Math.max(1, selectedAlignments.length + selectedClassAlignments.length)}
               value={overlapMinRows}
               onChange={(e) => setOverlapMinRows(Number(e.target.value))}
               className="w-24"
@@ -1915,6 +2438,47 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
           Selected: {selectedAlignments.length} / {fastaNames.length} alignments
         </div>
 
+        {/* Class-wide Alignments Section */}
+        <div className="mt-6">
+          <h3 className="text-lg font-semibold mb-4">Class-wide Alignments</h3>
+          <div className="flex flex-wrap gap-2 items-center mb-4">
+            <span className="text-sm font-medium">Select Class Alignments:</span>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={selectAllClassAlignments}>
+                Select All Classes
+              </Button>
+              <Button variant="outline" size="sm" onClick={selectNoClassAlignments}>
+                Select None
+              </Button>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+            {availableClassAlignments.map((className: string) => (
+              <div key={className} className="flex items-center gap-2 bg-blue-50 rounded px-3 py-2">
+                <input
+                  type="checkbox"
+                  id={`class-${className}`}
+                  checked={selectedClassAlignments.includes(className)}
+                  onChange={() => handleClassAlignmentToggle(className)}
+                  className="w-4 h-4 text-blue-600 rounded border-gray-300"
+                />
+                <label htmlFor={`class-${className}`} className="text-sm font-medium cursor-pointer">
+                  {className}
+                </label>
+              </div>
+            ))}
+          </div>
+          <div className="mt-3 text-sm text-muted-foreground">
+            Selected: {selectedClassAlignments.length} / {availableClassAlignments.length} class alignments
+            {selectedClassAlignments.length > 0 && (
+              <span className="ml-2 text-blue-600">
+                (Using family-wide human sequences: {selectedClassAlignments.map(c => classToRepresentative[c]).join(', ')})
+              </span>
+            )}
+          </div>
+        </div>
+
         {/* HRH2 filter input on its own line below checkboxes */}
         <div className="flex items-center gap-2 mt-4">
           <label className="text-sm font-medium">Filter HRH2 Residues:</label>
@@ -1941,7 +2505,7 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
         </div>
 
         {/* Display statistics */}
-        {selectedAlignments.length > 0 && (() => {
+        {(selectedAlignments.length > 0 || selectedClassAlignments.length > 0) && (() => {
           const stats = getDisplayStats();
           return (
             <div className="mt-2 text-sm text-muted-foreground">
