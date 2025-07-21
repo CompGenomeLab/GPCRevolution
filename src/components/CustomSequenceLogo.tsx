@@ -103,7 +103,7 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
   const [hideMaskedColumns, setHideMaskedColumns] = useState(false);
 
   // State for gap between receptor rows
-  const [gapBetweenReceptors, setGapBetweenReceptors] = useState(10);
+  const [gapBetweenReceptors] = useState(10);
 
   // State for class-wide alignments
   const [selectedClassAlignments, setSelectedClassAlignments] = useState<string[]>([]);
@@ -557,7 +557,7 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
     });
 
     setReferenceInfo(newRefInfo);
-  }, [selectedAlignments, selectedClassAlignments, referenceDataLoaded, referenceMaps]);
+  }, [selectedAlignments, selectedClassAlignments, referenceDataLoaded, referenceMaps, classReferenceOrder, classToGene]);
 
   // Load human reference sequences and pre-load all class-wide alignment data (runs only once)
   useEffect(() => {
@@ -666,7 +666,7 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
     };
 
          loadAllClassWideData();
-   }, []); // Empty dependency array since availableClassAlignments never changes
+   }, [availableClassAlignments]); // Include availableClassAlignments in dependency array
 
   // Class alignment selection functions
   const handleClassAlignmentToggle = (className: string) => {
@@ -1376,7 +1376,8 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
     referenceMaps, 
     humanRefSequences,
     classWideData,
-    classDataLoaded
+    classDataLoaded,
+    selectionOrder
   ]);
 
   // Calculate display statistics
@@ -2324,6 +2325,7 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
     showReferenceRows,
     referenceDataLoaded,
     referenceInfo,
+    previousDataHash,
     // Stable function references - these rarely change
     getResidueColor, 
     loadCustomSvgLetter, 

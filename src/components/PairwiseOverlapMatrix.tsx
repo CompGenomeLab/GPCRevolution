@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
@@ -68,7 +68,7 @@ const PairwiseOverlapMatrix: React.FC<PairwiseOverlapProps> = ({ fastaNames, fol
   }
 
   // Calculate position data for an alignment (similar to CustomSequenceLogo logic)
-  const calculatePositionData = (sequences: Sequence[]): PositionData[] => {
+  const calculatePositionData = useCallback((sequences: Sequence[]): PositionData[] => {
     if (!sequences.length) return [];
     
     const maxLength = Math.max(...sequences.map(s => s.sequence.length));
@@ -128,10 +128,10 @@ const PairwiseOverlapMatrix: React.FC<PairwiseOverlapProps> = ({ fastaNames, fol
     }
     
     return positionData;
-  };
+  }, []);
 
   // Load alignment data for selected alignments
-  const loadAlignmentData = async () => {
+  const loadAlignmentData = useCallback(async () => {
     if (selectedAlignments.length === 0) {
       setAlignmentData([]);
       setOverlapMatrix([]);
@@ -165,10 +165,10 @@ const PairwiseOverlapMatrix: React.FC<PairwiseOverlapProps> = ({ fastaNames, fol
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedAlignments, folder, calculatePositionData]);
 
   // Check if two amino acids are similar based on matching groups
-  const areSimilar = (aa1: string, aa2: string): boolean => {
+  const areSimilar = useCallback((aa1: string, aa2: string): boolean => {
     if (aa1 === aa2) return true;
     
     for (const group of Object.values(matchingGroups)) {
@@ -177,10 +177,10 @@ const PairwiseOverlapMatrix: React.FC<PairwiseOverlapProps> = ({ fastaNames, fol
       }
     }
     return false;
-  };
+  }, []);
 
   // Calculate pairwise overlap matrix based on amino acid conservation
-  const calculateOverlapMatrix = (data: AlignmentData[]) => {
+  const calculateOverlapMatrix = useCallback((data: AlignmentData[]) => {
     const n = data.length;
     const matrix: number[][] = Array(n).fill(null).map(() => Array(n).fill(0));
     
@@ -234,12 +234,12 @@ const PairwiseOverlapMatrix: React.FC<PairwiseOverlapProps> = ({ fastaNames, fol
     }
 
     setOverlapMatrix(matrix);
-  };
+  }, [conservationThreshold, areSimilar]);
 
   // Load data when selected alignments or threshold changes
   useEffect(() => {
     loadAlignmentData();
-  }, [selectedAlignments, conservationThreshold]);
+  }, [loadAlignmentData]);
 
   // Handle alignment selection
   const handleAlignmentToggle = (alignmentName: string) => {
