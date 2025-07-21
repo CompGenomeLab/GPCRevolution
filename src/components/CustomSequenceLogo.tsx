@@ -66,7 +66,10 @@ const classToRepresentative: Record<string, string> = {
   'ClassB2': 'AGRL3', 
   'ClassC': 'CASR',
   'ClassF': 'FZD7',
-  'ClassT': 'T2R39'
+  'ClassT': 'T2R39',
+  'ClassOlf': 'O52I2',
+  'GP157': 'GP157',
+  'GP143': 'GP143'
 };
 
 
@@ -99,6 +102,9 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
   // State: hide masked columns completely
   const [hideMaskedColumns, setHideMaskedColumns] = useState(false);
 
+  // State for gap between receptor rows
+  const [gapBetweenReceptors, setGapBetweenReceptors] = useState(10);
+
   // State for class-wide alignments
   const [selectedClassAlignments, setSelectedClassAlignments] = useState<string[]>([]);
   const [humanRefSequences, setHumanRefSequences] = useState<Sequence[]>([]);
@@ -117,7 +123,7 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
   const [classDataLoaded, setClassDataLoaded] = useState(false);
 
   // Available class-wide alignments (moved outside component to prevent re-creation)
-  const availableClassAlignments = useMemo(() => ['ClassA', 'ClassB1', 'ClassB2', 'ClassC', 'ClassF', 'ClassT'], []);
+  const availableClassAlignments = useMemo(() => ['ClassA', 'ClassB1', 'ClassB2', 'ClassC', 'ClassF', 'ClassT', 'ClassOlf', 'GP157', 'GP143'], []);
   
   // State to track selection order (both custom and class-wide)
   const [selectionOrder, setSelectionOrder] = useState<string[]>([]);
@@ -164,7 +170,7 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
   const [referenceMaps, setReferenceMaps] = useState<Record<string, string[]>>({});
 
   // Computed array for current selection (order fixed by class mapping)
-  const classReferenceOrder = ['ClassA', 'ClassT', 'ClassB1', 'ClassB2', 'ClassC', 'ClassF'] as const;
+  const classReferenceOrder = ['ClassA', 'ClassT', 'ClassB1', 'ClassB2', 'ClassC', 'ClassF', 'ClassOlf', 'GP157', 'GP143'] as const;
   type ClassKey = typeof classReferenceOrder[number];
   const classToGene: Record<ClassKey, string> = {
     ClassA: 'HRH2',
@@ -173,6 +179,9 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
     ClassB2: 'AGRL3',
     ClassC: 'CASR',
     ClassF: 'FZD7',
+    ClassOlf: 'O52I2',
+    GP157: 'GP157',
+    GP143: 'GP143',
   };
   const [referenceInfo, setReferenceInfo] = useState<{ geneName: string; gpcrdbMap: string[] }[]>([]);
 
@@ -585,7 +594,17 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
              const classIdentifier = className.replace('Class', '');
              
              // Load family alignment
-             const familyAlignmentPath = `/alignments/class${classIdentifier}_humans_MSA.fasta`;
+             let familyAlignmentPath: string;
+             if (className === 'GP157' || className === 'GP143') {
+               // Use ortholog alignment files for individual receptors
+               familyAlignmentPath = `/alignments/${className}_orthologs_MSA.fasta`;
+             } else if (className === 'ClassOlf') {
+               // Use olfactory class-wide alignment file
+               familyAlignmentPath = `/alignments/classOlfactory_humans_MSA.fasta`;
+             } else {
+               // Use class-wide alignment files for classes
+               familyAlignmentPath = `/alignments/class${classIdentifier}_humans_MSA.fasta`;
+             }
              const familyResponse = await fetch(familyAlignmentPath);
              
              if (!familyResponse.ok) {
@@ -1602,7 +1621,7 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
       // Total width based on constant column width; masked columns appear narrow visually via mask overlay
       const totalWidth = maxPositions * barWidthEstimate + margin.left + margin.right;
       
-      const gapBetweenReceptors = 2; // Reduced gap between rows
+      const gapBetweenReceptors = 5; // No gap between rows to eliminate unwanted spacing
       const logoAreaHeight = rowHeight;
       const conservationBarHeight = useSimpleConservation ? 60 : 0; // Only show if using simple conservation
       // UpSet-style dot plot settings
@@ -1644,25 +1663,40 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
       data.forEach((receptorData, receptorIndex) => {
         const receptorY = margin.top + receptorIndex * (logoAreaHeight + gapBetweenReceptors);
         
-        const yAxis = d3.axisLeft(y).ticks(5).tickFormat(d => `${Number(d).toFixed(1)}`);
+
+
+        const yLabel = yAxisSvg
+          .append('text')
+          .attr('text-anchor', 'end')
+          .attr('x', yAxisWidth - 10)
+          .attr('y', receptorY + logoAreaHeight / 2 + 5)
+          .attr('class', 'text-foreground fill-current')
+          .style('font-size', '12px')
+          .style('font-family', 'Helvetica');
+
+        // Format receptor name: ClassX -> Class X, except ClassOlf -> Olfactory
+        const formatReceptorName = (name: string) => {
+          if (name === 'ClassOlf') return 'Olfactory';
+          if (name.startsWith('Class') && name.length > 5) {
+            return 'Class ' + name.substring(5);
+          }
+          return name;
+        };
+        
+        yLabel.append('tspan').text(formatReceptorName(receptorData.receptorName.split('_')[0]));
+        // yLabel.append('tspan').attr('x', 0).attr('dy', '1.2em').text('Information');
+        // yLabel.append('tspan').attr('x', 0).attr('dy', '1.2em').text('Content (bits)');
+        
+        // Create individual y-scale for this receptor to avoid continuous lines
+        const receptorY_scale = d3.scaleLinear().domain([0, yDomainMax]).range([logoAreaHeight, 0]);
+        
+        // Add y-axis line with tick marks but no labels
+        const yAxis = d3.axisLeft(receptorY_scale).ticks(4).tickFormat(() => '');
         yAxisSvg
           .append('g')
           .attr('transform', `translate(${yAxisWidth - 1}, ${receptorY})`)
           .attr('class', 'axis text-foreground')
-          .call(yAxis)
-          .selectAll('text')
-          .style('font-size', '12px');
-
-        const yLabel = yAxisSvg
-          .append('text')
-          .attr('text-anchor', 'middle')
-          .attr('transform', `translate(${yAxisWidth - 75}, ${receptorY + logoAreaHeight / 2}) rotate(-90)`)
-          .attr('class', 'text-foreground fill-current')
-          .style('font-size', '12px');
-
-        yLabel.append('tspan').attr('x', 0).text(`${receptorData.receptorName.split('_')[0]}`);
-        // yLabel.append('tspan').attr('x', 0).attr('dy', '1.2em').text('Information');
-        // yLabel.append('tspan').attr('x', 0).attr('dy', '1.2em').text('Content (bits)');
+          .call(yAxis);
       });
 
       const letterPromises: Promise<void>[] = [];
@@ -1709,9 +1743,18 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
 
           // Store into overlap map
           if (topAA) {
+            // Find which similarity group this amino acid belongs to
+            let groupKey = topAA; // Default to the amino acid itself
+            for (const [groupName, groupResidues] of Object.entries(matchingGroups)) {
+              if (groupResidues.includes(topAA)) {
+                groupKey = groupName; // Use group name as key
+                break;
+              }
+            }
+            
             if (!overlapMap[d.position]) overlapMap[d.position] = {};
-            if (!overlapMap[d.position][topAA]) overlapMap[d.position][topAA] = [];
-            overlapMap[d.position][topAA].push(receptorIndex);
+            if (!overlapMap[d.position][groupKey]) overlapMap[d.position][groupKey] = [];
+            overlapMap[d.position][groupKey].push(receptorIndex);
           }
 
           const sortedResidues = Object.entries(d.letterHeights)
@@ -1822,7 +1865,7 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
                     .attr('text-anchor', 'middle')
                     .attr('font-family', 'Helvetica')
                     .attr('font-weight', 'bold')
-                    .attr('font-size', 16)
+                    .attr('font-size', 12)
                     .attr('transform', `scale(1, ${letterHeightPx / 16}) translate(0, -1)`)
                     .attr('fill', getResidueColor(residue))
                     .text(residue)
@@ -1926,7 +1969,23 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
         positionTopAA[Number(posStr)] = { aa: bestAA, rows: bestRows };
       });
 
-      // Draw dots per receptor/position, coloring matches to top variant
+      // Determine all overlaps per position (not just the most frequent)
+      // Map: position -> sorted list of [amino acid, rows[]] by overlap size (desc)
+      const positionOverlapAAs: Record<number, Array<{ aa: string, rows: number[] }>> = {};
+      Object.entries(overlapMap).forEach(([posStr, posMap]) => {
+        // Only keep AAs that occur in more than one row (overlap)
+        const aaRows = Object.entries(posMap)
+          .filter(([, rows]) => rows.length > 1)
+          .map(([aa, rows]) => ({ aa, rows }));
+        // Sort by overlap size descending
+        aaRows.sort((a, b) => b.rows.length - a.rows.length);
+        positionOverlapAAs[Number(posStr)] = aaRows;
+      });
+
+      // Define colors for primary, secondary, tertiary overlaps
+      const overlapColors = ['#475c6c', '#8a8583', '#eed7a1']; // user-provided palette
+
+      // Draw dots per receptor/position, coloring by overlap rank if present
       data.forEach((receptorData, rIdx) => {
         receptorData.logoData.forEach(d => {
           if (hideMaskedColumns && maskedSet.has(d.position)) return;
@@ -1935,105 +1994,72 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
           
           const isMasked = maskedSet.has(d.position);
 
-          const topInfo = positionTopAA[d.position];
-          let matchesTop = false;
-          if (topInfo) {
-            const topAA = topInfo.aa;
-            const groupTop = Object.values(matchingGroups).find(g => g.includes(topAA));
-            let rowTopAA = d.mostConservedAA;
-            if (!rowTopAA) {
-              const entries = Object.entries(d.residueCounts).sort(([,a],[,b]) => (b as number) - (a as number));
-              rowTopAA = entries.length > 0 ? (entries[0][0] as string) : '';
-            }
-            if (rowTopAA) {
-              matchesTop = groupTop ? groupTop.includes(rowTopAA) : rowTopAA === topAA;
-            }
-          }
-          // frequency of top AA in this row
-          let freq = 0;
-          if (topInfo) {
-            // Sum counts for residues similar to top AA
-            const topAA = topInfo.aa;
-            const group = Object.values(matchingGroups).find(g => g.includes(topAA));
-            let similarCount = 0;
-            if (group) {
-              group.forEach(res => { similarCount += d.residueCounts[res] || 0; });
-            } else {
-              similarCount = d.residueCounts[topAA] || 0;
-            }
-            freq = similarCount / d.totalSequences;
-          }
-
-          const meetsConservation = matchesTop && (freq * 100 >= dotMinConservation);
-
-          const radius = meetsConservation ? (5 * Math.max(0.2, freq)) : 4; // min 0.2 scale to keep visible
-
-          let color = meetsConservation ? '#000000' : '#a3a3a3';
+          // Find which overlap group (if any) this dot belongs to
+          let dotColor = '#a3a3a3'; // default gray
           let strokeColor = 'none';
-          
+          const overlapAAs = positionOverlapAAs[d.position] || [];
+          let found = false;
+          let freq = 0;
+          for (let i = 0; i < overlapAAs.length && i < overlapColors.length; ++i) {
+            const { aa: groupKey, rows } = overlapAAs[i];
+            // Find the most-conserved AA for this row at this position
+            let rowAA = d.mostConservedAA;
+            if (!rowAA) {
+              const entries = Object.entries(d.residueCounts).sort(([,a],[,b]) => (b as number) - (a as number));
+              rowAA = entries.length > 0 ? (entries[0][0] as string) : '';
+            }
+            // Check if rowAA belongs to the same similarity group as the overlap group
+            let belongsToGroup = false;
+            if (matchingGroups[groupKey]) {
+              // groupKey is a similarity group name
+              belongsToGroup = matchingGroups[groupKey].includes(rowAA);
+            } else {
+              // groupKey is an individual amino acid (not in any group)
+              belongsToGroup = rowAA === groupKey;
+            }
+            
+            if (belongsToGroup && rows.includes(rIdx)) {
+              dotColor = overlapColors[i];
+              // Calculate frequency for this AA in this row
+              if (matchingGroups[groupKey]) {
+                // Sum frequencies for all amino acids in this group
+                let groupCount = 0;
+                matchingGroups[groupKey].forEach(res => {
+                  groupCount += d.residueCounts[res] || 0;
+                });
+                freq = groupCount / d.totalSequences;
+              } else {
+                // Individual amino acid
+                freq = d.residueCounts[groupKey] ? d.residueCounts[groupKey] / d.totalSequences : 0;
+              }
+              found = true;
+              break;
+            }
+          }
           // Add visual indication for masked positions
           if (!hideMaskedColumns && isMasked) {
-            color = meetsConservation ? '#ff0000' : '#ff6666'; // Red tint for masked
+            dotColor = found ? '#ff0000' : '#ff6666'; // Red tint for masked
             strokeColor = '#ff0000';
           }
 
-          chartSvg.append('circle')
-            .attr('cx', posX)
-            .attr('cy', posY)
-            .attr('r', radius)
-            .attr('fill', color)
-            .attr('stroke', strokeColor)
-            .attr('stroke-width', strokeColor !== 'none' ? 1 : 0);
+          // Only color if part of an overlap (otherwise keep gray)
+          let radius, fill, stroke, strokeWidth;
+          if (found) {
+            radius = 5 * Math.max(0.2, freq);
+            fill = dotColor;
+            stroke = strokeColor;
+            strokeWidth = strokeColor !== 'none' ? 1 : 0;
+            chartSvg.append('circle')
+              .attr('cx', posX)
+              .attr('cy', posY)
+              .attr('r', radius)
+              .attr('fill', fill)
+              .attr('stroke', stroke)
+              .attr('stroke-width', strokeWidth);
+          }
         });
       });
 
-      // Draw connecting lines for matches (rows that share top variant)
-      Object.entries(positionTopAA).forEach(([posStr, info]) => {
-        // Only skip if no top-AA information; we want to allow connections based on similarity groups
-        if (!info) return;
-        const pos = Number(posStr);
-        const posX = x(pos.toString())! + x.bandwidth() / 2;
-        // Build list of rows that share similar residue and meet conservation threshold
-        const qualifyingRows: number[] = [];
-        data.forEach((row, rIdx) => {
-          const rowData = row.logoData.find(p => p.position === pos);
-          if (!rowData) return;
-          // Determine row's representative residue (top)
-          let rowAA = rowData.mostConservedAA;
-          if (!rowAA) {
-            const entries = Object.entries(rowData.residueCounts).sort(([,a],[,b]) => (b as number)-(a as number));
-            rowAA = entries.length > 0 ? (entries[0][0] as string) : '';
-          }
-          if (!rowAA) return;
-          const group = Object.values(matchingGroups).find(g => g.includes(info.aa));
-          const isSimilar = group ? group.includes(rowAA) : rowAA === info.aa;
-          if (!isSimilar) return;
-          // similarity frequency
-          let simCount = 0;
-          if (group) {
-            group.forEach(res => { simCount += rowData.residueCounts[res] || 0; });
-          } else {
-            simCount = rowData.residueCounts[info.aa] || 0;
-          }
-          const freq = simCount / rowData.totalSequences;
-          if (freq * 100 >= dotMinConservation) {
-            qualifyingRows.push(rIdx);
-          }
-        });
-
-        if (qualifyingRows.length < 2) return;
-
-        const sortedRows = qualifyingRows.slice().sort((a,b)=>a-b);
-        const y1 = overlapPlotOffset + sortedRows[0] * (dotRowHeight + dotGap) + dotRowHeight / 2;
-        const y2 = overlapPlotOffset + sortedRows[sortedRows.length-1] * (dotRowHeight + dotGap) + dotRowHeight / 2;
-        chartSvg.append('line')
-          .attr('x1', posX)
-          .attr('x2', posX)
-          .attr('y1', y1)
-          .attr('y2', y2)
-          .attr('stroke', '#000000')
-          .attr('stroke-width', 2);
-      });
 
       // === Column masking based on overlap count ===
       const drawMasks = () => {
@@ -2112,8 +2138,16 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
           .attr('x', yAxisWidth - 10)
           .attr('y', labelY)
           .attr('class', 'text-foreground fill-current')
-          .style('font-size', '10px')
-          .text(receptorData.receptorName.split('_')[0]);
+          .style('font-size', '12px')
+          .style('font-family', 'Helvetica')
+          .text((() => {
+            const name = receptorData.receptorName.split('_')[0];
+            if (name === 'ClassOlf') return 'Olfactory';
+            if (name.startsWith('Class') && name.length > 5) {
+              return 'Class ' + name.substring(5);
+            }
+            return name;
+          })());
       });
 
       /* ─── Reference GPCRdb rows ───────────────────────────── */
@@ -2139,7 +2173,8 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
             .attr('x', yAxisWidth - 10)
             .attr('y', rowCenterY + 4)
             .attr('class', 'text-foreground fill-current')
-            .style('font-size', '10px')
+            .style('font-size', '12px')
+            .style('font-family', 'Helvetica')
             .text(ref.geneName);
 
           // Get the first receptor's logo data to access msaColumn information
@@ -2157,6 +2192,7 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
                 chartSvg.append('text')
                   .attr('class', 'text-foreground fill-current')
                   .style('font-size', '10px')
+                  .style('font-family', 'Helvetica')
                   .attr('text-anchor', 'middle')
                   .attr('dominant-baseline', 'middle')
                   .attr('transform', `translate(${cx}, ${rowCenterY}) rotate(-90)`)
@@ -2237,7 +2273,8 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
             .attr('x', 5)
             .attr('y', thresholdY - 5)
             .attr('class', 'text-foreground fill-current')
-            .style('font-size', '10px')
+            .style('font-size', '12px')
+            .style('font-family', 'Helvetica')
             .text(`Threshold: ${conservationThreshold}%`);
         }
         
@@ -2254,7 +2291,8 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
           .attr('class', 'axis text-foreground')
           .call(conservationAxis)
           .selectAll('text')
-          .style('font-size', '10px');
+          .style('font-size', '12px')
+          .style('font-family', 'Helvetica');
         
         // Conservation chart label
         yAxisSvg
@@ -2262,7 +2300,8 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
           .attr('text-anchor', 'middle')
           .attr('transform', `translate(15, ${barChartY + conservationBarHeight / 2}) rotate(-90)`)
           .attr('class', 'text-foreground fill-current')
-          .style('font-size', '10px')
+          .style('font-size', '12px')
+          .style('font-family', 'Helvetica')
           .text('Conservation %');
       }
     }
@@ -2278,6 +2317,7 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
     useSimpleConservation, 
     conservationThreshold, 
     rowHeight, 
+    gapBetweenReceptors,
     hideMaskedColumns, 
     overlapMinRows, 
     dotMinConservation,
@@ -2453,21 +2493,46 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
             </div>
           </div>
           
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-            {availableClassAlignments.map((className: string) => (
-              <div key={className} className="flex items-center gap-2 bg-blue-50 rounded px-3 py-2">
-                <input
-                  type="checkbox"
-                  id={`class-${className}`}
-                  checked={selectedClassAlignments.includes(className)}
-                  onChange={() => handleClassAlignmentToggle(className)}
-                  className="w-4 h-4 text-blue-600 rounded border-gray-300"
-                />
-                <label htmlFor={`class-${className}`} className="text-sm font-medium cursor-pointer">
-                  {className}
-                </label>
-              </div>
-            ))}
+          {/* GPCR Classes */}
+          <div className="mb-4">
+            <h4 className="text-md font-medium mb-2">GPCR Classes</h4>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+              {['ClassA', 'ClassB1', 'ClassB2', 'ClassC', 'ClassF', 'ClassT', 'ClassOlf'].map((className: string) => (
+                <div key={className} className="flex items-center gap-2 bg-blue-50 rounded px-3 py-2">
+                  <input
+                    type="checkbox"
+                    id={`class-${className}`}
+                    checked={selectedClassAlignments.includes(className)}
+                    onChange={() => handleClassAlignmentToggle(className)}
+                    className="w-4 h-4 text-blue-600 rounded border-gray-300"
+                  />
+                  <label htmlFor={`class-${className}`} className="text-sm font-medium cursor-pointer">
+                    {className === 'ClassOlf' ? 'ClassOlf' : className}
+                  </label>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Individual Receptor Orthologs */}
+          <div className="mb-4">
+            <h4 className="text-md font-medium mb-2">Individual Receptor Orthologs</h4>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+              {['GP157', 'GP143'].map((className: string) => (
+                <div key={className} className="flex items-center gap-2 bg-purple-50 rounded px-3 py-2">
+                  <input
+                    type="checkbox"
+                    id={`class-${className}`}
+                    checked={selectedClassAlignments.includes(className)}
+                    onChange={() => handleClassAlignmentToggle(className)}
+                    className="w-4 h-4 text-blue-600 rounded border-gray-300"
+                  />
+                  <label htmlFor={`class-${className}`} className="text-sm font-medium cursor-pointer">
+                    {className}
+                  </label>
+                </div>
+              ))}
+            </div>
           </div>
           <div className="mt-3 text-sm text-muted-foreground">
             Selected: {selectedClassAlignments.length} / {availableClassAlignments.length} class alignments
