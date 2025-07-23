@@ -179,20 +179,26 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
   // Map geneName → gpcrdb string array (indexed by alignment column, 0-based)
   const [referenceMaps, setReferenceMaps] = useState<Record<string, string[]>>({});
 
-  // Computed array for current selection (order fixed by class mapping)
-  const classReferenceOrder = ['ClassA', 'ClassT', 'ClassB1', 'ClassB2', 'ClassC', 'ClassF', 'ClassOlf', 'GP157', 'GP143'] as const;
+  // Computed array for current selection (order fixed by class mapping) – memoized so identity never changes  
+  const classReferenceOrder = useMemo(
+    () => ['ClassA','ClassT','ClassB1','ClassB2','ClassC','ClassF','ClassOlf','GP157','GP143'] as const,
+    []
+  );
   type ClassKey = typeof classReferenceOrder[number];
-  const classToGene: Record<ClassKey, string> = {
-    ClassA: 'HRH2',
-    ClassT: 'T2R39',
-    ClassB1: 'PTH1R',
-    ClassB2: 'AGRL3',
-    ClassC: 'CASR',
-    ClassF: 'FZD7',
-    ClassOlf: 'O52I2',
-    GP157: 'GP157',
-    GP143: 'GP143',
-  };
+  const classToGene = useMemo<Record<ClassKey, string>>(
+    () => ({
+      ClassA: 'HRH2',
+      ClassT: 'T2R39',
+      ClassB1: 'PTH1R',
+      ClassB2: 'AGRL3',
+      ClassC: 'CASR',
+      ClassF: 'FZD7',
+      ClassOlf: 'O52I2',
+      GP157: 'GP157',
+      GP143: 'GP143'
+    }),
+    []
+  );
   const [referenceInfo, setReferenceInfo] = useState<{ geneName: string; gpcrdbMap: string[] }[]>([]);
 
   // (Column width slider removed – fixed width used)
@@ -1512,6 +1518,49 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
     URL.revokeObjectURL(url);
   };
 
+  // Download EPS function
+  const downloadEPS = () => {
+    const yAxisContainer = yAxisContainerRef.current;
+    const chartContainer = chartContainerRef.current;
+    if (!yAxisContainer || !chartContainer) return;
+    const yAxisSvg = yAxisContainer.querySelector('svg');
+    const chartSvg = chartContainer.querySelector('svg');
+    if (!yAxisSvg || !chartSvg) return;
+
+    const yAxisW = parseInt(yAxisSvg.getAttribute('width') || '80', 10);
+    const chartW = parseInt(chartSvg.getAttribute('width') || '800', 10);
+    const totalW = yAxisW + chartW;
+    const totalH = parseInt(chartSvg.getAttribute('height') || '400', 10);
+
+    // build combined <svg> exactly as in downloadSVG()
+    const combined = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    combined.setAttribute('width', totalW.toString());
+    combined.setAttribute('height', totalH.toString());
+    combined.setAttribute('viewBox', `0 0 ${totalW} ${totalH}`);
+    combined.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    const yClone = yAxisSvg.cloneNode(true) as SVGElement;
+    combined.appendChild(yClone);
+    const cClone = (chartSvg.cloneNode(true) as SVGElement);
+    cClone.setAttribute('x', yAxisW.toString());
+    combined.appendChild(cClone);
+
+    const svgStr = new XMLSerializer().serializeToString(combined);
+
+    // simple EPS wrapper
+    const header = 
+      '%!PS-Adobe-3.0 EPSF-3.0\n' +
+      `%%BoundingBox: 0 0 ${totalW} ${totalH}\n`;
+    const epsBlob = new Blob([ header + svgStr ], { type: 'application/postscript' });
+    const url = URL.createObjectURL(epsBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'custom_sequence_logo.eps';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   // Track previous data to avoid unnecessary rebuilds
   const [previousDataHash, setPreviousDataHash] = useState<string>('');
 
@@ -1704,7 +1753,6 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
         }
       });
 
-      const maxPositions = positionsWithGaps.length; // Removed unused variable
       const gapWidth = barWidthEstimate * 0.5; // Half column width for gaps
 
       // Total width accounting for gaps
@@ -1805,12 +1853,18 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
         const receptorY_scale = d3.scaleLinear().domain([0, yDomainMax]).range([logoAreaHeight, 0]);
         
         // Add y-axis line with tick marks only at min and max, no labels
-        const yAxis = d3.axisLeft(receptorY_scale).tickValues([0, yDomainMax]).tickFormat(() => '');
+        const yAxis = d3.axisLeft(receptorY_scale)
+          .tickValues([0, yDomainMax])
+          .tickFormat(() => '')
+          .tickSize(0);
         yAxisSvg
           .append('g')
           .attr('transform', `translate(${yAxisWidth - 1}, ${receptorY})`)
-          .attr('class', 'axis text-foreground')
-          .call(yAxis);
+          .attr('class', 'axis')
+          .call(yAxis)
+          .call(g => g.select('.domain')
+                         .attr('stroke', '#888')
+                         .attr('stroke-width', 2));
       });
 
       const letterPromises: Promise<void>[] = [];
@@ -1834,8 +1888,10 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
               .attr('y', receptorY)
               .attr('width', positionWidth)
               .attr('height', logoAreaHeight)
-              .attr('fill', 'rgba(255, 0, 0, 0.1)')
-              .attr('stroke', 'rgba(255, 0, 0, 0.3)')
+              .attr('fill', '#ff0000')
+              .attr('fill-opacity', 0.1)
+              .attr('stroke', '#ff0000')
+              .attr('stroke-opacity', 0.3)
               .attr('stroke-width', 1)
               .attr('pointer-events', 'none')
               .style('mix-blend-mode', 'multiply');
@@ -2065,7 +2121,8 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
           .attr('y', overlapPlotOffset + rIdx * (dotRowHeight + dotGap))
           .attr('width', totalWidth)
           .attr('height', dotRowHeight)
-          .attr('fill', rIdx % 2 ? 'rgba(0,0,0,0.03)' : 'rgba(0,0,0,0.06)');
+          .attr('fill', '#000000')
+          .attr('fill-opacity', rIdx % 2 ? 0.03 : 0.06);
       });
 
       // Determine top variant per position (most abundant across rows)
@@ -2096,7 +2153,7 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
       });
 
       // Define colors for primary, secondary, tertiary overlaps
-      const overlapColors = ['#475c6c', '#8a8583', '#eed7a1']; // user-provided palette
+      const overlapColors = ['#475c6c', '#591F0A', '#eed7a1', '#8a8583', '#FBCAEF']; // user-provided palette
 
       // Draw dots per receptor/position, coloring by overlap rank if present
               data.forEach((receptorData, rIdx) => {
@@ -2274,7 +2331,8 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
             .attr('y', referencePlotOffset + idx * referenceRowHeight)
             .attr('width', totalWidth)
             .attr('height', referenceRowHeight)
-            .attr('fill', idx % 2 ? 'rgba(0,0,0,0.03)' : 'rgba(0,0,0,0.06)');
+            .attr('fill', '#000000')
+            .attr('fill-opacity', idx % 2 ? 0.03 : 0.06);
         });
 
         referenceInfo.forEach((ref, refIdx) => {
@@ -2439,22 +2497,29 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
         }
 
         if (displayedRegionGroups.length > 0) {
-          // Background stripe
-          chartSvg.append('rect')
-            .attr('x', 0)
-            .attr('y', hrh2RegionPlotOffset)
-            .attr('width', totalWidth)
-            .attr('height', hrh2RegionHeight)
-            .attr('fill', 'rgba(0,0,0,0.02)');
+          // Clamp background stripe and blocks to just the displayed region span
+          if (displayedRegionGroups.length > 0) {
+            const first = displayedRegionGroups[0];
+            const last  = displayedRegionGroups[displayedRegionGroups.length - 1];
+            const xStart = x.getX(first.startDisplayPos.toString());
+            const xEnd   = x.getX(last.endDisplayPos.toString()) + x.bandwidth();
 
-          // Render region blocks with alternating grey colors
+            chartSvg.append('rect')
+              .attr('x', xStart)
+              .attr('y', hrh2RegionPlotOffset)
+              .attr('width', xEnd - xStart)
+              .attr('height', hrh2RegionHeight)
+              .attr('fill', 'rgba(0,0,0,0.02)');
+          }
+
+          // Render region blocks
           displayedRegionGroups.forEach((regionGroup, regionIndex) => {
-            const startX = x.getX(regionGroup.startDisplayPos.toString());
-            const endX = x.getX(regionGroup.endDisplayPos.toString()) + x.bandwidth();
+            // Use the same alternating greys as our reference rows
+            const fillColor = regionIndex % 2 ? 'rgba(0,0,0,0.03)' : 'rgba(0,0,0,0.06)';
+
+            const startX    = x.getX(regionGroup.startDisplayPos.toString());
+            const endX      = x.getX(regionGroup.endDisplayPos.toString()) + x.bandwidth();
             const regionWidth = endX - startX;
-            
-            // Use alternating grey colors
-            const fillColor = regionIndex % 2 ? 'rgba(0,0,0,0.06)' : 'rgba(0,0,0,0.12)';
             
             // Region block
             chartSvg.append('rect')
@@ -2576,13 +2641,17 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
           .domain([0, maxConservation])
           .range([conservationBarHeight - 10, 10]))
           .tickValues([0, maxConservation])
-          .tickFormat(d => `${d}%`);
+          .tickFormat(d => `${d}%`)
+          .tickSize(0);
         
         yAxisSvg
           .append('g')
           .attr('transform', `translate(${yAxisWidth - 1}, ${barChartY})`)
-          .attr('class', 'axis text-foreground')
+          .attr('class', 'axis')
           .call(conservationAxis)
+          .call(g => g.select('.domain')
+                         .attr('stroke', '#888')
+                         .attr('stroke-width', 2))
           .selectAll('text')
           .style('font-size', '12px')
           .style('font-family', 'Helvetica');
@@ -2645,6 +2714,9 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
           <div className="flex items-center gap-2">
             <Button onClick={downloadSVG} variant="outline" size="sm">
               Download SVG
+            </Button>
+            <Button onClick={downloadEPS} variant="outline" size="sm">
+              Download EPS
             </Button>
           </div>
 
@@ -2894,6 +2966,13 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
             </div>
           );
         })()}
+      </div>
+
+      {/* Download SVG button (vector export) */}
+      <div className="mb-4">
+        <Button onClick={downloadSVG} variant="outline" size="sm">
+          Download SVG
+        </Button>
       </div>
 
       {/* Chart container placeholder (SVGs rendered via d3) */}
