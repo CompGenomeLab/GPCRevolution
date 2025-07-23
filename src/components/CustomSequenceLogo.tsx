@@ -122,6 +122,16 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
   }>>({});
   const [classDataLoaded, setClassDataLoaded] = useState(false);
 
+  // State for HRH2 conservation data with region information
+  const [hrh2ConservationData, setHrh2ConservationData] = useState<Array<{
+    residue: number;
+    conservation: number;
+    conservedAA: string;
+    aa: string;
+    region: string;
+    gpcrdb: string;
+  }>>([]);
+
   // Available class-wide alignments (moved outside component to prevent re-creation)
   const availableClassAlignments = useMemo(() => ['ClassA', 'ClassB1', 'ClassB2', 'ClassC', 'ClassF', 'ClassT', 'ClassOlf', 'GP157', 'GP143'], []);
   
@@ -491,15 +501,45 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
               // Store HRH2 residue→gpcrdb mapping for filter use
               if (gene === 'HRH2') {
                 const mapping: Record<string, string> = {};
-                type ConsEntry = { gpcrdb?: string };
+                const conservationArray: Array<{
+                  residue: number;
+                  conservation: number;
+                  conservedAA: string;
+                  aa: string;
+                  region: string;
+                  gpcrdb: string;
+                }> = [];
+                
+                type ConsEntry = { 
+                  conservation?: number;
+                  conservedAA?: string;
+                  aa?: string;
+                  region?: string;
+                  gpcrdb?: string;
+                };
                 const typedCons = consData as Record<string, ConsEntry>;
                 Object.entries(typedCons).forEach(([resNum, d]) => {
                   const gpcr = d.gpcrdb || '';
                   if (gpcr) {
                     mapping[resNum.toUpperCase()] = gpcr.toUpperCase();
                   }
+                  
+                  // Store full conservation data for region blocks
+                  conservationArray.push({
+                    residue: parseInt(resNum),
+                    conservation: d.conservation || 0,
+                    conservedAA: d.conservedAA || '',
+                    aa: d.aa || '',
+                    region: d.region || '',
+                    gpcrdb: gpcr
+                  });
                 });
+                
+                // Sort by residue number
+                conservationArray.sort((a, b) => a.residue - b.residue);
+                
                 setHrh2ResToGpcrdb(mapping);
+                setHrh2ConservationData(conservationArray);
               }
             } catch (err) {
               console.warn('Error loading conservation data for', gene, err);
@@ -1504,7 +1544,8 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
       rowHeight,
       hideMaskedColumns,
       overlapMinRows,
-      dotMinConservation
+      dotMinConservation,
+      hrh2RegionCount: hrh2ConservationData.length
     });
 
     // Only rebuild if data actually changed
@@ -1617,10 +1658,59 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
         displayToOriginalPos[displayIndex + 1] = originalPos; // displayIndex + 1 because positions are 1-based
       });
 
-      const maxPositions = positionsWithData.length;
+      // Check if HRH2 filter is active
+      const filterActive = filterTokens.length > 0 && !!referenceMaps['HRH2'];
+      
+      // Calculate gaps between non-consecutive residues when HRH2 filter is active
+      const getHrh2ResidueNumber = (position: number): number | null => {
+        if (!filterActive || !referenceMaps['HRH2']) return null;
+        
+        // Find the logo data for this position to get msaColumn
+        const logoData = data[0]?.logoData.find(d => d.position === position);
+        if (!logoData) return null;
+        
+        const msaCol = logoData.msaColumn;
+        const hrh2Map = referenceMaps['HRH2'];
+        
+        if (msaCol >= hrh2Map.length) return null;
+        
+        // Calculate residue number for this MSA column
+        let residueCount = 0;
+        for (let i = 0; i <= msaCol && i < hrh2Map.length; i++) {
+          if (hrh2Map[i]) {
+            residueCount++;
+          }
+        }
+        return residueCount;
+      };
 
-      // Total width based on constant column width; masked columns appear narrow visually via mask overlay
-      const totalWidth = maxPositions * barWidthEstimate + margin.left + margin.right;
+      // Build positions array with gap indicators for non-consecutive residues
+      const positionsWithGaps: Array<{ position: number; isGap: boolean }> = [];
+      
+      positionsWithData.forEach((pos, index) => {
+        if (index === 0) {
+          positionsWithGaps.push({ position: pos, isGap: false });
+        } else {
+          const currentResidueNum = getHrh2ResidueNumber(pos);
+          const prevResidueNum = getHrh2ResidueNumber(positionsWithData[index - 1]);
+          
+          // Add gap if residues are not consecutive (more than 1 apart)
+          if (filterActive && currentResidueNum && prevResidueNum && 
+              currentResidueNum - prevResidueNum > 1) {
+            positionsWithGaps.push({ position: -1, isGap: true }); // Gap marker
+          }
+          
+          positionsWithGaps.push({ position: pos, isGap: false });
+        }
+      });
+
+      const maxPositions = positionsWithGaps.length; // Removed unused variable
+      const gapWidth = barWidthEstimate * 0.5; // Half column width for gaps
+
+      // Total width accounting for gaps
+      const regularColumns = positionsWithGaps.filter(p => !p.isGap).length;
+      const gapColumns = positionsWithGaps.filter(p => p.isGap).length;
+      const totalWidth = (regularColumns * barWidthEstimate) + (gapColumns * gapWidth) + margin.left + margin.right;
       
       const gapBetweenReceptors = 5; // No gap between rows to eliminate unwanted spacing
       const logoAreaHeight = rowHeight;
@@ -1634,8 +1724,12 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
       const referenceRowHeight = 30; // Increased from 16 to better fit GPCRdb numbers
       const referenceAreaHeight = (showReferenceRows && referenceDataLoaded) ? (referenceInfo.length * referenceRowHeight + 4) : 0; // tighter padding
 
-      // Total chart height: logos + dot plot + optional reference rows + conservation bar + margins
-      const totalHeight = (logoAreaHeight * data.length) + (gapBetweenReceptors * (data.length - 1)) + dotPlotHeight + referenceAreaHeight + conservationBarHeight + margin.top + margin.bottom + 20;
+      // HRH2 region blocks (optional)
+      const hrh2RegionHeight = 25;
+      const hrh2RegionAreaHeight = hrh2ConservationData.length > 0 ? hrh2RegionHeight + 8 : 0; // include padding
+
+      // Total chart height: logos + dot plot + optional reference rows + HRH2 regions + conservation bar + margins
+      const totalHeight = (logoAreaHeight * data.length) + (gapBetweenReceptors * (data.length - 1)) + dotPlotHeight + referenceAreaHeight + hrh2RegionAreaHeight + conservationBarHeight + margin.top + margin.bottom + 20;
 
       // Create SVGs
       const yAxisSvg = d3
@@ -1650,12 +1744,31 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
         .attr('width', totalWidth)
         .attr('height', totalHeight);
 
-      // x scale uses filtered positions
-      const x = d3
-        .scaleBand<string>()
-        .domain(positionsWithData.map(p => p.toString()))
-        .range([0, totalWidth])
-        .paddingInner(0.05);
+      // Create custom x scale that handles gaps
+      const createXScale = () => {
+        let currentX = 0;
+        const positionToX: Record<string, number> = {};
+        const bandwidth = barWidthEstimate * 0.95; // Account for padding
+        
+        positionsWithGaps.forEach((item) => { // Removed unused 'index' parameter
+          if (item.isGap) {
+            currentX += gapWidth;
+          } else {
+            positionToX[item.position.toString()] = currentX;
+            currentX += barWidthEstimate;
+          }
+        });
+        
+        return {
+          bandwidth: () => bandwidth,
+          range: () => [0, totalWidth],
+          domain: () => positionsWithData.map(p => p.toString()),
+          // Custom function to get x position
+          getX: (position: string) => positionToX[position] || 0
+        };
+      };
+      
+      const x = createXScale();
 
       const yDomainMax = 4.32;
       const y = d3.scaleLinear().domain([0, yDomainMax]).range([logoAreaHeight, 0]);
@@ -1691,8 +1804,8 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
         // Create individual y-scale for this receptor to avoid continuous lines
         const receptorY_scale = d3.scaleLinear().domain([0, yDomainMax]).range([logoAreaHeight, 0]);
         
-        // Add y-axis line with tick marks but no labels
-        const yAxis = d3.axisLeft(receptorY_scale).ticks(4).tickFormat(() => '');
+        // Add y-axis line with tick marks only at min and max, no labels
+        const yAxis = d3.axisLeft(receptorY_scale).tickValues([0, yDomainMax]).tickFormat(() => '');
         yAxisSvg
           .append('g')
           .attr('transform', `translate(${yAxisWidth - 1}, ${receptorY})`)
@@ -1708,8 +1821,7 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
         
         receptorData.logoData.forEach((d) => {
           if (hideMaskedColumns && maskedSet.has(d.position)) return; // skip
-          const positionX = x(d.position.toString());
-          if (positionX === undefined) return;
+          const positionX = x.getX(d.position.toString());
           const positionWidth = x.bandwidth();
           
           // Add visual indicator for masked columns when not hiding them
@@ -1987,10 +2099,10 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
       const overlapColors = ['#475c6c', '#8a8583', '#eed7a1']; // user-provided palette
 
       // Draw dots per receptor/position, coloring by overlap rank if present
-      data.forEach((receptorData, rIdx) => {
+              data.forEach((receptorData, rIdx) => {
         receptorData.logoData.forEach(d => {
           if (hideMaskedColumns && maskedSet.has(d.position)) return;
-          const posX = x(d.position.toString())! + x.bandwidth() / 2;
+          const posX = x.getX(d.position.toString()) + x.bandwidth() / 2;
           const posY = overlapPlotOffset + rIdx * (dotRowHeight + dotGap) + dotRowHeight / 2;
           
           const isMasked = maskedSet.has(d.position);
@@ -2066,7 +2178,7 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
       const drawMasks = () => {
         if (!hideMaskedColumns && overlapMinRows <= 1) return;
 
-        const logosHeight = logoAreaHeight * data.length + gapBetweenReceptors * (data.length - 1);
+                  const logosHeight = logoAreaHeight * data.length + gapBetweenReceptors * (data.length - 1);
 
         Object.entries(positionTopAA).forEach(([posStr, info]) => {
           const pos = Number(posStr);
@@ -2102,10 +2214,10 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
             // mask this column over logo area only
             const bw = x.bandwidth();
             const maskW = bw; // full column width
-            const posX = x(pos.toString())!;
+            const posX = x.getX(pos.toString());
             // blank out full column
             chartSvg.append('rect')
-              .attr('x', x(pos.toString())!)
+              .attr('x', x.getX(pos.toString()))
               .attr('y', margin.top)
               .attr('width', bw)
               .attr('height', logosHeight)
@@ -2189,7 +2301,7 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
               if (positionsWithData.includes(displayPos)) {
                 const gpcr = ref.gpcrdbMap[msaCol] || '';
                 if (!gpcr) return;
-                const cx = x(displayPos.toString())! + x.bandwidth() / 2;
+                const cx = x.getX(displayPos.toString()) + x.bandwidth() / 2;
                 chartSvg.append('text')
                   .attr('class', 'text-foreground fill-current')
                   .style('font-size', '10px')
@@ -2203,11 +2315,191 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
           }
         });
       }
+
+      /* ─── HRH2 Region blocks ─────────────────────────────────── */
+      if (hrh2ConservationData.length > 0) {
+        const hrh2RegionPlotOffset = margin.top + (logoAreaHeight * data.length) + (gapBetweenReceptors * (data.length - 1)) + dotPlotHeight + referenceAreaHeight + 4;
+
+        // Group consecutive residues with the same region
+        type RegionGroup = { region: string; startResidue: number; endResidue: number };
+        const regionGroups: RegionGroup[] = [];
+        
+        if (hrh2ConservationData.length > 0) {
+          let startResidue = hrh2ConservationData[0].residue;
+          let currentRegion = hrh2ConservationData[0].region;
+          
+          for (let i = 1; i < hrh2ConservationData.length; i++) {
+            const prev = hrh2ConservationData[i - 1];
+            const cur = hrh2ConservationData[i];
+            if (cur.region !== prev.region) {
+              regionGroups.push({ region: prev.region, startResidue, endResidue: prev.residue });
+              startResidue = cur.residue;
+              currentRegion = cur.region;
+            }
+          }
+          regionGroups.push({ 
+            region: currentRegion, 
+            startResidue, 
+            endResidue: hrh2ConservationData[hrh2ConservationData.length - 1].residue 
+          });
+        }
+
+        // Get currently displayed HRH2 residues (after filtering)
+        const getDisplayedHrh2Residues = (): Array<{
+          residue: number;
+          region: string;
+          displayPosition: number;
+        }> => {
+          if (!referenceMaps['HRH2'] || !data[0]?.logoData) return [];
+          
+          const displayedResidues: Array<{
+            residue: number;
+            region: string;
+            displayPosition: number;
+          }> = [];
+          
+          // For each currently displayed position, find the corresponding HRH2 residue
+          data[0].logoData.forEach(logoPos => {
+            const msaCol = logoPos.msaColumn;
+            const hrh2Map = referenceMaps['HRH2'];
+            
+            if (msaCol < hrh2Map.length && hrh2Map[msaCol]) {
+              // Calculate residue number for this MSA column
+              let residueCount = 0;
+              for (let i = 0; i <= msaCol && i < hrh2Map.length; i++) {
+                if (hrh2Map[i]) {
+                  residueCount++;
+                }
+              }
+              
+              // Find the region for this residue
+              const conservationEntry = hrh2ConservationData.find(entry => entry.residue === residueCount);
+              if (conservationEntry) {
+                displayedResidues.push({
+                  residue: residueCount,
+                  region: conservationEntry.region,
+                  displayPosition: logoPos.position
+                });
+              }
+            }
+          });
+          
+          return displayedResidues.sort((a, b) => a.displayPosition - b.displayPosition);
+        };
+
+        // Get displayed HRH2 residues and group them by region
+        const displayedHrh2Residues = getDisplayedHrh2Residues();
+        
+        // Filter out ECLs, ICLs, and H8 regions
+        const filteredHrh2Residues = displayedHrh2Residues.filter(residue => {
+          const region = residue.region.toUpperCase();
+          return !region.includes('ECL') && !region.includes('ICL') && region !== 'H8';
+        });
+        
+        // Group consecutive displayed residues by region
+        const displayedRegionGroups: Array<{
+          region: string;
+          startDisplayPos: number;
+          endDisplayPos: number;
+          startResidue: number;
+          endResidue: number;
+        }> = [];
+        
+        if (filteredHrh2Residues.length > 0) {
+          let currentGroup = {
+            region: filteredHrh2Residues[0].region,
+            startDisplayPos: filteredHrh2Residues[0].displayPosition,
+            endDisplayPos: filteredHrh2Residues[0].displayPosition,
+            startResidue: filteredHrh2Residues[0].residue,
+            endResidue: filteredHrh2Residues[0].residue
+          };
+          
+          for (let i = 1; i < filteredHrh2Residues.length; i++) {
+            const current = filteredHrh2Residues[i];
+            const prev = filteredHrh2Residues[i - 1];
+            
+            // If same region and consecutive display positions, extend current group
+            if (current.region === currentGroup.region && 
+                current.displayPosition === prev.displayPosition + 1) {
+              currentGroup.endDisplayPos = current.displayPosition;
+              currentGroup.endResidue = current.residue;
+            } else {
+              // Start new group
+              displayedRegionGroups.push(currentGroup);
+              currentGroup = {
+                region: current.region,
+                startDisplayPos: current.displayPosition,
+                endDisplayPos: current.displayPosition,
+                startResidue: current.residue,
+                endResidue: current.residue
+              };
+            }
+          }
+          displayedRegionGroups.push(currentGroup);
+        }
+
+        if (displayedRegionGroups.length > 0) {
+          // Background stripe
+          chartSvg.append('rect')
+            .attr('x', 0)
+            .attr('y', hrh2RegionPlotOffset)
+            .attr('width', totalWidth)
+            .attr('height', hrh2RegionHeight)
+            .attr('fill', 'rgba(0,0,0,0.02)');
+
+          // Render region blocks with alternating grey colors
+          displayedRegionGroups.forEach((regionGroup, regionIndex) => {
+            const startX = x.getX(regionGroup.startDisplayPos.toString());
+            const endX = x.getX(regionGroup.endDisplayPos.toString()) + x.bandwidth();
+            const regionWidth = endX - startX;
+            
+            // Use alternating grey colors
+            const fillColor = regionIndex % 2 ? 'rgba(0,0,0,0.06)' : 'rgba(0,0,0,0.12)';
+            
+            // Region block
+            chartSvg.append('rect')
+              .attr('class', 'hrh2-region-block')
+              .attr('x', startX)
+              .attr('y', hrh2RegionPlotOffset)
+              .attr('width', regionWidth)
+              .attr('height', hrh2RegionHeight)
+              .attr('fill', fillColor)
+              .attr('stroke', 'rgba(0,0,0,0.2)')
+              .attr('stroke-width', 0.5);
+
+            // Region label (only show if block is wide enough)
+            const labelX = startX + regionWidth / 2;
+            const labelY = hrh2RegionPlotOffset + hrh2RegionHeight / 2;
+            
+            if (regionWidth > 30) { // Only show label if region block is wide enough
+              chartSvg.append('text')
+                .attr('class', 'hrh2-region-label text-foreground fill-current')
+                .style('font-size', '11px')
+                .style('font-family', 'Helvetica')
+                .attr('text-anchor', 'middle')
+                .attr('dominant-baseline', 'middle')
+                .attr('x', labelX)
+                .attr('y', labelY)
+                .text(regionGroup.region);
+            }
+          });
+        }
+
+        // Y-axis label for HRH2 regions
+        yAxisSvg.append('text')
+          .attr('text-anchor', 'end')
+          .attr('x', yAxisWidth - 10)
+          .attr('y', hrh2RegionPlotOffset + hrh2RegionHeight / 2 + 4)
+          .attr('class', 'text-foreground fill-current')
+          .style('font-size', '12px')
+          .style('font-family', 'Helvetica')
+          .text('HRH2 Regions');
+      }
       
       // Add conservation bar plot below the logos if using simple conservation
       if (useSimpleConservation && data.length > 0 && data[0].logoData.length > 0) {
         const conservationBarHeight = 60;
-        const barChartY = totalHeight - conservationBarHeight;
+        const barChartY = totalHeight - conservationBarHeight - margin.bottom;
         
         // Add conservation bar chart background
         chartSvg
@@ -2228,7 +2520,7 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
         
         data[0].logoData.forEach((d) => {
           if (d.crossAlignmentData) {
-            const barX = x(d.position.toString())!;
+            const barX = x.getX(d.position.toString());
             const barWidth = x.bandwidth();
             const barHeight = barScale(d.crossAlignmentData.conservationPercentage);
             
@@ -2283,7 +2575,7 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
         const conservationAxis = d3.axisLeft(d3.scaleLinear()
           .domain([0, maxConservation])
           .range([conservationBarHeight - 10, 10]))
-          .ticks(5)
+          .tickValues([0, maxConservation])
           .tickFormat(d => `${d}%`);
         
         yAxisSvg
@@ -2325,6 +2617,9 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
     showReferenceRows,
     referenceDataLoaded,
     referenceInfo,
+    hrh2ConservationData,
+    filterTokens,
+    referenceMaps,
     previousDataHash,
     // Stable function references - these rarely change
     getResidueColor, 
