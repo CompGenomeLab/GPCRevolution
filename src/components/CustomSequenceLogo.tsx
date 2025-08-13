@@ -2666,6 +2666,24 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
           .style('font-family', 'Helvetica')
           .text('Conservation %');
       }
+
+      // ─── Add column numbers on top ─────────────────────────────────────────
+      // Use the display positions (1-based) for labeling
+      chartSvg.selectAll('text.column-number')
+        .data(positionsWithData.map((pos, i) => ({ pos, display: i + 1 })))
+        .enter()
+        .append('text')
+        .attr('class', 'column-number')
+        // nudge the row slightly right by adding a small x-offset (e.g., 4px)
+        .attr('transform', d => {
+          const xPos = x.getX(d.pos.toString()) + x.bandwidth() / 2 + 4;
+          const yPos = margin.top / 2;
+          return `translate(${xPos},${yPos}) rotate(-90)`;
+        })
+        .attr('text-anchor', 'middle')
+        .style('font-weight', 'bold')
+        .text(d => d.display);
+      // ─────────────────────────────────────────────────────────────────────────
     }
 
     return () => {
