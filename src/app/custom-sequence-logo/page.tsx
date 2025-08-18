@@ -13,6 +13,7 @@ export default function CustomSequenceLogoPage() {
     'ClassB1_clade',
     'ClassB2_clade',
     'GPR1_clade',
+    'GprD_clade',
     'ClassT_clade',
     'ClassA_clade',
     'GP107_clade',
