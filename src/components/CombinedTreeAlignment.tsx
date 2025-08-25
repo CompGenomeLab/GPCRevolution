@@ -43,6 +43,14 @@ export type CombinedTreeAlignmentProps = {
   // Style
   fontSize?: number;
   leafRowSpacing?: number;
+  // Sequence area padding
+  sequenceTopPadding?: number;
+  sequenceBottomPadding?: number;
+  // Overall container padding
+  containerTopPadding?: number;
+  containerBottomPadding?: number;
+  // Alignment area padding
+  alignmentRightPadding?: number;
   // Dark mode
   isDarkMode?: boolean;
   // Receptor data for GPCRdb numbering (will use conservationFile from receptor object)
@@ -200,12 +208,29 @@ export function CombinedTreeAlignment({
   mirrorRightToLeft = false,
   fontSize = 12,
   leafRowSpacing = 28,
+  sequenceTopPadding = 4,
+  sequenceBottomPadding = 4,
+  containerTopPadding = 0,
+  containerBottomPadding = 0,
+  alignmentRightPadding = 4,
   isDarkMode,
   receptor,
 }: CombinedTreeAlignmentProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   // Mirror site-wide dark mode like other components (SequenceLogoChart, etc.)
-  const [detectedDarkMode, setDetectedDarkMode] = useState<boolean>(false);
+  // Initialize synchronously from document to avoid a light→dark flash on first paint
+  const [detectedDarkMode, setDetectedDarkMode] = useState<boolean>(() => {
+    try {
+      const html = typeof document !== 'undefined' ? document.documentElement : null;
+      const body = typeof document !== 'undefined' ? document.body : null;
+      if (!html || !body) return false;
+      const hasDarkClass = html.classList.contains('dark') || body.classList.contains('dark');
+      const hasDarkData = html.getAttribute('data-theme') === 'dark' || body.getAttribute('data-theme') === 'dark';
+      return hasDarkClass || hasDarkData;
+    } catch {
+      return false;
+    }
+  });
   useEffect(() => {
     const updateTheme = () => {
       try {
@@ -307,17 +332,17 @@ export function CombinedTreeAlignment({
       });
   }, [receptor?.conservationFile]);
 
-  // Autosize to parent if width/height not provided
+  // Only autosize width if not provided (height is now calculated based on content)
   useEffect(() => {
-    if (width && height) return;
+    if (width) return;
     const el = containerRef.current;
     if (!el) return;
-    const update = () => setContainerSize({ w: el.clientWidth || 800, h: el.clientHeight || 500 });
+    const update = () => setContainerSize({ w: el.clientWidth || 800, h: containerSize.h });
     update();
     const ro = new ResizeObserver(update);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [width, height]);
+  }, [width, containerSize.h]);
 
   const parsedTree = useMemo(() => {
     try {
@@ -332,22 +357,14 @@ export function CombinedTreeAlignment({
 
   // Derived drawing metrics
   const treePadding = 16; // left padding and bottom padding
-  const treeTopOffset = treePadding + fontSize + 20; // extra space for scale bar
   // Compact header height for rotated GPCRdb numbers
   // alignmentHeaderHeight will be computed dynamically below based on widest label
+  
+  // Fine-tune vertical gaps relative to the header bottom
+  const headerToSeqGapPx = Math.max(2, Math.round(fontSize * 0.5)); // slightly larger gap for sequences
 
-  // Calculate dynamic row spacing to fit container height when size not explicitly provided
-  const dynamicRowSpacing = useMemo(() => {
-    if (!parsedTree || (width && height)) {
-      return leafRowSpacing; // Use fixed spacing if explicit dimensions provided
-    }
-    const tempLayout = layoutTree(parsedTree, leafRowSpacing, collapsed);
-    const numVisibleRows = tempLayout.rowNodes.length;
-    if (numVisibleRows <= 1) return leafRowSpacing;
-    const availableHeight = containerSize.h - treeTopOffset - treePadding;
-    const calculatedSpacing = Math.max(16, availableHeight / numVisibleRows);
-    return Math.min(calculatedSpacing, leafRowSpacing * 2);
-  }, [parsedTree, collapsed, containerSize.h, leafRowSpacing, width, height, treeTopOffset, treePadding]);
+  // Use fixed row spacing - no dynamic calculation based on container
+  const dynamicRowSpacing = leafRowSpacing;
 
   const laidOut = useMemo(() => {
     if (!parsedTree) return null;
@@ -380,10 +397,11 @@ export function CombinedTreeAlignment({
     if (!ctx) return sampleText.length * fontSize * (0.6 + LETTER_SPACING_EM); // fallback adjusted for letter spacing
     const monoFont = "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace";
     ctx.font = `bold ${fontSize}px ${monoFont}`;
-    const baseWidth = ctx.measureText(sampleText).width;
-    // Add letter spacing for each character (0.2em per character)
-    const letterSpacingTotal = sampleText.length * (fontSize * LETTER_SPACING_EM);
-    return baseWidth + letterSpacingTotal;
+    const baseCharWidth = ctx.measureText('M').width;
+    const charWidthWithSpacing = baseCharWidth + fontSize * LETTER_SPACING_EM;
+    // Calculate width as: (n-1) * charWidthWithSpacing + baseCharWidth
+    // This accounts for letter spacing between characters but not after the last one
+    return sampleText.length > 0 ? (sampleText.length - 1) * charWidthWithSpacing + baseCharWidth : 0;
   }, [cleanedSequences, fontSize]);
 
   // Number of columns (characters) to render in the alignment/header
@@ -447,12 +465,24 @@ export function CombinedTreeAlignment({
 
   const contentHeight = useMemo(() => {
     if (width && height) return height;
-    if (!laidOut) return containerSize.h;
-    // Calculate the exact height needed for the content including header space
-    const desired = laidOut.totalHeight + treePadding + (cleanedSequences.length > 0 ? alignmentHeaderHeight : 0);
-    // Only use container height as minimum if content is smaller, otherwise use exact content height
-    return desired > 0 ? desired : containerSize.h;
-  }, [laidOut, treePadding, containerSize.h, width, height, cleanedSequences.length, alignmentHeaderHeight]);
+    if (!laidOut) return 400; // fallback minimum height
+    
+    // Calculate height based purely on number of sequences/rows
+    const numSequenceRows = laidOut.visibleLeaves.length;
+    const headerPx = cleanedSequences.length > 0 ? alignmentHeaderHeight : 0;
+    const sequenceAreaHeight = numSequenceRows * leafRowSpacing;
+    
+    // Total: header + gap + top padding + sequence area + bottom padding + container padding
+    const totalHeight = headerPx + 
+                       headerToSeqGapPx + 
+                       sequenceTopPadding + 
+                       sequenceAreaHeight + 
+                       sequenceBottomPadding + 
+                       containerTopPadding + 
+                       containerBottomPadding;
+    
+    return Math.max(totalHeight, 200); // ensure minimum reasonable height
+  }, [laidOut, cleanedSequences.length, alignmentHeaderHeight, leafRowSpacing, headerToSeqGapPx, sequenceTopPadding, sequenceBottomPadding, containerTopPadding, containerBottomPadding, width, height]);
 
   // Height of just the alignment body (rows area) excluding header and external paddings
   const alignmentBodyHeight = useMemo(() => {
@@ -460,8 +490,8 @@ export function CombinedTreeAlignment({
     const leaves = laidOut.visibleLeaves;
     if (leaves.length === 0) return 0;
     const maxY = Math.max(...leaves.map(l => l.y || 0));
-    return Math.max(0, maxY + dynamicRowSpacing / 2);
-  }, [laidOut, dynamicRowSpacing]);
+    return Math.max(0, maxY + dynamicRowSpacing / 2 + sequenceTopPadding + sequenceBottomPadding);
+  }, [laidOut, dynamicRowSpacing, sequenceTopPadding, sequenceBottomPadding]);
 
   // Consistent character width used for both headers and background stripes
   const columnCharWidth = useMemo(() => {
@@ -475,20 +505,22 @@ export function CombinedTreeAlignment({
     return baseWidth + fontSize * LETTER_SPACING_EM;
   }, [fontSize]);
 
-  // Colors: responsive to dark mode
-  const backgroundColor = effectiveDarkMode ? '#1f2937' : '#ffffff'; // gray-800 : white
+  // Colors: responsive to dark mode - use CSS variables to match other components
+  const backgroundColor = useMemo(() => {
+    if (typeof document === 'undefined') return effectiveDarkMode ? '#2A2A2A' : '#FDFBF7';
+    const computedStyle = getComputedStyle(document.documentElement);
+    return computedStyle.getPropertyValue('--card').trim() || (effectiveDarkMode ? '#2A2A2A' : '#FDFBF7');
+  }, [effectiveDarkMode]);
+  
   const strokeColor = effectiveDarkMode ? '#9ca3af' : '#333333'; // gray-400 : dark gray
   const textColor = effectiveDarkMode ? '#f9fafb' : '#111111'; // gray-50 : almost black
   const leafGuideColor = effectiveDarkMode ? '#6b7280' : '#bdbdbd'; // gray-500 : light gray
   const connectorColor = effectiveDarkMode ? '#9ca3af' : '#9e9e9e'; // gray-400 : medium gray
   const alternatingStripeColor = effectiveDarkMode ? '#4b5563' : '#cbd5e1'; // dark: gray-600, light: slate-300
-  const errorBgColor = effectiveDarkMode ? '#1f2937' : '#ffffff'; // gray-800 : white
+  const errorBgColor = backgroundColor;
   const errorTextColor = effectiveDarkMode ? '#ef4444' : '#b91c1c'; // red-500 : red-700
 
-  // Fine-tune vertical gaps relative to the header bottom
-  // Note: headerToTreeGapPx is currently unused after aligning tree to sequences; keep for quick tuning if needed.
-  // const headerToTreeGapPx = Math.max(0, Math.round(fontSize * 0.2));
-  const headerToSeqGapPx = Math.max(2, Math.round(fontSize * 0.5)); // slightly larger gap for sequences
+  // Note: headerToTreeGapPx was removed after aligning tree to sequences
 
   if (!parsedTree) {
     return (
@@ -501,12 +533,12 @@ export function CombinedTreeAlignment({
   }
 
   const leftWidth = treeWidthPx + Math.max(0, labelsRightX - treeWidthPx) + treePadding * 2;
-  // Use precise measured content width to eliminate empty space
-  const alignmentTotalWidth = alignmentContentWidth;
-  const totalWidth = leftWidth + alignmentTotalWidth; // Remove alignPadding gap
+  // Use precise measured content width plus right padding for better visibility
+  const alignmentTotalWidth = alignmentContentWidth + alignmentRightPadding;
+  const totalWidth = leftWidth + alignmentTotalWidth;
 
   return (
-    <div ref={containerRef} style={{ width: width ? `${width}px` : '100%', height: height ? `${height}px` : '100%', overflow: 'auto', position: 'relative', background: backgroundColor }}>
+    <div ref={containerRef} style={{ width: width ? `${width}px` : '100%', height: height ? `${height}px` : 'auto', overflow: 'auto', position: 'relative', background: backgroundColor }}>
       {/* Content area with proper width to avoid empty space on right */}
       <div style={{ position: 'relative', width: totalWidth, height: contentHeight, background: backgroundColor }}>
         {/* Sticky header overlay: GPCRdb column numbers (placed before tree SVG to avoid being pushed down). */}
@@ -575,7 +607,7 @@ export function CombinedTreeAlignment({
           {/* Optional mirror for RTL */}
           <g transform={mirrorRightToLeft ? `translate(${leftWidth},0) scale(-1,1)` : undefined}>
             {/* Tree drawing origin padding: align directly under header to match sequence start offset. */}
-            <g transform={`translate(${treePadding}, ${alignmentHeaderHeight + headerToSeqGapPx})`}>
+            <g transform={`translate(${treePadding}, ${alignmentHeaderHeight + headerToSeqGapPx + sequenceTopPadding})`}>
               {/* Draw branches */}
               {laidOut && (
                 <TreeBranches
@@ -641,9 +673,9 @@ export function CombinedTreeAlignment({
               {/* Background behind sequences to ensure header overlap looks clean */}
               <rect
                 x={0}
-                y={-dynamicRowSpacing / 2}
+                y={-sequenceTopPadding}
                 width={alignmentTotalWidth}
-                height={alignmentBodyHeight + dynamicRowSpacing / 2}
+                height={alignmentBodyHeight}
                 fill={backgroundColor}
               />
               {/* Alternating column background stripes */}
@@ -653,9 +685,9 @@ export function CombinedTreeAlignment({
                     <rect
                       key={`bg-${i}`}
                       x={i * columnCharWidth}
-                      y={-dynamicRowSpacing / 2}
+                      y={-sequenceTopPadding}
                       width={columnCharWidth}
-                      height={alignmentBodyHeight + dynamicRowSpacing / 2}
+                      height={alignmentBodyHeight}
                       fill={alternatingStripeColor} /* Stripe fill */
                     />
                   ) : null
@@ -671,6 +703,7 @@ export function CombinedTreeAlignment({
                 sequences={cleanedSequences}
                 fallbackText={alignmentText}
                 isDarkMode={effectiveDarkMode}
+                topPadding={sequenceTopPadding}
               />
             </g>
           </svg>
@@ -972,6 +1005,7 @@ function AlignmentOnly({
   sequences,
   fallbackText,
   isDarkMode,
+  topPadding = 0,
 }: {
   rowNodes: NewickNode[];
   leaves: NewickNode[];
@@ -982,6 +1016,7 @@ function AlignmentOnly({
   sequences: { header: string; sequence: string }[];
   fallbackText: string;
   isDarkMode: boolean;
+  topPadding?: number;
 }) {
   const monoFont = "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace";
   const rows: React.ReactNode[] = [];
@@ -1016,7 +1051,7 @@ function AlignmentOnly({
   };
 
   leaves.forEach((leaf, idx) => {
-    const y = leaf.y || 0;
+    const y = (leaf.y || 0) + topPadding;
     const sequence = getSequenceForLeaf(leaf.name || '');
     
     // Only render if we have a sequence (not null while loading)
