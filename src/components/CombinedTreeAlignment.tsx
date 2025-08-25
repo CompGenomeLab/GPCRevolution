@@ -43,6 +43,8 @@ export type CombinedTreeAlignmentProps = {
   // Style
   fontSize?: number;
   leafRowSpacing?: number;
+  // Dark mode
+  isDarkMode?: boolean;
   // Receptor data for GPCRdb numbering (will use conservationFile from receptor object)
   receptor?: { conservationFile?: string } | null;
 };
@@ -198,9 +200,36 @@ export function CombinedTreeAlignment({
   mirrorRightToLeft = false,
   fontSize = 12,
   leafRowSpacing = 28,
+  isDarkMode,
   receptor,
 }: CombinedTreeAlignmentProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  // Mirror site-wide dark mode like other components (SequenceLogoChart, etc.)
+  const [detectedDarkMode, setDetectedDarkMode] = useState<boolean>(false);
+  useEffect(() => {
+    const updateTheme = () => {
+      try {
+        const html = document.documentElement;
+        const body = document.body;
+        const hasDarkClass = html.classList.contains('dark') || body.classList.contains('dark');
+        const hasDarkData = html.getAttribute('data-theme') === 'dark' || body.getAttribute('data-theme') === 'dark';
+        setDetectedDarkMode(hasDarkClass || hasDarkData);
+      } catch {
+        setDetectedDarkMode(false);
+      }
+    };
+    updateTheme();
+    const htmlObserver = new MutationObserver(updateTheme);
+    const bodyObserver = new MutationObserver(updateTheme);
+    htmlObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'data-theme'] });
+    if (document.body) bodyObserver.observe(document.body, { attributes: true, attributeFilter: ['class', 'data-theme'] });
+    return () => {
+      htmlObserver.disconnect();
+      bodyObserver.disconnect();
+    };
+  }, []);
+  // Effective dark mode: explicit prop wins when provided; otherwise use detected
+  const effectiveDarkMode = typeof isDarkMode === 'boolean' ? isDarkMode : detectedDarkMode;
   const [containerSize, setContainerSize] = useState<{ w: number; h: number }>({ w: width || 800, h: height || 500 });
 
   // Parse FASTA and use the cleaning hook
@@ -390,7 +419,7 @@ export function CombinedTreeAlignment({
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     if (!ctx) return laidOut.visibleLeaves.map(() => 0);
-    ctx.font = `${fontSize}px sans-serif`;
+    ctx.font = `${fontSize}px Arial, sans-serif`;
     return laidOut.visibleLeaves.map(leaf => {
       const name = leaf.name || '';
       const parts = name.split('|');
@@ -425,6 +454,15 @@ export function CombinedTreeAlignment({
     return desired > 0 ? desired : containerSize.h;
   }, [laidOut, treePadding, containerSize.h, width, height, cleanedSequences.length, alignmentHeaderHeight]);
 
+  // Height of just the alignment body (rows area) excluding header and external paddings
+  const alignmentBodyHeight = useMemo(() => {
+    if (!laidOut) return 0;
+    const leaves = laidOut.visibleLeaves;
+    if (leaves.length === 0) return 0;
+    const maxY = Math.max(...leaves.map(l => l.y || 0));
+    return Math.max(0, maxY + dynamicRowSpacing / 2);
+  }, [laidOut, dynamicRowSpacing]);
+
   // Consistent character width used for both headers and background stripes
   const columnCharWidth = useMemo(() => {
     const canvas = document.createElement('canvas');
@@ -437,11 +475,15 @@ export function CombinedTreeAlignment({
     return baseWidth + fontSize * LETTER_SPACING_EM;
   }, [fontSize]);
 
-  // Colors: charcoal on white background
-  const strokeColor = '#333333';
-  const textColor = '#111111';
-  const leafGuideColor = '#bdbdbd';
-  const connectorColor = '#9e9e9e';
+  // Colors: responsive to dark mode
+  const backgroundColor = effectiveDarkMode ? '#1f2937' : '#ffffff'; // gray-800 : white
+  const strokeColor = effectiveDarkMode ? '#9ca3af' : '#333333'; // gray-400 : dark gray
+  const textColor = effectiveDarkMode ? '#f9fafb' : '#111111'; // gray-50 : almost black
+  const leafGuideColor = effectiveDarkMode ? '#6b7280' : '#bdbdbd'; // gray-500 : light gray
+  const connectorColor = effectiveDarkMode ? '#9ca3af' : '#9e9e9e'; // gray-400 : medium gray
+  const alternatingStripeColor = effectiveDarkMode ? '#4b5563' : '#cbd5e1'; // dark: gray-600, light: slate-300
+  const errorBgColor = effectiveDarkMode ? '#1f2937' : '#ffffff'; // gray-800 : white
+  const errorTextColor = effectiveDarkMode ? '#ef4444' : '#b91c1c'; // red-500 : red-700
 
   // Fine-tune vertical gaps relative to the header bottom
   // Note: headerToTreeGapPx is currently unused after aligning tree to sequences; keep for quick tuning if needed.
@@ -451,7 +493,7 @@ export function CombinedTreeAlignment({
   if (!parsedTree) {
     return (
       <div ref={containerRef} style={{ width: width ? `${width}px` : '100%', height: height ? `${height}px` : '420px' }}>
-        <div style={{ background: '#ffffff', color: '#b91c1c', padding: 8, border: '1px solid #e5e7eb' }}>
+        <div style={{ background: errorBgColor, color: errorTextColor, padding: 8, border: `1px solid ${isDarkMode ? '#4b5563' : '#e5e7eb'}` }}>
           Invalid Newick provided.
         </div>
       </div>
@@ -464,16 +506,16 @@ export function CombinedTreeAlignment({
   const totalWidth = leftWidth + alignmentTotalWidth; // Remove alignPadding gap
 
   return (
-    <div ref={containerRef} style={{ width: width ? `${width}px` : '100%', height: height ? `${height}px` : '100%', overflow: 'auto', position: 'relative', background: '#ffffff' }}>
+    <div ref={containerRef} style={{ width: width ? `${width}px` : '100%', height: height ? `${height}px` : '100%', overflow: 'auto', position: 'relative', background: backgroundColor }}>
       {/* Content area with proper width to avoid empty space on right */}
-      <div style={{ position: 'relative', width: totalWidth, height: contentHeight, background: '#ffffff' }}>
+      <div style={{ position: 'relative', width: totalWidth, height: contentHeight, background: backgroundColor }}>
         {/* Sticky header overlay: GPCRdb column numbers (placed before tree SVG to avoid being pushed down). */}
         {laidOut && (
           // Make the header sticky without affecting flow: height 0 + overflow visible prevents pushing tree down
           <div style={{ position: 'sticky', top: 0, left: leftWidth, zIndex: 15, width: alignmentTotalWidth, height: 0, pointerEvents: 'none', overflow: 'visible' }}>
             <svg width={alignmentTotalWidth} height={alignmentHeaderHeight} viewBox={`0 0 ${alignmentTotalWidth} ${alignmentHeaderHeight}`} style={{ display: 'block' }}>
-              {/* Solid white background to ensure header is opaque */}
-              <rect x={0} y={0} width={alignmentTotalWidth} height={alignmentHeaderHeight} fill="#ffffff" />
+              {/* Solid background to ensure header is opaque */}
+              <rect x={0} y={0} width={alignmentTotalWidth} height={alignmentHeaderHeight} fill={backgroundColor} />
               {/* Alternating background stripes behind GPCRdb header */}
               <g>
                 {Array.from({ length: numColumns }).map((_, i) => (
@@ -484,7 +526,7 @@ export function CombinedTreeAlignment({
                       y={0}
                       width={columnCharWidth}
                       height={alignmentHeaderHeight}
-                      fill="#f3f4f6"
+                      fill={alternatingStripeColor}
                     />
                   ) : null
                 ))}
@@ -510,12 +552,12 @@ export function CombinedTreeAlignment({
           width={leftWidth}
           height={contentHeight}
           viewBox={`0 0 ${leftWidth} ${Math.max(contentHeight, 10)}`}
-          style={{ position: 'sticky', left: 0, top: 0, zIndex: 20, background: '#ffffff' }}
+          style={{ position: 'sticky', left: 0, top: 0, zIndex: 20, background: backgroundColor }}
         >
-        {/* White background for entire tree column (also covers the sticky header area above content) */}
-        <rect x={0} y={0} width={leftWidth} height={Math.max(contentHeight, 10)} fill="#ffffff" />
+        {/* Background for entire tree column (also covers the sticky header area above content) */}
+        <rect x={0} y={0} width={leftWidth} height={Math.max(contentHeight, 10)} fill={backgroundColor} />
         {/* Top cap to ensure header disappears behind tree when scrolling right */}
-        <rect x={0} y={0} width={leftWidth} height={alignmentHeaderHeight} fill="#ffffff" />
+        <rect x={0} y={0} width={leftWidth} height={alignmentHeaderHeight} fill={backgroundColor} />
         {/* Scale bar (top-left) */}
         {laidOut && (
           <SimpleScaleBar
@@ -543,6 +585,7 @@ export function CombinedTreeAlignment({
                   showSupport={showSupportOnBranches}
                   textColor={textColor}
                   collapsed={collapsed}
+                  backgroundColor={backgroundColor}
                 />
               )}
 
@@ -560,6 +603,7 @@ export function CombinedTreeAlignment({
                       return next;
                     })
                   }
+                  backgroundColor={backgroundColor}
                 />
               )}
 
@@ -594,13 +638,13 @@ export function CombinedTreeAlignment({
           >
             {/* Alignment content: start under header with adjustable gap */}
             <g transform={`translate(0, ${alignmentHeaderHeight + headerToSeqGapPx})`}>
-              {/* White background behind sequences to ensure header overlap looks clean */}
+              {/* Background behind sequences to ensure header overlap looks clean */}
               <rect
                 x={0}
-                y={0}
+                y={-dynamicRowSpacing / 2}
                 width={alignmentTotalWidth}
-                height={Math.max(0, contentHeight - alignmentHeaderHeight - headerToSeqGapPx)}
-                fill="#ffffff"
+                height={alignmentBodyHeight + dynamicRowSpacing / 2}
+                fill={backgroundColor}
               />
               {/* Alternating column background stripes */}
               <g>
@@ -609,10 +653,10 @@ export function CombinedTreeAlignment({
                     <rect
                       key={`bg-${i}`}
                       x={i * columnCharWidth}
-                      y={0}
+                      y={-dynamicRowSpacing / 2}
                       width={columnCharWidth}
-                      height={Math.max(0, contentHeight - alignmentHeaderHeight - headerToSeqGapPx)}
-                      fill="#f3f4f6" /* Tailwind gray-100 */
+                      height={alignmentBodyHeight + dynamicRowSpacing / 2}
+                      fill={alternatingStripeColor} /* Stripe fill */
                     />
                   ) : null
                 ))}
@@ -626,6 +670,7 @@ export function CombinedTreeAlignment({
                 fontSize={fontSize}
                 sequences={cleanedSequences}
                 fallbackText={alignmentText}
+                isDarkMode={effectiveDarkMode}
               />
             </g>
           </svg>
@@ -642,6 +687,7 @@ function TreeBranches({
   showSupport,
   textColor,
   collapsed,
+  backgroundColor,
 }: {
   node: NewickNode;
   strokeColor: string;
@@ -649,6 +695,7 @@ function TreeBranches({
   showSupport: boolean;
   textColor: string;
   collapsed: Set<string>;
+  backgroundColor: string;
 }) {
   const elements: React.ReactNode[] = [];
 
@@ -693,8 +740,8 @@ function TreeBranches({
             height={rectH}
             rx={3}
             ry={3}
-            fill="#ffffff"
-            opacity={0.80}
+            fill={backgroundColor}
+            opacity={0.90}
           />,
         );
         elements.push(
@@ -768,6 +815,7 @@ function LeafLabels({
         y={y}
         fontSize={fontSize}
         fill={textColor}
+        fontFamily="Arial, sans-serif"
         textAnchor="end"
         dominantBaseline="middle"
         transform={mirror ? `scale(-1,1) translate(${-2 * rightRailX},0)` : undefined}
@@ -794,12 +842,14 @@ function NodeCircles({
   strokeColor,
   collapsed,
   onToggle,
+  backgroundColor,
 }: {
   node: NewickNode;
   radius: number;
   strokeColor: string;
   collapsed: Set<string>;
   onToggle: (id: string) => void;
+  backgroundColor: string;
 }) {
   const elements: React.ReactNode[] = [];
 
@@ -817,7 +867,7 @@ function NodeCircles({
             cx={cx}
             cy={cy}
             r={radius}
-            fill={isCollapsed ? strokeColor : '#ffffff'}
+            fill={isCollapsed ? strokeColor : backgroundColor}
             stroke={strokeColor}
             strokeWidth={1}
             style={{ cursor: 'pointer' }}
@@ -868,7 +918,7 @@ function AlignmentColumnHeaders({
 
   // charWidth provided by parent for consistency with backgrounds
 
-  const monoFont = "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace";
+  const headerFont = "Arial, sans-serif";
   // Anchor labels to the bottom of the header so rotation doesn't clip at the top
   const yAnchor = Math.max(2, headerHeight - 2);
   
@@ -895,7 +945,7 @@ function AlignmentColumnHeaders({
         y={yAnchor}
         fontSize={fontSize}
         fill={textColor}
-        fontFamily={monoFont}
+        fontFamily={headerFont}
         textAnchor="start"
         dominantBaseline="hanging"
         transform={`rotate(-90, ${x}, ${yAnchor})`}
@@ -921,6 +971,7 @@ function AlignmentOnly({
   fontSize,
   sequences,
   fallbackText,
+  isDarkMode,
 }: {
   rowNodes: NewickNode[];
   leaves: NewickNode[];
@@ -930,6 +981,7 @@ function AlignmentOnly({
   fontSize: number;
   sequences: { header: string; sequence: string }[];
   fallbackText: string;
+  isDarkMode: boolean;
 }) {
   const monoFont = "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace";
   const rows: React.ReactNode[] = [];
@@ -988,7 +1040,7 @@ function AlignmentOnly({
               x={xStart + i * charWidth + charWidth / 2}
               dy={0}
               textAnchor="middle"
-              fill={residueColor(residue)}
+              fill={residueColor(residue, isDarkMode)}
             >
               {residue}
             </tspan>
@@ -1000,8 +1052,9 @@ function AlignmentOnly({
 
   return <g>{rows}</g>;
 }
-function residueColor(residue: string): string | undefined {
-  const mapping: Record<string, string> = {
+function residueColor(residue: string, isDarkMode: boolean = false): string | undefined {
+  // Light mode colors
+  const lightMapping: Record<string, string> = {
     FCB315: 'WYHF',
     '7D2985': 'STQN',
     '231F20': 'PGA',
@@ -1009,6 +1062,18 @@ function residueColor(residue: string): string | undefined {
     '7CAEC4': 'RK',
     B4B4B4: 'VCIML',
   };
+  
+  // Dark mode colors (adjusted for better contrast)
+  const darkMapping: Record<string, string> = {
+    'FFD700': 'WYHF', // Gold for aromatic
+    'DA70D6': 'STQN', // Orchid for polar
+    'F0F0F0': 'PGA',  // Light gray for small (inverted)
+    'FF6347': 'ED',   // Tomato for acidic
+    '87CEEB': 'RK',   // Sky blue for basic
+    'C0C0C0': 'VCIML', // Silver for hydrophobic
+  };
+  
+  const mapping = isDarkMode ? darkMapping : lightMapping;
   const ch = residue.toUpperCase();
   for (const [hex, acids] of Object.entries(mapping)) {
     if (acids.includes(ch)) return `#${hex}`;
