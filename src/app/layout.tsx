@@ -4,6 +4,7 @@ import { ThemeProvider } from 'next-themes';
 import './globals.css';
 import { TheHeader } from '@/components/TheHeader';
 import { Toaster } from '@/components/ui/sonner';
+import { Analytics } from '@/components/Analytics';
 
 const openSans = Open_Sans({
   subsets: ['latin'],
@@ -35,6 +36,7 @@ export default function RootLayout({
           <main className="grow">{children}</main>
         </ThemeProvider>
         <Toaster />
+        <Analytics />
       </body>
     </html>
   );

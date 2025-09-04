@@ -4,6 +4,7 @@ import React from 'react';
 import CustomSequenceLogo from '@/components/CustomSequenceLogo';
 import PairwiseOverlapMatrix from '@/components/PairwiseOverlapMatrix';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import ConsensusEmitter from '@/components/ConsensusEmitter';
 
 export default function CustomSequenceLogoPage() {
   // All FASTA files in the custom_msa folder (without .fasta extension)
@@ -55,6 +56,9 @@ export default function CustomSequenceLogoPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Consensus Emitter */}
+      <ConsensusEmitter customFastaNames={fastaNames} customFolder={folder} />
 
       {/* Pairwise Overlap Matrix */}
       <PairwiseOverlapMatrix

@@ -34,3 +34,23 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Analytics (Google Analytics 4)
+
+This project supports GA4 to track visits and geography.
+
+1) Create a GA4 property and web data stream. Copy the Measurement ID (looks like `G-XXXXXXX`).
+
+2) Set the environment variable locally or in your hosting provider:
+
+```
+NEXT_PUBLIC_GA_MEASUREMENT_ID=G-XXXXXXX
+```
+
+You can use `.env.local` during development. See `.env.local.example`.
+
+3) The app automatically loads GA and tracks route changes. No additional setup is needed.
+
+Notes:
+- GA4 reports: Acquisition (source/medium/referrals) and Demographics (country/city).
+- GA4 does not identify individual users; data is aggregate. Ensure cookie/consent compliance as required.
