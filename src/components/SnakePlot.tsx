@@ -270,87 +270,97 @@ export default function SnakePlot({ svgPath, conservationFile, onLoaded }: Snake
   if (!svgPath) return null;
 
   return (
-    <div className="bg-card text-card-foreground rounded-lg p-6 shadow-md select-none overflow-x-auto">
-      <h2 className="text-2xl font-bold mb-4">Residue Conservation Snake Plot</h2>
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
-        <div className="flex items-center gap-2 mt-2 sm:mt-0 pr-10">
+    <div className="bg-card text-card-foreground rounded-lg shadow-md select-none overflow-x-auto">
+      <div className="p-6 border-b border-border flex items-center justify-between">
+        <h2 className="text-xl font-semibold text-foreground">Residue Conservation Snake Plot</h2>
+        <div className="flex items-center gap-2">
           {svgContent && !isLoading && !error && (
-            <Button onClick={downloadSVG} variant="outline" size="sm">
+            <button
+              type="button"
+              onClick={downloadSVG}
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border text-sm hover:bg-accent"
+              data-action="download-snakeplot"
+            >
+              <span className="sr-only">Download Snake Plot SVG</span>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
+                <path d="M12 16l4-5h-3V4h-2v7H8l4 5z" />
+                <path d="M4 18h16v2H4z" />
+              </svg>
               Download SVG
-            </Button>
+            </button>
           )}
         </div>
       </div>
-
-      {isLoading ? (
-        <div className="space-y-4">
-          <div className="flex items-center justify-center p-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-foreground mr-4"></div>
-            <span>Loading snake plot... {loadingProgress}%</span>
+      <div className="p-6">
+        {isLoading ? (
+          <div className="space-y-4">
+            <div className="flex items-center justify-center p-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-foreground mr-4"></div>
+              <span>Loading snake plot... {loadingProgress}%</span>
+            </div>
+            {loadingProgress > 0 && (
+              <div className="w-full bg-muted rounded-full h-2">
+                <div
+                  className="bg-primary h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${loadingProgress}%` }}
+                ></div>
+              </div>
+            )}
           </div>
-          {loadingProgress > 0 && (
-            <div className="w-full bg-muted rounded-full h-2">
-              <div
-                className="bg-primary h-2 rounded-full transition-all duration-300"
-                style={{ width: `${loadingProgress}%` }}
-              ></div>
-            </div>
-          )}
-        </div>
-      ) : error ? (
-        <div className="text-center text-destructive p-4">
-          Failed to load snake plot
-          <button
-            onClick={loadSnakePlotContent}
-            className="block mx-auto mt-2 px-3 py-1 text-sm bg-primary text-primary-foreground rounded hover:bg-primary/90"
-          >
-            Retry
-          </button>
-        </div>
-      ) : !svgContent ? (
-        <div className="text-center text-muted-foreground p-4">
-          Click Load Snake Plot to view the conservation visualization
-        </div>
-      ) : (
-        <div className="space-y-4">
-          <div className="w-full max-w-full mx-auto rounded-lg bg-card overflow-x-auto text-center">
-            <div className="w-full sm:w-auto sm:max-w-none sm:inline-block">
-              {svgContent}
-            </div>
-          </div>
-          
-          {/* Color controls section */}
-          <div className="flex flex-wrap gap-4 items-center justify-center pt-4">
-            <div className="flex items-center gap-2">
-              <input
-                type="color"
-                value={fillColor}
-                onChange={e => setFillColor(e.target.value)}
-                className="w-5 h-5 rounded cursor-pointer border"
-                title="Circle Fill Color"
-              />
-              <span className="text-base text-foreground">Circle Fill Color</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="color"
-                value={textColor}
-                onChange={e => setTextColor(e.target.value)}
-                className="w-5 h-5 rounded cursor-pointer border"
-                title="Text Color"
-              />
-              <span className="text-base text-foreground">Text Color</span>
-            </div>
+        ) : error ? (
+          <div className="text-center text-destructive p-4">
+            Failed to load snake plot
             <button
-              onClick={resetColors}
-              className="ml-2 px-3 py-1 text-xs bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground rounded border transition-colors"
-              title="Reset colors to default"
+              onClick={loadSnakePlotContent}
+              className="block mx-auto mt-2 px-3 py-1 text-sm bg-primary text-primary-foreground rounded hover:bg-primary/90"
             >
-              Reset
+              Retry
             </button>
           </div>
-        </div>
-      )}
+        ) : !svgContent ? (
+          <div className="text-center text-muted-foreground p-4">
+            Click Load Snake Plot to view the conservation visualization
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="w-full max-w-full mx-auto rounded-lg bg-card overflow-x-auto text-center">
+              <div className="w-full sm:w-auto sm:max-w-none sm:inline-block">
+                {svgContent}
+              </div>
+            </div>
+            {/* Color controls section */}
+            <div className="flex flex-wrap gap-4 items-center justify-center pt-4">
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={fillColor}
+                  onChange={e => setFillColor(e.target.value)}
+                  className="w-5 h-5 rounded cursor-pointer border"
+                  title="Circle Fill Color"
+                />
+                <span className="text-base text-foreground">Circle Fill Color</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={textColor}
+                  onChange={e => setTextColor(e.target.value)}
+                  className="w-5 h-5 rounded cursor-pointer border"
+                  title="Text Color"
+                />
+                <span className="text-base text-foreground">Text Color</span>
+              </div>
+              <button
+                onClick={resetColors}
+                className="ml-2 px-3 py-1 text-xs bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground rounded border transition-colors"
+                title="Reset colors to default"
+              >
+                Reset
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* React-based tooltip rendered using portal */}
       {tooltip.visible && typeof document !== 'undefined' && createPortal(

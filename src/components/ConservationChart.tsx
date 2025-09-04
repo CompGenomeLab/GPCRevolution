@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import * as d3 from 'd3';
 import type { NumberValue } from 'd3';
+import { Download } from 'lucide-react';
 
 export interface ConservationDatum {
   residue: number;
@@ -385,16 +386,85 @@ const ConservationChart: React.FC<ConservationChartProps> = ({ conservationFile,
     );
   }
 
-  /* ----------------------------------------------------------------------- */
-  /* 6. Main rendered chart ------------------------------------------------- */
-  /* ----------------------------------------------------------------------- */
   return (
-    <div className="bg-card text-card-foreground rounded-lg p-6 shadow-md">
-      <h2 className="mb-4 text-xl font-semibold text-foreground">Residue Conservation Bar Plot</h2>
-      <div className="relative flex h-[300px] w-full overflow-hidden">
-        <div ref={yAxisContainerRef} className="z-10 flex-shrink-0 bg-card" />
-        <div className="flex-grow overflow-x-auto">
-          <div ref={chartContainerRef} className="h-full" />
+    <div className="bg-card text-card-foreground rounded-lg shadow-md" data-plot="conservation">
+      <div className="p-6 border-b border-border flex items-center justify-between">
+        <h2 className="text-xl font-semibold text-foreground">Residue Conservation Bar Plot</h2>
+        <div className="flex items-center gap-2">
+          {conservationFile && (
+            <a
+              href={`/${conservationFile}`}
+              download
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border text-sm hover:bg-accent"
+              data-action="download-conservation-file"
+            >
+              <Download className="h-4 w-4" />
+              Conservation File
+            </a>
+          )}
+          {conservationFile && (
+            <button
+              type="button"
+              onClick={() => {
+                const yAxisContainer = yAxisContainerRef.current;
+                const chartContainer = chartContainerRef.current;
+                if (!yAxisContainer || !chartContainer) return;
+
+                const yAxisSvg = yAxisContainer.querySelector('svg');
+                const chartSvg = chartContainer.querySelector('svg');
+                if (!yAxisSvg || !chartSvg) return;
+
+                const yAxisWidth = parseInt(yAxisSvg.getAttribute('width') || '80');
+                const chartWidth = parseInt(chartSvg.getAttribute('width') || '800');
+                const totalWidth = yAxisWidth + chartWidth;
+                const totalHeight = parseInt(chartSvg.getAttribute('height') || '300');
+
+                const combinedSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                combinedSvg.setAttribute('width', totalWidth.toString());
+                combinedSvg.setAttribute('height', totalHeight.toString());
+                combinedSvg.setAttribute('viewBox', `0 0 ${totalWidth} ${totalHeight}`);
+                combinedSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+
+                const yAxisClone = yAxisSvg.cloneNode(true) as SVGElement;
+                yAxisClone.setAttribute('x', '0');
+                yAxisClone.setAttribute('y', '0');
+                combinedSvg.appendChild(yAxisClone);
+
+                const chartClone = chartSvg.cloneNode(true) as SVGElement;
+                chartClone.setAttribute('x', yAxisWidth.toString());
+                chartClone.setAttribute('y', '0');
+                combinedSvg.appendChild(chartClone);
+
+                const serializer = new XMLSerializer();
+                const svgString = serializer.serializeToString(combinedSvg);
+                const svgWithDeclaration = `<?xml version="1.0" encoding="UTF-8"?>\n${svgString}`;
+                const blob = new Blob([svgWithDeclaration], { type: 'image/svg+xml' });
+                const url = URL.createObjectURL(blob);
+                const baseName = conservationFile ? conservationFile.split('/').pop()?.replace(/\.[^.]+$/, '') : 'conservation';
+                const fileName = `${baseName || 'conservation'}_barplot.svg`;
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = fileName;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+              }}
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border text-sm hover:bg-accent"
+              data-action="download-conservation"
+            >
+              <Download className="h-4 w-4" />
+              Download SVG
+            </button>
+          )}
+        </div>
+      </div>
+      <div className="p-6">
+        <div className="relative flex h-[300px] w-full overflow-hidden">
+          <div ref={yAxisContainerRef} className="z-10 flex-shrink-0 bg-card" />
+          <div className="flex-grow overflow-x-auto">
+            <div ref={chartContainerRef} className="h-full" />
+          </div>
         </div>
       </div>
 

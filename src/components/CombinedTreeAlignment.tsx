@@ -51,6 +51,8 @@ export type CombinedTreeAlignmentProps = {
   containerBottomPadding?: number;
   // Alignment area padding
   alignmentRightPadding?: number;
+  // Gap between column header (GPCRdb numbers) and top of sequences
+  headerGapPx?: number;
   // Dark mode
   isDarkMode?: boolean;
   // Receptor data for GPCRdb numbering (will use conservationFile from receptor object)
@@ -360,8 +362,11 @@ export function CombinedTreeAlignment({
   // Compact header height for rotated GPCRdb numbers
   // alignmentHeaderHeight will be computed dynamically below based on widest label
   
-  // Fine-tune vertical gaps relative to the header bottom
-  const headerToSeqGapPx = Math.max(2, Math.round(fontSize * 0.5)); // slightly larger gap for sequences
+  // Fine-tune vertical gaps relative to the header bottom (configurable)
+  const headerToSeqGapPx = useMemo(() => {
+    // If headerGapPx provided, use it; otherwise default to ~0.5em of current font size
+    return Math.max(0, typeof (arguments as unknown as { headerGapPx?: number }).headerGapPx === 'number' ? (arguments as unknown as { headerGapPx?: number }).headerGapPx! : Math.round(fontSize * 0.5));
+  }, [fontSize]);
 
   // Use fixed row spacing - no dynamic calculation based on container
   const dynamicRowSpacing = leafRowSpacing;
@@ -487,10 +492,10 @@ export function CombinedTreeAlignment({
   // Height of just the alignment body (rows area) excluding header and external paddings
   const alignmentBodyHeight = useMemo(() => {
     if (!laidOut) return 0;
-    const leaves = laidOut.visibleLeaves;
-    if (leaves.length === 0) return 0;
-    const maxY = Math.max(...leaves.map(l => l.y || 0));
-    return Math.max(0, maxY + dynamicRowSpacing / 2 + sequenceTopPadding + sequenceBottomPadding);
+    const numRows = laidOut.visibleLeaves.length;
+    if (numRows === 0) return 0;
+    // Full rows height + vertical paddings to avoid clipping bottom row
+    return numRows * dynamicRowSpacing + sequenceTopPadding + sequenceBottomPadding;
   }, [laidOut, dynamicRowSpacing, sequenceTopPadding, sequenceBottomPadding]);
 
   // Consistent character width used for both headers and background stripes
@@ -538,7 +543,7 @@ export function CombinedTreeAlignment({
   const totalWidth = leftWidth + alignmentTotalWidth;
 
   return (
-    <div ref={containerRef} style={{ width: width ? `${width}px` : '100%', height: height ? `${height}px` : 'auto', overflow: 'auto', position: 'relative', background: backgroundColor }}>
+    <div ref={containerRef} style={{ width: width ? `${width}px` : '100%', height: height ? `${height}px` : 'auto', overflow: 'auto', position: 'relative', background: backgroundColor }} data-plot="combined-tree-msa">
       {/* Content area with proper width to avoid empty space on right */}
       <div style={{ position: 'relative', width: totalWidth, height: contentHeight, background: backgroundColor }}>
         {/* Sticky header overlay: GPCRdb column numbers (placed before tree SVG to avoid being pushed down). */}

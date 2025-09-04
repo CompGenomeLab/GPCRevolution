@@ -3,7 +3,7 @@
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useState, Suspense, lazy } from 'react';
 import Link from 'next/link';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, Download } from 'lucide-react';
 
 import RootContainer from '@/components/RootContainer';
 import DownloadableFiles from '@/components/DownloadableFiles';
@@ -13,10 +13,7 @@ import receptors from '../../../public/receptors.json';
 const ConservationChart = lazy(() => import('@/components/ConservationChart'));
 const SnakePlot   = lazy(() => import('@/components/SnakePlot'));
 const SequenceLogoChart    = lazy(() => import('@/components/SequenceLogoChart'));
-const SVGTree     = lazy(() => import('@/components/SVGTree'));
-const MSAViewer            = lazy(() =>
-  import('@/components/MSAViewer').then(m => ({ default: m.MSAViewer })),
-);
+const CombinedTreeAlignment = lazy(() => import('@/components/CombinedTreeAlignment'));
 
 /* ------------------------------------------------------------------------- */
 /*  ↓↓↓ 1.  Tiny route entry — just a Suspense wrapper around the content ↓↓↓ */
@@ -103,6 +100,16 @@ function ReceptorContent() {
             <ChevronLeft className="h-8 w-8" />
             <h1 className="text-3xl font-bold">{`${receptor.geneName} - ${receptor.name}`}</h1>
           </Link>
+          <div className="mt-4">
+            <button
+              type="button"
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border text-sm hover:bg-accent"
+              onClick={() => downloadAllSvgs(receptor)}
+              data-action="download-all-svgs"
+            >
+              <Download className="h-4 w-4" /> Download All SVGs
+            </button>
+          </div>
         </div>
 
         {/* basic info card ----------------------------------------------- */}
@@ -123,6 +130,75 @@ function ReceptorContent() {
       </RootContainer>
     </>
   );
+}
+function downloadAllSvgs(receptor: Receptor) {
+  try {
+    // Conservation chart (has its own exporter)
+    const conservationButton = document.querySelector('[data-action="download-conservation"]') as HTMLButtonElement | null;
+    conservationButton?.click();
+
+    // Sequence logo: trigger its built-in button if present
+    const logoButton = document.querySelector('[data-action="download-sequence-logo"]') as HTMLButtonElement | null;
+    logoButton?.click();
+
+    // Snake plot: trigger its built-in button if present
+    const snakeButton = document.querySelector('[data-action="download-snakeplot"]') as HTMLButtonElement | null;
+    snakeButton?.click();
+
+    // Combined view: export outer container as SVG snapshot - rely on its own internal SVGs
+    // We will try to find the right-side alignment SVG and left tree SVG and combine side-by-side similar to conservation export.
+    const combinedContainer = document.querySelector('[data-plot="combined-tree-msa"]') as HTMLElement | null;
+    if (combinedContainer) {
+      const svgs = combinedContainer.querySelectorAll('svg');
+      if (svgs.length > 0) {
+        // Compute total bounds by concatenating horizontally
+        let totalWidth = 0;
+        let maxHeight = 0;
+        const clones: SVGElement[] = [];
+        svgs.forEach((svg) => {
+          const w = parseInt(svg.getAttribute('width') || '0');
+          const h = parseInt(svg.getAttribute('height') || '0');
+          totalWidth += w;
+          maxHeight = Math.max(maxHeight, h);
+          clones.push(svg.cloneNode(true) as SVGElement);
+        });
+        if (totalWidth > 0 && maxHeight > 0) {
+          const combinedSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+          combinedSvg.setAttribute('width', `${totalWidth}`);
+          combinedSvg.setAttribute('height', `${maxHeight}`);
+          combinedSvg.setAttribute('viewBox', `0 0 ${totalWidth} ${maxHeight}`);
+          combinedSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+
+          let xOffset = 0;
+          clones.forEach((clone) => {
+            const w = parseInt(clone.getAttribute('width') || '0');
+            const wrapper = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            wrapper.setAttribute('transform', `translate(${xOffset},0)`);
+            wrapper.appendChild(clone);
+            combinedSvg.appendChild(wrapper);
+            xOffset += w;
+          });
+
+          const serializer = new XMLSerializer();
+          const svgString = serializer.serializeToString(combinedSvg);
+          const svgWithDeclaration = `<?xml version="1.0" encoding="UTF-8"?>\n${svgString}`;
+          const blob = new Blob([svgWithDeclaration], { type: 'image/svg+xml' });
+          const url = URL.createObjectURL(blob);
+          const fileName = `${receptor.geneName}_combined_tree_alignment.svg`;
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = fileName;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+        }
+      }
+    }
+  } catch (err) {
+    // best-effort: no-op on error
+    console.error('Download all SVGs error:', err);
+  }
 }
 
 /* helper for tidy info pairs */
@@ -177,28 +253,12 @@ function SequentialSections({ receptor }: { receptor: Receptor }) {
       )}
 
       {sectionIndex >= 3 && (
-        <Suspense fallback={<SectionSpinner title="Phylogenetic Tree of Orthologs" />}>
-          <SVGTree svgPath={receptor.svgTree} onLoaded={next(4)} />
+        <Suspense fallback={<SectionSpinner title="Tree and Multiple Sequence Alignment of Orthologs" />}>
+          <CombinedSection receptor={receptor} onLoaded={next(4)} />
         </Suspense>
       )}
 
-      {sectionIndex >= 4 && (
-        <Suspense fallback={<SectionSpinner title="Multiple Sequence Alignment of Orthologs" />}>
-          <MSAViewer
-            alignmentPath={receptor.alignment}
-            conservationFile={receptor.conservationFile}
-            onLoaded={next(5)}
-          />
-        </Suspense>
-      )}
-
-      {sectionIndex >= 5 && (
-        <DownloadableFiles
-          tree={receptor.tree}
-          alignment={receptor.alignment}
-          conservationFile={receptor.conservationFile}
-        />
-      )}
+      {/* Download buttons are moved into the combined section header */}
     </>
   );
 }
@@ -224,3 +284,88 @@ const SectionSpinner = ({ title }: { title: string }) => (
     </div>
   </div>
 );
+
+/* ------------------------------------------------------------------------- */
+/*  ↓↓↓ 5.  Combined Tree + Alignment Section ↓↓↓                            */
+/* ------------------------------------------------------------------------- */
+
+function CombinedSection({ receptor, onLoaded }: { receptor: Receptor; onLoaded: () => void }) {
+  const [loading, setLoading] = useState<boolean>(false);
+  const [newick, setNewick] = useState<string>('');
+  const [alignmentFasta, setAlignmentFasta] = useState<string>('');
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    Promise.all([
+      fetch(receptor.tree).then(res => res.text()),
+      fetch(receptor.alignment).then(res => res.text()),
+    ])
+      .then(([treeData, alignmentData]) => {
+        if (cancelled) return;
+        setNewick(treeData.trim());
+        setAlignmentFasta(alignmentData);
+      })
+      .catch(err => {
+        console.error('Error loading tree/alignment:', err);
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setLoading(false);
+        onLoaded();
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [receptor.tree, receptor.alignment, onLoaded]);
+
+  return (
+    <div className="bg-card text-card-foreground rounded-lg shadow-md">
+      <div className="p-6 border-b border-border flex items-center justify-between">
+        <h2 className="text-xl font-semibold text-foreground">Tree and Multiple Sequence Alignment of Orthologs</h2>
+        <div className="flex items-center gap-2">
+          {receptor.tree && (
+            <a href={`/${receptor.tree}`} download className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border text-sm hover:bg-accent">
+              <Download className="h-4 w-4" /> Tree
+            </a>
+          )}
+          {receptor.alignment && (
+            <a href={`/${receptor.alignment}`} download className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border text-sm hover:bg-accent">
+              <Download className="h-4 w-4" /> Alignment
+            </a>
+          )}
+          {/* Conservation download moved into the Conservation Bar Plot header */}
+        </div>
+      </div>
+      <div className="p-6">
+        <div className="rounded-lg bg-card text-card-foreground" style={{ height: 600 }}>
+          {loading ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center">
+                <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-foreground mx-auto mb-2" />
+                <p className="text-muted-foreground">Loading tree and alignment data...</p>
+              </div>
+            </div>
+          ) : newick ? (
+            <CombinedTreeAlignment
+              newick={newick}
+              alignmentFasta={alignmentFasta}
+              receptor={receptor}
+              showSupportOnBranches={false}
+              mirrorRightToLeft={false}
+              fontSize={14}
+              leafRowSpacing={13}
+              treeWidthPx={300}
+              alignmentBoxWidthPx={900}
+              height={600}
+            />
+          ) : (
+            <div className="flex items-center justify-center h-full">
+              <p className="text-muted-foreground">Unable to load tree/alignment for this receptor.</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

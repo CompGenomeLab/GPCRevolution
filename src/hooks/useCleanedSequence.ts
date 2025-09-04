@@ -14,30 +14,24 @@ function useCleanedSequences(initialData: ProteinData[]): ProteinData[] {
       return;
     }
 
-    // Determine the maximum alignment length across sequences
-    const maxLength = initialData.reduce((max, item) => Math.max(max, item.sequence.length), 0);
+    // Determine alignment length based on the first sequence (reference/human)
+    const reference = initialData[0]?.sequence || '';
+    const maxLength = Math.max(reference.length, ...initialData.map(item => item.sequence.length));
 
-    // Identify columns that are gap-only across ALL sequences
-    const gapOnlyIndices: boolean[] = new Array(maxLength).fill(false);
+    // Keep columns where the first sequence has an amino acid (non-gap)
+    const standardAA = 'ACDEFGHIKLMNPQRSTVWY';
+    const keepColumn: boolean[] = new Array(maxLength).fill(false);
     for (let i = 0; i < maxLength; i++) {
-      let allGapsAtColumn = true;
-      for (let s = 0; s < initialData.length; s++) {
-        const seq = initialData[s].sequence;
-        const char = i < seq.length ? seq[i] : '-';
-        if (char !== '-') {
-          allGapsAtColumn = false;
-          break;
-        }
-      }
-      gapOnlyIndices[i] = allGapsAtColumn;
+      const refChar = i < reference.length ? reference[i].toUpperCase() : '-';
+      keepColumn[i] = !!refChar && standardAA.includes(refChar);
     }
 
-    // Build cleaned sequences by removing gap-only columns
+    // Build cleaned sequences by keeping only the selected columns
     const newProcessedData: ProteinData[] = initialData.map(item => {
       const seq = item.sequence;
       let newSequence = '';
       for (let i = 0; i < maxLength; i++) {
-        if (!gapOnlyIndices[i]) {
+        if (keepColumn[i]) {
           newSequence += i < seq.length ? seq[i] : '-';
         }
       }

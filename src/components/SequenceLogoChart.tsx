@@ -393,6 +393,7 @@ const SequenceLogoChart: React.FC<SequenceLogoChartProps> = ({ sequences, conser
   };
 
   useEffect(() => {
+    let cancelled = false;
     const yAxisContainer = yAxisContainerRef.current;
     const chartContainer = chartContainerRef.current;
 
@@ -447,6 +448,7 @@ const SequenceLogoChart: React.FC<SequenceLogoChartProps> = ({ sequences, conser
     }
 
     function renderChart(data: PositionLogoData[]) {
+      if (cancelled) return;
       if (!yAxisContainer || !chartContainer) return;
 
       /* ---------- Layout constants ---------- */
@@ -546,6 +548,7 @@ const SequenceLogoChart: React.FC<SequenceLogoChartProps> = ({ sequences, conser
         // Create custom SVG letters asynchronously
         const createCustomSvgLetters = async () => {
           for (const [residue, height] of sortedResidues) {
+            if (cancelled) return;
             if (height > 0) {
               // Pixel height of this letter based on information content
               const letterHeightPx = y(0) - y(height);
@@ -756,6 +759,7 @@ const SequenceLogoChart: React.FC<SequenceLogoChartProps> = ({ sequences, conser
     }
 
     return () => {
+      cancelled = true;
       // Hide tooltip when component unmounts or data changes
       setTooltip(prev => ({ ...prev, visible: false }));
     };
@@ -771,16 +775,24 @@ const SequenceLogoChart: React.FC<SequenceLogoChartProps> = ({ sequences, conser
 
   return (
     <div className="bg-card text-card-foreground rounded-lg shadow-md">
-      <div className="p-6 border-b border-border">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-          <h2 className="text-xl font-semibold text-foreground">Sequence Logo</h2>
-          <div className="flex items-center gap-2 mt-2 sm:mt-0">
-            {cleanedSequences.length > 0 && (
-              <Button onClick={downloadSVG} variant="outline" size="sm">
-                Download SVG
-              </Button>
-            )}
-          </div>
+      <div className="p-6 border-b border-border flex items-center justify-between">
+        <h2 className="text-xl font-semibold text-foreground">Sequence Logo</h2>
+        <div className="flex items-center gap-2">
+          {cleanedSequences.length > 0 && (
+            <button
+              type="button"
+              onClick={downloadSVG}
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border text-sm hover:bg-accent"
+              data-action="download-sequence-logo"
+            >
+              <span className="sr-only">Download Sequence Logo SVG</span>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
+                <path d="M12 16l4-5h-3V4h-2v7H8l4 5z" />
+                <path d="M4 18h16v2H4z" />
+              </svg>
+              Download SVG
+            </button>
+          )}
         </div>
       </div>
       
