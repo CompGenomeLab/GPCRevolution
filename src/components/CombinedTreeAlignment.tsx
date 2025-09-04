@@ -215,6 +215,7 @@ export function CombinedTreeAlignment({
   containerTopPadding = 0,
   containerBottomPadding = 0,
   alignmentRightPadding = 4,
+  headerGapPx,
   isDarkMode,
   receptor,
 }: CombinedTreeAlignmentProps) {
@@ -365,8 +366,8 @@ export function CombinedTreeAlignment({
   // Fine-tune vertical gaps relative to the header bottom (configurable)
   const headerToSeqGapPx = useMemo(() => {
     // If headerGapPx provided, use it; otherwise default to ~0.5em of current font size
-    return Math.max(0, typeof (arguments as unknown as { headerGapPx?: number }).headerGapPx === 'number' ? (arguments as unknown as { headerGapPx?: number }).headerGapPx! : Math.round(fontSize * 0.5));
-  }, [fontSize]);
+    return Math.max(0, headerGapPx ?? Math.round(fontSize * 0.5));
+  }, [headerGapPx, fontSize]);
 
   // Use fixed row spacing - no dynamic calculation based on container
   const dynamicRowSpacing = leafRowSpacing;

@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Parser as HtmlToReactParser } from 'html-to-react';
 import { createPortal } from 'react-dom';
 import { useSnakePlotTooltip } from '../hooks/useSnakePlotTooltip';
-import { Button } from './ui/button';
+// Removed Button usage in favor of unified styled buttons
 import { toast } from 'sonner';
 
 interface SnakePlotProps {

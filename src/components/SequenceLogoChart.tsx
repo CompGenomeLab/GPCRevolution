@@ -4,7 +4,7 @@ import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import * as d3 from 'd3';
 import useCleanedSequences from '@/hooks/useCleanedSequence';
-import { Button } from '@/components/ui/button';
+// Removed Button usage in favor of unified styled buttons
 
 interface Sequence {
   header: string;
