@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Open_Sans } from 'next/font/google';
 import { ThemeProvider } from 'next-themes';
+import { Suspense } from 'react';
 import './globals.css';
 import { TheHeader } from '@/components/TheHeader';
 import { Toaster } from '@/components/ui/sonner';
@@ -36,7 +37,9 @@ export default function RootLayout({
           <main className="grow">{children}</main>
         </ThemeProvider>
         <Toaster />
-        <Analytics />
+        <Suspense fallback={null}>
+          <Analytics />
+        </Suspense>
       </body>
     </html>
   );
