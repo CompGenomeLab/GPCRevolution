@@ -1,6 +1,7 @@
 // GA4 helper utilities
 
-export const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID || '';
+// Prefer env var; fallback to known public Measurement ID if not provided
+export const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID || 'G-Q8RWWFCV20';
 
 declare global {
   interface Window {
