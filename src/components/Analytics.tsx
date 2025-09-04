@@ -1,19 +1,19 @@
 'use client';
 
 import Script from 'next/script';
-import { usePathname, useSearchParams } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { useEffect } from 'react';
 import { GA_MEASUREMENT_ID, trackPageview } from '@/lib/gtag';
 
 export function Analytics() {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
 
   useEffect(() => {
     if (!GA_MEASUREMENT_ID) return;
-    const url = `${pathname}${searchParams?.toString() ? `?${searchParams.toString()}` : ''}`;
+    const search = typeof window !== 'undefined' ? window.location.search : '';
+    const url = `${pathname}${search}`;
     trackPageview(url);
-  }, [pathname, searchParams]);
+  }, [pathname]);
 
   if (!GA_MEASUREMENT_ID) return null;
 
