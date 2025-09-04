@@ -58,51 +58,6 @@ function parseFasta(text: string): Sequence[] {
   return seqs;
 }
 
-// Produce top-N consensus sequences for a given alignment (already aligned)
-function computeTopNConsensus(sequences: Sequence[], topN: number): string[] {
-  if (!sequences.length || topN <= 0) return [];
-  const maxLen = sequences.reduce((m, s) => Math.max(m, s.sequence.length), 0);
-
-  // Precompute counts per column
-  const perColumnCounts: Array<Record<string, number>> = new Array(maxLen).fill(null).map(() => ({}));
-  for (let col = 0; col < maxLen; col++) {
-    const counts: Record<string, number> = {};
-    for (const seq of sequences) {
-      const c = col < seq.sequence.length ? seq.sequence[col]?.toUpperCase() : '-';
-      if (!c) continue;
-      // Exclude gaps from ranking counts; they will be used only if column is gap-only
-      if (c !== '-') {
-        counts[c] = (counts[c] || 0) + 1;
-      }
-    }
-    perColumnCounts[col] = counts;
-  }
-
-  // Build N consensus sequences
-  const results: string[] = new Array(topN).fill('');
-  for (let col = 0; col < maxLen; col++) {
-    const counts = perColumnCounts[col];
-    const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-
-    // If no amino acids (all gaps), emit '-'
-    if (entries.length === 0) {
-      for (let k = 0; k < topN; k++) results[k] += '-';
-      continue;
-    }
-
-    // For fewer than topN residues, repeat the best residue
-    const rankedResidues: string[] = [];
-    for (let i = 0; i < Math.min(entries.length, topN); i++) rankedResidues.push(entries[i][0]);
-    while (rankedResidues.length < topN) rankedResidues.push(entries[0][0]);
-
-    // Append to each consensus sequence
-    for (let k = 0; k < topN; k++) {
-      results[k] += rankedResidues[k];
-    }
-  }
-
-  return results;
-}
 
 const ConsensusEmitter: React.FC<Props> = ({ customFastaNames, customFolder }) => {
   const [selectedCustom, setSelectedCustom] = useState<string[]>([]);
@@ -157,39 +112,7 @@ const ConsensusEmitter: React.FC<Props> = ({ customFastaNames, customFolder }) =
     URL.revokeObjectURL(url);
   };
 
-  // Build GPCRdb-per-column map for a class alignment using its representative reference
-  const buildGpcrdbPerColumn = useCallback(async (alignmentFilename: string, sequences: Sequence[]) => {
-    const rep = FILENAME_TO_REP[alignmentFilename];
-    if (!rep) return new Array(sequences[0]?.sequence.length || 0).fill('');
-    const repSeq = sequences.find(s => s.header.includes(`${rep}_HUMAN`)) || sequences.find(s => s.header.toUpperCase().includes(rep.toUpperCase()));
-    if (!repSeq) return new Array(sequences[0]?.sequence.length || 0).fill('');
-
-    const consRes = await fetch(`/conservation_files/${rep}_conservation.txt`);
-    if (!consRes.ok) return new Array(sequences[0]?.sequence.length || 0).fill('');
-    const consText = await consRes.text();
-    const consMap: Record<number, string> = {};
-    consText.split(/\r?\n/).forEach(line => {
-      const parts = line.split(/\s+/);
-      if (parts.length >= 6 && parts[0].trim().toLowerCase() !== 'residue_number') {
-        const resNum = parseInt(parts[0].trim());
-        const gpcrdb = parts[5].trim();
-        if (!isNaN(resNum)) consMap[resNum] = gpcrdb;
-      }
-    });
-
-    const perCol: string[] = new Array(repSeq.sequence.length).fill('');
-    let residue = 0;
-    for (let i = 0; i < repSeq.sequence.length; i++) {
-      const c = repSeq.sequence[i];
-      if (c && c !== '-') {
-        residue += 1;
-        perCol[i] = consMap[residue] || String(residue);
-      } else {
-        perCol[i] = '';
-      }
-    }
-    return perCol;
-  }, []);
+  // (unused helper removed)
 
   // (Removed GPCRdb-based union logic; emission is strictly cropped by custom-MSA-derived positions.)
 

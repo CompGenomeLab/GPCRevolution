@@ -13,7 +13,6 @@ export function Analytics() {
     if (!GA_MEASUREMENT_ID) return;
     const url = `${pathname}${searchParams?.toString() ? `?${searchParams.toString()}` : ''}`;
     trackPageview(url);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname, searchParams]);
 
   if (!GA_MEASUREMENT_ID) return null;

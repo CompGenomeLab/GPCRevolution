@@ -165,7 +165,7 @@ const PairwiseOverlapMatrix: React.FC<PairwiseOverlapProps> = ({ fastaNames, fol
     } finally {
       setLoading(false);
     }
-  }, [selectedAlignments, folder, calculatePositionData]);
+  }, [selectedAlignments, folder, calculatePositionData, calculateOverlapMatrix]);
 
   // Check if two amino acids are similar based on matching groups
   const areSimilar = useCallback((aa1: string, aa2: string): boolean => {
