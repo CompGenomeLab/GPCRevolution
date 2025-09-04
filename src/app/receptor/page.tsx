@@ -99,16 +99,6 @@ function ReceptorContent() {
             <ChevronLeft className="h-8 w-8" />
             <h1 className="text-3xl font-bold">{`${receptor.geneName} - ${receptor.name}`}</h1>
           </Link>
-          <div className="mt-4">
-            <button
-              type="button"
-              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border text-sm hover:bg-accent"
-              onClick={() => downloadAllSvgs(receptor)}
-              data-action="download-all-svgs"
-            >
-              <Download className="h-4 w-4" /> Download All SVGs
-            </button>
-          </div>
         </div>
 
         {/* basic info card ----------------------------------------------- */}
@@ -129,75 +119,6 @@ function ReceptorContent() {
       </RootContainer>
     </>
   );
-}
-function downloadAllSvgs(receptor: Receptor) {
-  try {
-    // Conservation chart (has its own exporter)
-    const conservationButton = document.querySelector('[data-action="download-conservation"]') as HTMLButtonElement | null;
-    conservationButton?.click();
-
-    // Sequence logo: trigger its built-in button if present
-    const logoButton = document.querySelector('[data-action="download-sequence-logo"]') as HTMLButtonElement | null;
-    logoButton?.click();
-
-    // Snake plot: trigger its built-in button if present
-    const snakeButton = document.querySelector('[data-action="download-snakeplot"]') as HTMLButtonElement | null;
-    snakeButton?.click();
-
-    // Combined view: export outer container as SVG snapshot - rely on its own internal SVGs
-    // We will try to find the right-side alignment SVG and left tree SVG and combine side-by-side similar to conservation export.
-    const combinedContainer = document.querySelector('[data-plot="combined-tree-msa"]') as HTMLElement | null;
-    if (combinedContainer) {
-      const svgs = combinedContainer.querySelectorAll('svg');
-      if (svgs.length > 0) {
-        // Compute total bounds by concatenating horizontally
-        let totalWidth = 0;
-        let maxHeight = 0;
-        const clones: SVGElement[] = [];
-        svgs.forEach((svg) => {
-          const w = parseInt(svg.getAttribute('width') || '0');
-          const h = parseInt(svg.getAttribute('height') || '0');
-          totalWidth += w;
-          maxHeight = Math.max(maxHeight, h);
-          clones.push(svg.cloneNode(true) as SVGElement);
-        });
-        if (totalWidth > 0 && maxHeight > 0) {
-          const combinedSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-          combinedSvg.setAttribute('width', `${totalWidth}`);
-          combinedSvg.setAttribute('height', `${maxHeight}`);
-          combinedSvg.setAttribute('viewBox', `0 0 ${totalWidth} ${maxHeight}`);
-          combinedSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-
-          let xOffset = 0;
-          clones.forEach((clone) => {
-            const w = parseInt(clone.getAttribute('width') || '0');
-            const wrapper = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-            wrapper.setAttribute('transform', `translate(${xOffset},0)`);
-            wrapper.appendChild(clone);
-            combinedSvg.appendChild(wrapper);
-            xOffset += w;
-          });
-
-          const serializer = new XMLSerializer();
-          const svgString = serializer.serializeToString(combinedSvg);
-          const svgWithDeclaration = `<?xml version="1.0" encoding="UTF-8"?>\n${svgString}`;
-          const blob = new Blob([svgWithDeclaration], { type: 'image/svg+xml' });
-          const url = URL.createObjectURL(blob);
-          const fileName = `${receptor.geneName}_combined_tree_alignment.svg`;
-          const link = document.createElement('a');
-          link.href = url;
-          link.download = fileName;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          URL.revokeObjectURL(url);
-        }
-      }
-    }
-  } catch (err) {
-    // best-effort: no-op on error
-    console.error('Download all SVGs error:', err);
-  }
 }
 
 /* helper for tidy info pairs */
