@@ -6,7 +6,6 @@ import Link from 'next/link';
 import { ChevronLeft, Download } from 'lucide-react';
 
 import RootContainer from '@/components/RootContainer';
-import DownloadableFiles from '@/components/DownloadableFiles';
 
 import receptors from '../../../public/receptors.json';
 
