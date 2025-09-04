@@ -130,6 +130,18 @@ const PairwiseOverlapMatrix: React.FC<PairwiseOverlapProps> = ({ fastaNames, fol
     return positionData;
   }, []);
 
+  // Check if two amino acids are similar based on matching groups
+  const areSimilar = useCallback((aa1: string, aa2: string): boolean => {
+    if (aa1 === aa2) return true;
+    
+    for (const group of Object.values(matchingGroups)) {
+      if (group.includes(aa1) && group.includes(aa2)) {
+        return true;
+      }
+    }
+    return false;
+  }, []);
+
   // Calculate pairwise overlap matrix based on amino acid conservation
   const calculateOverlapMatrix = useCallback((data: AlignmentData[]) => {
     const n = data.length;
@@ -224,17 +236,6 @@ const PairwiseOverlapMatrix: React.FC<PairwiseOverlapProps> = ({ fastaNames, fol
     }
   }, [selectedAlignments, folder, calculatePositionData, calculateOverlapMatrix]);
 
-  // Check if two amino acids are similar based on matching groups
-  const areSimilar = useCallback((aa1: string, aa2: string): boolean => {
-    if (aa1 === aa2) return true;
-    
-    for (const group of Object.values(matchingGroups)) {
-      if (group.includes(aa1) && group.includes(aa2)) {
-        return true;
-      }
-    }
-    return false;
-  }, []);
 
 
   // Load data when selected alignments or threshold changes
