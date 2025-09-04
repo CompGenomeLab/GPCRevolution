@@ -130,6 +130,63 @@ const PairwiseOverlapMatrix: React.FC<PairwiseOverlapProps> = ({ fastaNames, fol
     return positionData;
   }, []);
 
+  // Calculate pairwise overlap matrix based on amino acid conservation
+  const calculateOverlapMatrix = useCallback((data: AlignmentData[]) => {
+    const n = data.length;
+    const matrix: number[][] = Array(n).fill(null).map(() => Array(n).fill(0));
+
+    // Find the maximum position across all alignments
+    const maxPos = Math.max(...data.map(d => 
+      d.positionData.length > 0 ? Math.max(...d.positionData.map(p => p.position)) : 0
+    ));
+    setTotalPositions(maxPos + 1);
+
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < n; j++) {
+        if (i === j) {
+          // Diagonal: count positions that meet conservation threshold
+          const conservedPositions = data[i].positionData.filter(
+            pos => pos.conservationFrequency >= conservationThreshold
+          ).length;
+          matrix[i][j] = conservedPositions;
+        } else {
+          // Off-diagonal: count positions where both alignments have similar conserved amino acids
+          let sharedPositions = 0;
+
+          // Create position maps for quick lookup
+          const posMapI = new Map<number, PositionData>();
+          const posMapJ = new Map<number, PositionData>();
+
+          data[i].positionData.forEach(pos => posMapI.set(pos.position, pos));
+          data[j].positionData.forEach(pos => posMapJ.set(pos.position, pos));
+
+          // Check all positions that exist in both alignments
+          for (let pos = 0; pos <= maxPos; pos++) {
+            const posDataI = posMapI.get(pos);
+            const posDataJ = posMapJ.get(pos);
+
+            if (posDataI && posDataJ) {
+              // Both alignments have data at this position
+              const meetsThresholdI = posDataI.conservationFrequency >= conservationThreshold;
+              const meetsThresholdJ = posDataJ.conservationFrequency >= conservationThreshold;
+
+              if (meetsThresholdI && meetsThresholdJ) {
+                // Check if the most conserved amino acids are similar
+                if (areSimilar(posDataI.mostConservedAA, posDataJ.mostConservedAA)) {
+                  sharedPositions++;
+                }
+              }
+            }
+          }
+
+          matrix[i][j] = sharedPositions;
+        }
+      }
+    }
+
+    setOverlapMatrix(matrix);
+  }, [conservationThreshold, areSimilar]);
+
   // Load alignment data for selected alignments
   const loadAlignmentData = useCallback(async () => {
     if (selectedAlignments.length === 0) {
@@ -179,62 +236,6 @@ const PairwiseOverlapMatrix: React.FC<PairwiseOverlapProps> = ({ fastaNames, fol
     return false;
   }, []);
 
-  // Calculate pairwise overlap matrix based on amino acid conservation
-  const calculateOverlapMatrix = useCallback((data: AlignmentData[]) => {
-    const n = data.length;
-    const matrix: number[][] = Array(n).fill(null).map(() => Array(n).fill(0));
-    
-    // Find the maximum position across all alignments
-    const maxPos = Math.max(...data.map(d => 
-      d.positionData.length > 0 ? Math.max(...d.positionData.map(p => p.position)) : 0
-    ));
-    setTotalPositions(maxPos + 1);
-
-    for (let i = 0; i < n; i++) {
-      for (let j = 0; j < n; j++) {
-        if (i === j) {
-          // Diagonal: count positions that meet conservation threshold
-          const conservedPositions = data[i].positionData.filter(
-            pos => pos.conservationFrequency >= conservationThreshold
-          ).length;
-          matrix[i][j] = conservedPositions;
-        } else {
-          // Off-diagonal: count positions where both alignments have similar conserved amino acids
-          let sharedPositions = 0;
-          
-          // Create position maps for quick lookup
-          const posMapI = new Map<number, PositionData>();
-          const posMapJ = new Map<number, PositionData>();
-          
-          data[i].positionData.forEach(pos => posMapI.set(pos.position, pos));
-          data[j].positionData.forEach(pos => posMapJ.set(pos.position, pos));
-          
-          // Check all positions that exist in both alignments
-          for (let pos = 0; pos <= maxPos; pos++) {
-            const posDataI = posMapI.get(pos);
-            const posDataJ = posMapJ.get(pos);
-            
-            if (posDataI && posDataJ) {
-              // Both alignments have data at this position
-              const meetsThresholdI = posDataI.conservationFrequency >= conservationThreshold;
-              const meetsThresholdJ = posDataJ.conservationFrequency >= conservationThreshold;
-              
-              if (meetsThresholdI && meetsThresholdJ) {
-                // Check if the most conserved amino acids are similar
-                if (areSimilar(posDataI.mostConservedAA, posDataJ.mostConservedAA)) {
-                  sharedPositions++;
-                }
-              }
-            }
-          }
-          
-          matrix[i][j] = sharedPositions;
-        }
-      }
-    }
-
-    setOverlapMatrix(matrix);
-  }, [conservationThreshold, areSimilar]);
 
   // Load data when selected alignments or threshold changes
   useEffect(() => {
