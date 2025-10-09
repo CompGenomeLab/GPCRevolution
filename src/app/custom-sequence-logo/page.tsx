@@ -1,30 +1,98 @@
 'use client';
 
-import React from 'react';
+import React, { useCallback } from 'react';
 import CustomSequenceLogo from '@/components/CustomSequenceLogo';
 import PairwiseOverlapMatrix from '@/components/PairwiseOverlapMatrix';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import ConsensusEmitter from '@/components/ConsensusEmitter';
 
 export default function CustomSequenceLogoPage() {
+  // Function to get display name for a FASTA file (for UI elements like checkboxes)
+  const getDisplayName = useCallback((fileName: string): string => {
+    const baseName = fileName.split('_')[0];
+    
+    const displayNameMap: Record<string, string> = {
+      'classA': 'Class A',
+      'classB1': 'Class B1',
+      'classB2': 'Class B2',
+      'classC': 'Class C',
+      'classF': 'Class F',
+      'classT': 'Class T',
+      'Vomeronasal1': 'Vomeronasal 1',
+      'Vomeronasal2': 'Vomeronasal 2',
+      'Olfactory': 'Olfactory',
+      'GPR1': 'GPR1',
+      'GP143': 'GP143',
+      'cAMP': 'cAMP',
+      'STE3': 'STE3',
+      'Mth': 'Mth',
+      'Nematode': 'Nematode'
+    };
+    
+    return displayNameMap[baseName] || baseName;
+  }, []);
+
+  // Function to get short display name for plot labels
+  const getPlotDisplayName = useCallback((fileName: string): string => {
+    const baseName = fileName.split('_')[0];
+    
+    const plotNameMap: Record<string, string> = {
+      'classA': 'Class A',
+      'classB1': 'Class B1',
+      'classB2': 'Class B2',
+      'classC': 'Class C',
+      'classF': 'Class F',
+      'classT': 'Class T',
+      'Vomeronasal1': 'V1R',
+      'Vomeronasal2': 'V2R',
+      'Olfactory': 'Olfactory',
+      'GPR1': 'GPR1',
+      'GP143': 'GP143',
+      'cAMP': 'cAMP',
+      'STE3': 'STE3',
+      'Mth': 'Mth',
+      'Nematode': 'Nematode'
+    };
+    
+    return plotNameMap[baseName] || baseName;
+  }, []);
   // All FASTA files in the custom_msa folder (without .fasta extension)
+  // STE2 has been removed as requested
   const fastaNames = [
-    'ClassF_clade',
-    'GP157_clade',
-    'ClassB1_clade',
-    'ClassB2_clade',
-    'GPR1_clade',
-    'GprD_clade',
-    'ClassT_clade',
-    'ClassA_clade',
-    'GP107_clade',
-    'G137_clade',
-    'STE3_clade',
-    'STM1_clade',
-    'ClassC_clade',
-    'STE2_clade',
-    'NOP1_clade',
-    'TPRA1_clade'
+    'classA_genes_filtered_db_FAMSA.ref_trimmed',
+    'classB1_genes_filtered_db_FAMSA.ref_trimmed',
+    'classB2_genes_filtered_db_FAMSA.ref_trimmed',
+    'classC_genes_filtered_db_FAMSA.ref_trimmed',
+    'classF_genes_filtered_db_FAMSA.ref_trimmed',
+    'classT_genes_filtered_db_FAMSA.ref_trimmed',
+    'Olfactory_genes_filtered_db_FAMSA.ref_trimmed',
+    'GPR1_genes_filtered_db_FAMSA.ref_trimmed',
+    'GP143_genes_filtered_db_FAMSA.ref_trimmed',
+    'cAMP_genes_filtered_db_FAMSA.ref_trimmed',
+    'STE3_genes_filtered_db_FAMSA.ref_trimmed',
+    'Vomeronasal1_genes_filtered_db_FAMSA.ref_trimmed',
+    'Vomeronasal2_genes_filtered_db_FAMSA.ref_trimmed',
+    'Mth_genes_filtered_db_FAMSA.ref_trimmed',
+    'Nematode_genes_filtered_db_FAMSA.ref_trimmed'
+  ];
+
+  // Custom order for "Select All": classA, Olfactory, classT, Vomeronasal1, Nematode, GPR1, cAMP, classF, GP143, Mth, ClassB2, ClassB1, STE3, ClassC, Vomeronasal2
+  const selectAllOrder = [
+    'classA_genes_filtered_db_FAMSA.ref_trimmed',
+    'Olfactory_genes_filtered_db_FAMSA.ref_trimmed',
+    'classT_genes_filtered_db_FAMSA.ref_trimmed',
+    'Vomeronasal1_genes_filtered_db_FAMSA.ref_trimmed',
+    'Nematode_genes_filtered_db_FAMSA.ref_trimmed',
+    'GPR1_genes_filtered_db_FAMSA.ref_trimmed',
+    'cAMP_genes_filtered_db_FAMSA.ref_trimmed',
+    'classF_genes_filtered_db_FAMSA.ref_trimmed',
+    'GP143_genes_filtered_db_FAMSA.ref_trimmed',
+    'Mth_genes_filtered_db_FAMSA.ref_trimmed',
+    'classB2_genes_filtered_db_FAMSA.ref_trimmed',
+    'classB1_genes_filtered_db_FAMSA.ref_trimmed',
+    'STE3_genes_filtered_db_FAMSA.ref_trimmed',
+    'classC_genes_filtered_db_FAMSA.ref_trimmed',
+    'Vomeronasal2_genes_filtered_db_FAMSA.ref_trimmed'
   ];
 
   const folder = '/custom_msa';
@@ -35,7 +103,7 @@ export default function CustomSequenceLogoPage() {
         <h1 className="text-3xl font-bold mb-2">Custom Sequence Logo Generator</h1>
         <p className="text-gray-600">
           Interactive sequence logos generated from your custom multiple sequence alignments (MSA).
-          Visualizing conservation patterns across {fastaNames.length} different clades with manual ordering capability.
+          Visualizing conservation patterns across {fastaNames.length} different families with manual ordering capability.
         </p>
       </div>
 
@@ -52,18 +120,27 @@ export default function CustomSequenceLogoPage() {
             <CustomSequenceLogo
               fastaNames={fastaNames}
               folder={folder}
+              selectAllOrder={selectAllOrder}
+              getDisplayName={getDisplayName}
+              getPlotDisplayName={getPlotDisplayName}
             />
           </div>
         </CardContent>
       </Card>
 
       {/* Consensus Emitter */}
-      <ConsensusEmitter customFastaNames={fastaNames} customFolder={folder} />
+      <ConsensusEmitter 
+        customFastaNames={fastaNames} 
+        customFolder={folder}
+        getDisplayName={getDisplayName}
+      />
 
       {/* Pairwise Overlap Matrix */}
       <PairwiseOverlapMatrix
         fastaNames={fastaNames}
         folder={folder}
+        selectAllOrder={selectAllOrder}
+        getDisplayName={getDisplayName}
       />
 
       {/* File List */}
@@ -108,12 +185,12 @@ export default function CustomSequenceLogoPage() {
               </ul>
             </div>
             <div className="p-4 bg-green-50 rounded-lg">
-              <h4 className="font-semibold text-green-900 mb-2">Analyzed Clades:</h4>
+              <h4 className="font-semibold text-green-900 mb-2">Analyzed Families:</h4>
               <ul className="text-sm text-green-800 space-y-1">
                 <li>• Class A, B1, B2, C, F, and T GPCRs</li>
-                <li>• Various orphan receptors (GPR1, GP107, etc.)</li>
-                <li>• Yeast pheromone receptors (STE2, STE3)</li>
-                <li>• Specialized receptor families</li>
+                <li>• Olfactory and vomeronasal families (V1R, V2R)</li>
+                <li>• Yeast pheromone receptor (STE3)</li>
+                <li>• Specialized groups (e.g., cAMP signaling) and orphan families (GPR1, GP143)</li>
               </ul>
             </div>
           </div>

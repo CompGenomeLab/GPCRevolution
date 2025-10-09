@@ -47,6 +47,12 @@ interface Props {
   fastaNames: string[];
   /** Public folder path where FASTA files live */
   folder: string;
+  /** Optional custom order for select all */
+  selectAllOrder?: string[];
+  /** Optional function to get display name for a file (for UI elements) */
+  getDisplayName?: (fileName: string) => string;
+  /** Optional function to get display name for plot labels (shorter form) */
+  getPlotDisplayName?: (fileName: string) => string;
 }
 
 // Define amino acid groups and their default colors (same as MultiReceptorLogoChart)
@@ -60,21 +66,57 @@ const aminoAcidGroups = {
 };
 
 // Class to representative sequence mapping
-const classToRepresentative: Record<string, string> = {
-  'ClassA': 'HRH2',
-  'ClassB1': 'PTH1R',
-  'ClassB2': 'AGRL3', 
-  'ClassC': 'CASR',
-  'ClassF': 'FZD7',
-  'ClassT': 'T2R39',
-  'ClassOlf': 'O52I2',
+// Representative mapping retained in case of future use
+// const classToRepresentative: Record<string, string> = {
+//   'ClassA': 'HRH2',
+//   'ClassB1': 'PTH1R',
+//   'ClassB2': 'AGRL3', 
+//   'ClassC': 'CASR',
+//   'ClassF': 'FZD7',
+//   'ClassT': 'T2R39',
+//   'ClassOlf': 'O52I2',
+//   'GP157': 'GP157',
+//   'GP143': 'GP143'
+// };
+
+// Map custom family FASTA base names -> family keys used in trim_info.tsv
+const fileBaseToFamily: Record<string, string> = {
+  'classA_genes_filtered_db_FAMSA.ref_trimmed': 'classA',
+  'classB1_genes_filtered_db_FAMSA.ref_trimmed': 'classB1',
+  'classB2_genes_filtered_db_FAMSA.ref_trimmed': 'classB2',
+  'classC_genes_filtered_db_FAMSA.ref_trimmed': 'classC',
+  'classF_genes_filtered_db_FAMSA.ref_trimmed': 'classF',
+  'classT_genes_filtered_db_FAMSA.ref_trimmed': 'classT',
+  'Olfactory_genes_filtered_db_FAMSA.ref_trimmed': 'Olfactory',
+  'GPR1_genes_filtered_db_FAMSA.ref_trimmed': 'GPR1',
+  'GP143_genes_filtered_db_FAMSA.ref_trimmed': 'GP143',
+  'cAMP_genes_filtered_db_FAMSA.ref_trimmed': 'cAMP',
+  'STE2_genes_filtered_db_FAMSA.ref_trimmed': 'STE2',
+  'STE3_genes_filtered_db_FAMSA.ref_trimmed': 'STE3',
+  'Vomeronasal1_genes_filtered_db_FAMSA.ref_trimmed': 'Vomeronasal1',
+  'Vomeronasal2_genes_filtered_db_FAMSA.ref_trimmed': 'Vomeronasal2',
+  'Mth_genes_filtered_db_FAMSA.ref_trimmed': 'Mth',
+  'Nematode_genes_filtered_db_FAMSA.ref_trimmed': 'Nematode'
+};
+
+// Map class-wide keys to family names in trim_info
+const classToFamilyKey: Record<string, string> = {
+  'ClassA': 'classA',
+  'ClassB1': 'classB1',
+  'ClassB2': 'classB2',
+  'ClassC': 'classC',
+  'ClassF': 'classF',
+  'ClassT': 'classT',
+  'ClassOlf': 'Olfactory',
   'GP157': 'GP157',
   'GP143': 'GP143'
 };
 
+// Removed unused inverse map
+// const familyKeyToClass: Record<string, string> = Object.entries(classToFamilyKey)
+//   .reduce((acc, [cls, fam]) => { acc[fam] = cls; return acc; }, {} as Record<string, string>);
 
-
-const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
+const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder, selectAllOrder, getDisplayName, getPlotDisplayName }) => {
   const yAxisContainerRef = useRef<HTMLDivElement>(null);
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -84,29 +126,130 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
     sequences: Sequence[];
   }[]>([]);
   
+  // Sup-representatives sequences (from sup_reps*.fasta)
+  const [supRepSequences, setSupRepSequences] = useState<Sequence[]>([]);
+  
   // State for selected alignments (maintains order of selection)
   const [selectedAlignments, setSelectedAlignments] = useState<string[]>([]);
   
   // State for row height control
-  const [rowHeight, setRowHeight] = useState(120);
+  const [rowHeight, setRowHeight] = useState(40);
   
-  // State for conservation threshold (as percentage)
-  const [conservationThreshold, setConservationThreshold] = useState(0);
+  // State for conservation threshold (as percentage) - FIXED VALUE
+  const conservationThreshold = 0;
+
+  // Load trim_info.tsv → maps of family -> acc1 and acc2 accessions (if present)
+  const [familyToAcc2, setFamilyToAcc2] = useState<Record<string, string>>({});
+  const [familyToAcc1, setFamilyToAcc1] = useState<Record<string, string>>({});
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch('/custom_msa/trim_info.tsv');
+        if (!res.ok) return;
+        const text = await res.text();
+        const lines = text.trim().split(/\r?\n/);
+        const map2: Record<string, string> = {};
+        const map1: Record<string, string> = {};
+        for (let i = 1; i < lines.length; i++) { // skip header
+          const parts = lines[i].split('\t');
+          if (parts.length < 2) continue;
+          const acc1 = (parts[0] || '').trim();
+          const family = (parts[1] || '').trim();
+          const acc2 = (parts[2] || '').trim();
+          if (family) {
+            if (acc1) map1[family] = acc1;
+            if (acc2) map2[family] = acc2;
+          }
+        }
+        setFamilyToAcc1(map1);
+        setFamilyToAcc2(map2);
+      } catch {}
+    })();
+  }, []);
 
   // State for dot-plot (UpSet) per-row minimum conservation (% frequency of top AA)
   const [dotMinConservation, setDotMinConservation] = useState(0);
 
   // State: minimum number of overlapping rows required to keep a column visible
   const [overlapMinRows, setOverlapMinRows] = useState(1);
+  
+  // New conservation filtering controls
+  const [minConservationThreshold, setMinConservationThreshold] = useState(0);
+  const [minFamiliesCount, setMinFamiliesCount] = useState(0);
+  
+  // Local state for text inputs (only update on blur)
+  const [rowHeightInput, setRowHeightInput] = useState('30');
+  const [dotMinInput, setDotMinInput] = useState('0');
+  const [minRowsInput, setMinRowsInput] = useState('1');
+  const [minConsInput, setMinConsInput] = useState('0');
+  const [minFamsInput, setMinFamsInput] = useState('0');
+  
+  // Sync text input state with slider values
+  useEffect(() => {
+    setRowHeightInput(String(rowHeight));
+  }, [rowHeight]);
+  
+  useEffect(() => {
+    setDotMinInput(String(dotMinConservation));
+  }, [dotMinConservation]);
+  
+  useEffect(() => {
+    setMinRowsInput(String(overlapMinRows));
+  }, [overlapMinRows]);
+  
+  useEffect(() => {
+    setMinConsInput(String(minConservationThreshold));
+  }, [minConservationThreshold]);
+  
+  useEffect(() => {
+    setMinFamsInput(String(minFamiliesCount));
+  }, [minFamiliesCount]);
+  
+  // Dot plot visibility control
+  const [showDotPlot, setShowDotPlot] = useState(false);
 
   // State: hide masked columns completely
   const [hideMaskedColumns, setHideMaskedColumns] = useState(false);
+
+  // Define receptor groupings
+  const receptorGroups = useMemo(() => [
+    {
+      name: 'Class A-like',
+      members: [
+        'classA_genes_filtered_db_FAMSA.ref_trimmed',
+        'Olfactory_genes_filtered_db_FAMSA.ref_trimmed',
+        'classT_genes_filtered_db_FAMSA.ref_trimmed',
+        'Vomeronasal1_genes_filtered_db_FAMSA.ref_trimmed',
+        'Nematode_genes_filtered_db_FAMSA.ref_trimmed'
+      ]
+    },
+    {
+      name: 'cAMP-like',
+      members: [
+        'GPR1_genes_filtered_db_FAMSA.ref_trimmed',
+        'cAMP_genes_filtered_db_FAMSA.ref_trimmed',
+        'classF_genes_filtered_db_FAMSA.ref_trimmed',
+        'GP143_genes_filtered_db_FAMSA.ref_trimmed',
+        'Mth_genes_filtered_db_FAMSA.ref_trimmed',
+        'classB2_genes_filtered_db_FAMSA.ref_trimmed',
+        'classB1_genes_filtered_db_FAMSA.ref_trimmed',
+        'STE3_genes_filtered_db_FAMSA.ref_trimmed'
+      ]
+    },
+    {
+      name: 'Class C-like',
+      members: [
+        'classC_genes_filtered_db_FAMSA.ref_trimmed',
+        'Vomeronasal2_genes_filtered_db_FAMSA.ref_trimmed'
+      ]
+    }
+  ], []);
 
   // State for gap between receptor rows
   const [gapBetweenReceptors] = useState(10);
 
   // State for class-wide alignments
-  const [selectedClassAlignments, setSelectedClassAlignments] = useState<string[]>([]);
+  const [selectedClassAlignments] = useState<string[]>([]);
   const [humanRefSequences, setHumanRefSequences] = useState<Sequence[]>([]);
   
   // Pre-loaded class-wide alignment data (similar to allData for custom alignments)
@@ -123,7 +266,7 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
   const [classDataLoaded, setClassDataLoaded] = useState(false);
 
   // State for HRH2 conservation data with region information
-  const [hrh2ConservationData, setHrh2ConservationData] = useState<Array<{
+  const [hrh2ConservationData] = useState<Array<{
     residue: number;
     conservation: number;
     conservedAA: string;
@@ -138,40 +281,7 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
   // State to track selection order (both custom and class-wide)
   const [selectionOrder, setSelectionOrder] = useState<string[]>([]);
 
-  /* ─── NEW: HRH2 residue filter ──────────────────────────────── */
-  // Raw text entered by the user
-  const [filterInput, setFilterInput] = useState('');
-  // Parsed, active tokens (upper-cased) used for filtering
-  const [filterTokens, setFilterTokens] = useState<string[]>([]);
-  // Mapping residue number → GPCRdb number for HRH2
-  const [hrh2ResToGpcrdb, setHrh2ResToGpcrdb] = useState<Record<string, string>>({});
-
-  // Apply the filter whenever the user presses Enter / clicks the button
-  const applyFilter = useCallback(() => {
-    const inputTokens = filterInput
-      .split(',')
-      .map(t => t.trim().toUpperCase())
-      .filter(t => t.length > 0);
-
-    const combined: string[] = [];
-    inputTokens.forEach(tok => {
-      combined.push(tok); // original residue number
-      const gpcr = hrh2ResToGpcrdb[tok];
-      if (gpcr) {
-        combined.push(gpcr.toUpperCase());
-      }
-    });
-
-    // Deduplicate
-    const unique = Array.from(new Set(combined));
-    setFilterTokens(unique);
-  }, [filterInput, hrh2ResToGpcrdb]);
-
-  // Clear the current filter
-  const clearFilter = () => {
-    setFilterInput('');
-    setFilterTokens([]);
-  };
+  // HRH2 residue filter removed
 
   /* ─── Reference GPCRdb info rows ─────────────────────────────── */
   const [showReferenceRows, setShowReferenceRows] = useState(false);
@@ -180,31 +290,26 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
   const [referenceMaps, setReferenceMaps] = useState<Record<string, string[]>>({});
 
   // Computed array for current selection (order fixed by class mapping) – memoized so identity never changes  
-  const classReferenceOrder = useMemo(
-    () => ['ClassA','ClassT','ClassB1','ClassB2','ClassC','ClassF','ClassOlf','GP157','GP143'] as const,
-    []
-  );
-  type ClassKey = typeof classReferenceOrder[number];
-  const classToGene = useMemo<Record<ClassKey, string>>(
-    () => ({
-      ClassA: 'HRH2',
-      ClassT: 'T2R39',
-      ClassB1: 'PTH1R',
-      ClassB2: 'AGRL3',
-      ClassC: 'CASR',
-      ClassF: 'FZD7',
-      ClassOlf: 'O52I2',
-      GP157: 'GP157',
-      GP143: 'GP143'
-    }),
-    []
-  );
-  const [referenceInfo, setReferenceInfo] = useState<{ geneName: string; gpcrdbMap: string[] }[]>([]);
+  // type ClassKey = 'ClassA' | 'ClassT' | 'ClassB1' | 'ClassB2' | 'ClassC' | 'ClassF' | 'ClassOlf' | 'GP157' | 'GP143';
+  // Removed unused map (we now use familyToAcc1 acc1 names directly)
+  // const classToGene: Record<ClassKey, string> = useMemo(() => ({
+  //   ClassA: 'HRH2',
+  //   ClassT: 'T2R39',
+  //   ClassB1: 'PTH1R',
+  //   ClassB2: 'AGRL3',
+  //   ClassC: 'CASR',
+  //   ClassF: 'FZD7',
+  //   ClassOlf: 'O52I2',
+  //   GP157: 'GP157',
+  //   GP143: 'GP143'
+  // }), []);
+  const [referenceInfo, setReferenceInfo] = useState<{ label: string; gpcrdbMap: string[] }[]>([]);
 
   // (Column width slider removed – fixed width used)
   
   // State for conservation method
-  const [useSimpleConservation, setUseSimpleConservation] = useState(false);
+  // Use Simple Conservation checkbox - FIXED VALUE
+  const useSimpleConservation = false;
   
   // State for tooltip
   const [tooltip, setTooltip] = useState<{
@@ -214,9 +319,24 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
     content: string;
   }>({ visible: false, x: 0, y: 0, content: '' });
 
+  // State for manual classification overrides
+  const [manualClassifications, setManualClassifications] = useState<Record<number, 'global' | 'ancestral' | 'convergent' | 'multi-class' | 'lineage-specific'>>({});
+  
+  // State for hidden positions
+  const [hiddenPositions, setHiddenPositions] = useState<Set<number>>(new Set());
+  
+  // State for classification menu
+  const [classificationMenu, setClassificationMenu] = useState<{
+    visible: boolean;
+    x: number;
+    y: number;
+    position: number;
+  }>({ visible: false, x: 0, y: 0, position: 0 });
+
   // State for processed receptor data
   const [processedReceptorData, setProcessedReceptorData] = useState<ReceptorLogoData[]>([]);
-  const [isProcessing, setIsProcessing] = useState(false);
+  // Removed processing flag; we keep the plot mounted during processing
+  // const [isProcessing, setIsProcessing] = useState(false);
 
   // Track theme changes
   useEffect(() => {
@@ -303,8 +423,9 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
   };
 
   const selectAll = () => {
-    setSelectedAlignments([...fastaNames]);
-    setSelectionOrder(prev => [...prev.filter(name => !fastaNames.includes(name)), ...fastaNames]);
+    const orderedNames = selectAllOrder || fastaNames;
+    setSelectedAlignments([...orderedNames]);
+    setSelectionOrder(prev => [...prev.filter(name => !orderedNames.includes(name)), ...orderedNames]);
   };
 
   const selectNone = () => {
@@ -402,6 +523,18 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
     return seqs;
   }
 
+  // Extract sequence range from header (e.g., "/27-335" -> {start: 27, end: 335})
+  function extractSeqRange(header: string): { start: number; end: number } | null {
+    const match = header.match(/\/(\d+)-(\d+)/);
+    if (match) {
+      return { start: parseInt(match[1]), end: parseInt(match[2]) };
+    }
+    return null;
+  }
+
+  // Removed unused helper to satisfy linter
+  // function getRealResidueNumber(msaColumn: number, sequence: string, header: string): number | null { return null; }
+
   // Load all FASTA files once
   useEffect(() => {
     async function loadAll() {
@@ -431,20 +564,50 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
   useEffect(() => {
     (async () => {
       try {
-        // Load sequences
-        const fastaRes = await fetch('/custom_msa/human_refs.fasta');
+        // Load sup_reps sequences instead of human_refs
+        const fastaRes = await fetch('/custom_msa/sup_reps_noClassC_noSTE3_linsi_trimends_treein_einsi_ep0.123_missing_added_reps_only.fasta');
         if (!fastaRes.ok) {
-          console.warn('Failed to load human_refs.fasta:', fastaRes.status);
+          console.warn('Failed to load sup_reps alignment:', fastaRes.status);
           return;
         }
         const fastaText = await fastaRes.text();
         const refSeqsArr = parseFasta(fastaText);
-        const seqMap: Record<string, Sequence> = {};
+        setSupRepSequences(refSeqsArr);
+        
+        // Build map: accession (from sup_reps header) → sequence
+        const acc1ToSeq: Record<string, Sequence> = {};
         refSeqsArr.forEach(seqObj => {
-          const headerPart = seqObj.header.split('|')[2] || seqObj.header;
-          const geneNameToken = headerPart.trim().split(' ')[0];
-          const geneName = geneNameToken.split('_')[0];
-          seqMap[geneName.toUpperCase()] = seqObj;
+          // Extract accession: split by | or _ and get second element
+          const parts1 = seqObj.header.split('|');
+          const acc = parts1.length > 1 ? parts1[1].trim() : seqObj.header.split('_')[1]?.trim();
+          if (acc) {
+            acc1ToSeq[acc] = seqObj;
+          }
+        });
+
+        // Wait for trim_info to load
+        // We'll trigger GPCRdb mapping computation in a separate effect after both are ready
+        console.log('Sup_reps sequences loaded:', Object.keys(acc1ToSeq));
+      } catch (err) {
+        console.error('Error loading sup_reps:', err);
+      }
+    })();
+  }, []);
+
+  // Build GPCRdb mapping after trim_info and sup_reps are loaded
+  useEffect(() => {
+    if (supRepSequences.length === 0 || Object.keys(familyToAcc1).length === 0) return;
+    
+    (async () => {
+      try {
+        // Build acc1 -> sup_reps sequence map
+        const acc1ToSupSeq: Record<string, Sequence> = {};
+        supRepSequences.forEach(seqObj => {
+          const parts1 = seqObj.header.split('|');
+          const acc = parts1.length > 1 ? parts1[1].trim() : seqObj.header.split('_')[1]?.trim();
+          if (acc) {
+            acc1ToSupSeq[acc] = seqObj;
+          }
         });
 
         // Load receptors metadata
@@ -454,173 +617,185 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
           return;
         }
         const receptorsList: ReceptorEntry[] = await recRes.json();
-
-        // Build mapping of geneName → conservation file path
         const geneToConsFile: Record<string, string> = {};
         receptorsList.forEach(rec => {
           geneToConsFile[rec.geneName.toUpperCase()] = rec.conservationFile;
         });
 
-        // For every reference gene we have sequence for, load conservation data once
+        // For each family, create acc1→acc2 mapping and build GPCRdb maps
         const maps: Record<string, string[]> = {};
-        await Promise.all(Object.keys(seqMap).map(async gene => {
-          const seqObj = seqMap[gene];
-          const consFile = geneToConsFile[gene];
-          const seq = seqObj.sequence;
-          
-          if (consFile) {
-            try {
-              const consData = await readConservationData(`/${consFile}`);
+        
+        for (const [family, acc1] of Object.entries(familyToAcc1)) {
+          const acc2 = familyToAcc2[family];
+          const supSeq = acc1ToSupSeq[acc1];
+          if (!supSeq) continue;
+
+          // Load family alignment to map acc1 columns to acc2 residue numbers
+            const familyFile = Object.entries(fileBaseToFamily).find((entry) => entry[1] === family)?.[0];
+          if (!familyFile) continue;
+
+          try {
+            const famRes = await fetch(`${folder}/${familyFile}.fasta`);
+            if (!famRes.ok) continue;
+            const famText = await famRes.text();
+            const famSeqs = parseFasta(famText);
+
+            // Find acc1 and acc2 sequences in family alignment
+            const findByAcc = (acc: string) => famSeqs.find(s => {
+              if (s.header.includes(acc)) return true;
+              const p = s.header.split('|');
+              if (p.length > 1 && p[1].trim() === acc) return true;
+              const u = s.header.split('_');
+              if (u.length > 1 && u[1].trim() === acc) return true;
+              return false;
+            });
+
+            const famAcc1Seq = findByAcc(acc1);
+            const famAcc2Seq = acc2 ? findByAcc(acc2) : null;
+
+            // If we have acc2, create mapping acc1_supCol → acc2_residueNum
+            const acc1ToAcc2ResMap: Record<number, number> = {};
+            let geneName: string | null = null;
+
+            if (famAcc2Seq && acc2) {
+              // Extract gene name from acc2 sequence header: split by | get 3rd, split by _ get 1st
+              const parts = famAcc2Seq.header.split('|');
+              if (parts.length > 2) {
+                const geneToken = parts[2].trim().split('_')[0];
+                geneName = geneToken;
+              }
+
+              // Build acc1→acc2 residue mapping via family alignment
+              // Extract sequence ranges to get real residue numbers
+              const acc1Range = famAcc1Seq ? extractSeqRange(famAcc1Seq.header) : null;
+              const acc2Range = extractSeqRange(famAcc2Seq.header);
+              const acc1Offset = acc1Range ? acc1Range.start - 1 : 0;
+              const acc2Offset = acc2Range ? acc2Range.start - 1 : 0;
               
-              // Create GPCRdb map for this gene's sequence
-              // The map should be indexed by MSA column position (0-based)
-              const gpcrdbMap: string[] = new Array(seq.length).fill('');
+              let acc1Running = 0;
+              let acc2Running = 0;
+              const familyLen = Math.max(famAcc1Seq?.sequence.length || 0, famAcc2Seq.sequence.length);
               
-              // For each MSA column, determine the corresponding GPCRdb number
-              for (let msaCol = 0; msaCol < seq.length; msaCol++) {
-                const aa = seq[msaCol];
-                if (aa !== '-') {
-                  // This is a real residue, calculate its position in the ungapped sequence
-                  let residueNumber = 0;
-                  for (let i = 0; i <= msaCol; i++) {
-                    if (seq[i] !== '-') {
-                      residueNumber++;
-                    }
-                  }
-                  
-                  // Get GPCRdb number from conservation data
-                  const residueData = consData[residueNumber.toString()];
-                  if (residueData && residueData.gpcrdb) {
-                    gpcrdbMap[msaCol] = residueData.gpcrdb;
-                  } else {
-                    // Fallback to residue number if GPCRdb not found
-                    gpcrdbMap[msaCol] = residueNumber.toString();
-                  }
-                } else {
-                  // Gap in alignment - no GPCRdb number
-                  gpcrdbMap[msaCol] = '';
+              for (let famCol = 0; famCol < familyLen; famCol++) {
+                const aa1 = famAcc1Seq?.sequence[famCol] || '-';
+                const aa2 = famAcc2Seq.sequence[famCol] || '-';
+                
+                if (aa1 !== '-') acc1Running++;
+                if (aa2 !== '-') acc2Running++;
+                
+                // Map acc1 REAL residue number to acc2 REAL residue number
+                if (aa1 !== '-' && aa2 !== '-') {
+                  const realAcc1Res = acc1Offset + acc1Running;
+                  const realAcc2Res = acc2Offset + acc2Running;
+                  acc1ToAcc2ResMap[realAcc1Res] = realAcc2Res;
                 }
               }
-              
-              maps[gene] = gpcrdbMap;
-
-              // Store HRH2 residue→gpcrdb mapping for filter use
-              if (gene === 'HRH2') {
-                const mapping: Record<string, string> = {};
-                const conservationArray: Array<{
-                  residue: number;
-                  conservation: number;
-                  conservedAA: string;
-                  aa: string;
-                  region: string;
-                  gpcrdb: string;
-                }> = [];
-                
-                type ConsEntry = { 
-                  conservation?: number;
-                  conservedAA?: string;
-                  aa?: string;
-                  region?: string;
-                  gpcrdb?: string;
-                };
-                const typedCons = consData as Record<string, ConsEntry>;
-                Object.entries(typedCons).forEach(([resNum, d]) => {
-                  const gpcr = d.gpcrdb || '';
-                  if (gpcr) {
-                    mapping[resNum.toUpperCase()] = gpcr.toUpperCase();
-                  }
-                  
-                  // Store full conservation data for region blocks
-                  conservationArray.push({
-                    residue: parseInt(resNum),
-                    conservation: d.conservation || 0,
-                    conservedAA: d.conservedAA || '',
-                    aa: d.aa || '',
-                    region: d.region || '',
-                    gpcrdb: gpcr
-                  });
-                });
-                
-                // Sort by residue number
-                conservationArray.sort((a, b) => a.residue - b.residue);
-                
-                setHrh2ResToGpcrdb(mapping);
-                setHrh2ConservationData(conservationArray);
-              }
-            } catch (err) {
-              console.warn('Error loading conservation data for', gene, err);
-              // Create empty map as fallback
-              maps[gene] = new Array(seq.length).fill('');
             }
-          } else {
-            // No conservation file found, create empty map
-            maps[gene] = new Array(seq.length).fill('');
+
+            // Now map sup_reps columns to GPCRdb
+            const gpcrdbMap: string[] = new Array(supSeq.sequence.length).fill('');
+            
+            if (geneName && acc1ToAcc2ResMap && Object.keys(acc1ToAcc2ResMap).length > 0) {
+              // Load conservation data for the gene
+              const consFile = geneToConsFile[geneName.toUpperCase()];
+              if (consFile) {
+                const consData = await readConservationData(`/${consFile}`);
+                
+                // Extract sup_reps acc1 sequence range offset
+                const supRange = extractSeqRange(supSeq.header);
+                const supOffset = supRange ? supRange.start - 1 : 0;
+                
+                // For each column in sup_reps (acc1 alignment)
+                let acc1ResCount = 0;
+                for (let supCol = 0; supCol < supSeq.sequence.length; supCol++) {
+                  const aa = supSeq.sequence[supCol];
+                  if (aa !== '-') {
+                    acc1ResCount++;
+                    const realAcc1Res = supOffset + acc1ResCount;
+                    
+                    // Map to acc2 REAL residue number
+                    const acc2ResNum = acc1ToAcc2ResMap[realAcc1Res];
+                    if (acc2ResNum) {
+                      // Get GPCRdb from conservation data using acc2's real residue number
+                      const residueData = consData[acc2ResNum.toString()];
+                      gpcrdbMap[supCol] = residueData?.gpcrdb || acc2ResNum.toString();
+                    }
+                  }
+                }
+              }
+            }
+
+            // Store the map using acc1 as key (since that's what sup_reps uses)
+            maps[acc1.toUpperCase()] = gpcrdbMap;
+            
+            } catch (err) {
+            console.warn(`Error processing family ${family}:`, err);
+            }
           }
-        }));
 
         setReferenceMaps(maps);
         setReferenceDataLoaded(true);
       } catch (err) {
-        console.error('Error loading references:', err);
+        console.error('Error building GPCRdb maps:', err);
       }
     })();
-  }, []);
+  }, [supRepSequences, familyToAcc1, familyToAcc2, folder]);
 
   /* ─── Compute referenceInfo based on selected alignments ───────── */
   useEffect(() => {
     if (!referenceDataLoaded) return;
 
-    // Determine classes present in selected alignments AND selected class-wide alignments
+    // Determine reference rows needed based on selected alignments using acc1 representatives
     const neededGenes: string[] = [];
-    
-    // Check custom alignments
+
+    // From custom alignments
     selectedAlignments.forEach(name => {
-      const match = classReferenceOrder.find(cls => name.startsWith(cls));
-      if (match) {
-        const gene = classToGene[match];
-        if (gene && !neededGenes.includes(gene.toUpperCase())) {
-          neededGenes.push(gene.toUpperCase());
-        }
+      const familyKey = fileBaseToFamily[name];
+      if (!familyKey) return;
+      const acc1 = familyToAcc1[familyKey];
+      if (acc1) {
+        const geneKey = acc1.toUpperCase();
+        if (!neededGenes.includes(geneKey)) neededGenes.push(geneKey);
       }
     });
 
-    // Check class-wide alignments
+    // From any class-wide selections (if any remain)
     selectedClassAlignments.forEach(className => {
-      const match = classReferenceOrder.find(cls => className === cls);
-      if (match) {
-        const gene = classToGene[match];
-        if (gene && !neededGenes.includes(gene.toUpperCase())) {
-          neededGenes.push(gene.toUpperCase());
-        }
+      const familyKey = classToFamilyKey[className];
+      if (!familyKey) return;
+      const acc1 = familyToAcc1[familyKey];
+      if (acc1) {
+        const geneKey = acc1.toUpperCase();
+        if (!neededGenes.includes(geneKey)) neededGenes.push(geneKey);
       }
     });
 
-    const newRefInfo: { geneName: string; gpcrdbMap: string[] }[] = [];
+    const newRefInfo: { label: string; gpcrdbMap: string[] }[] = [];
     neededGenes.forEach(gene => {
-      if (referenceMaps[gene]) {
-        newRefInfo.push({ geneName: gene, gpcrdbMap: referenceMaps[gene] });
+      const famKey = Object.entries(familyToAcc1).find(([, acc1]) => acc1.toUpperCase() === gene)?.[0];
+      const familyLabel = famKey || gene; // Prefer family name label if available
+      const map = referenceMaps[gene];
+      if (map && map.some(v => !!v)) { // only include rows that have any gpcrdb labels
+        newRefInfo.push({ label: familyLabel, gpcrdbMap: map });
       }
     });
 
     setReferenceInfo(newRefInfo);
-  }, [selectedAlignments, selectedClassAlignments, referenceDataLoaded, referenceMaps, classReferenceOrder, classToGene]);
+  }, [selectedAlignments, selectedClassAlignments, referenceDataLoaded, referenceMaps, familyToAcc1]);
 
-  // Load human reference sequences and pre-load all class-wide alignment data (runs only once)
+  // Load sup_reps sequences and pre-load all class-wide alignment data (runs only once)
   useEffect(() => {
     console.log('🔄 useEffect for class-wide data loading triggered - should only run once!');
     const loadAllClassWideData = async () => {
       try {
         console.log('🚀 Pre-loading all class-wide alignment data...');
         
-        // Load human reference sequences
-        const humanRefResponse = await fetch('/custom_msa/human_refs.fasta');
-        if (!humanRefResponse.ok) {
-          console.warn('Failed to load human_refs.fasta:', humanRefResponse.status);
+        // Wait for sup_reps to be loaded (from previous effect)
+        if (supRepSequences.length === 0) {
+          console.log('Waiting for sup_reps to load...');
           return;
         }
-        const humanRefText = await humanRefResponse.text();
-        const humanRefSeqs = parseFasta(humanRefText);
-        setHumanRefSequences(humanRefSeqs);
+        setHumanRefSequences(supRepSequences);
 
                  // Pre-load all class-wide alignments and their conservation data
          const classData: Record<string, {
@@ -636,22 +811,17 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
          
          await Promise.all(availableClassAlignments.map(async (className: string) => {
            try {
-             const representativeName = classToRepresentative[className];
-             const classIdentifier = className.replace('Class', '');
+             const familyKey = classToFamilyKey[className];
+             const acc2 = familyKey ? familyToAcc2[familyKey] : undefined;
              
-             // Load family alignment
-             let familyAlignmentPath: string;
-             if (className === 'GP157' || className === 'GP143') {
-               // Use ortholog alignment files for individual receptors
-               familyAlignmentPath = `/alignments/${className}_orthologs_MSA.fasta`;
-             } else if (className === 'ClassOlf') {
-               // Use olfactory class-wide alignment file
-               familyAlignmentPath = `/alignments/classOlfactory_humans_MSA.fasta`;
-             } else {
-               // Use class-wide alignment files for classes
-               familyAlignmentPath = `/alignments/class${classIdentifier}_humans_MSA.fasta`;
+             // Load family alignment from custom_msa
+             const familyFile = Object.entries(fileBaseToFamily).find((entry) => entry[1] === familyKey)?.[0];
+             if (!familyFile) {
+               console.warn(`No family file mapping for ${className}`);
+               return;
              }
-             const familyResponse = await fetch(familyAlignmentPath);
+             
+             const familyResponse = await fetch(`${folder}/${familyFile}.fasta`);
              
              if (!familyResponse.ok) {
                console.warn(`Failed to pre-load ${className} family alignment: ${familyResponse.status}`);
@@ -661,7 +831,7 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
              const familyFastaText = await familyResponse.text();
              const familySequences = parseFasta(familyFastaText);
              
-             // Load conservation data
+             // Load conservation data using acc2's gene name
              const conservationData: Record<string, {
                conservation: number;
                conservedAA: string;
@@ -669,8 +839,25 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
                region: string;
                gpcrdb: string;
              }> = {};
-            try {
-              const conservationResponse = await fetch(`/conservation_files/${representativeName}_conservation.txt`);
+            
+            if (acc2) {
+              // Find acc2 sequence to extract gene name
+              const acc2Seq = familySequences.find(s => {
+                if (s.header.includes(acc2)) return true;
+                const p = s.header.split('|');
+                if (p.length > 1 && p[1].trim() === acc2) return true;
+                const u = s.header.split('_');
+                if (u.length > 1 && u[1].trim() === acc2) return true;
+                return false;
+              });
+              
+              if (acc2Seq) {
+                const parts = acc2Seq.header.split('|');
+                if (parts.length > 2) {
+                  const geneName = parts[2].trim().split('_')[0];
+                  
+                  try {
+                    const conservationResponse = await fetch(`/conservation_files/${geneName}_conservation.txt`);
               if (conservationResponse.ok) {
                 const conservationText = await conservationResponse.text();
                 conservationText.split('\n').forEach(line => {
@@ -688,7 +875,10 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
                 });
               }
             } catch (error) {
-              console.warn(`Could not pre-load conservation data for ${representativeName}:`, error);
+                    console.warn(`Could not pre-load conservation data for ${geneName}:`, error);
+                  }
+                }
+              }
             }
             
             classData[className] = {
@@ -712,39 +902,10 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
     };
 
          loadAllClassWideData();
-   }, [availableClassAlignments]); // Include availableClassAlignments in dependency array
+  }, [availableClassAlignments, supRepSequences, familyToAcc1, familyToAcc2, folder]);
 
-  // Class alignment selection functions
-  const handleClassAlignmentToggle = (className: string) => {
-    setSelectedClassAlignments(prev => {
-      if (prev.includes(className)) {
-        return prev.filter(name => name !== className);
-      } else {
-        return [...prev, className];
-      }
-    });
-    
-    // Update selection order
-    setSelectionOrder(prev => {
-      if (prev.includes(className)) {
-        // Remove from selection order
-        return prev.filter(name => name !== className);
-      } else {
-        // Add to selection order
-        return [...prev, className];
-      }
-    });
-  };
-
-  const selectAllClassAlignments = () => {
-    setSelectedClassAlignments([...availableClassAlignments]);
-    setSelectionOrder(prev => [...prev.filter(name => !availableClassAlignments.includes(name)), ...availableClassAlignments]);
-  };
-
-  const selectNoClassAlignments = () => {
-    setSelectedClassAlignments([]);
-    setSelectionOrder(prev => prev.filter(name => !availableClassAlignments.includes(name)));
-  };
+  // Class alignment selection disabled – using mapping files via top checkboxes only
+  // Remove unused handlers to satisfy linter
 
   // Function to calculate position logo data
   const calculatePositionLogoData = useCallback((position: number, sequences: string[]): {
@@ -809,90 +970,10 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
     return { informationContent, letterHeights, residueCounts, totalSequences: totalSequencesInAlignment };
   }, []);
 
-  // Simple conservation calculation with enhanced matching rules
-  const calculateSimpleConservation = useCallback((position: number, sequences: string[]): {
-    matchPercentage: number;
-    residueCounts: Record<string, number>;
-    totalSequences: number;
-    mostConservedAA: string;
-    matchCounts: Record<string, number>;
-  } => {
-    const residueCounts: Record<string, number> = {};
-    let nonGapSequences = 0;
-    const totalSequencesInAlignment = sequences.length; // Include gaps in total
-    
-    const standardAA = 'ACDEFGHIKLMNPQRSTVWY';
-    sequences.forEach(seq => {
-      const residue = seq[position]?.toUpperCase();
-      if (residue && standardAA.includes(residue)) {
-        residueCounts[residue] = (residueCounts[residue] || 0) + 1;
-        nonGapSequences++;
-      }
-      // Gaps are implicitly counted as reducing conservation
-    });
-    
-    // Skip positions with no amino acids at all
-    if (nonGapSequences === 0) return { 
-      matchPercentage: 0, 
-      residueCounts: {},
-      totalSequences: totalSequencesInAlignment,
-      mostConservedAA: '',
-      matchCounts: {}
-    };
+  // Simple conservation calculation removed - DISABLED
+  // const calculateSimpleConservation = useCallback((position: number, sequences: string[]): { ... } => { ... }, []);
 
-    // Define matching groups
-    const matchingGroups = {
-      'acidic': ['E', 'D'],
-      'aromatic': ['W', 'Y', 'H', 'F'],
-      'basic': ['R', 'K'],
-      'polar': ['Q', 'N'],
-      'hydrophobic_vi': ['V', 'I'],
-      'hydrophobic_ml': ['M', 'L']
-    };
-
-    // Find the most conserved amino acid
-    let mostConservedAA = '';
-    let maxCount = 0;
-    Object.entries(residueCounts).forEach(([residue, count]) => {
-      if (count > maxCount) {
-        maxCount = count;
-        mostConservedAA = residue;
-      }
-    });
-
-    // Calculate matches for each amino acid
-    const matchCounts: Record<string, number> = {};
-    Object.keys(residueCounts).forEach(residue => {
-      matchCounts[residue] = residueCounts[residue]; // Exact matches
-      
-      // Add similar amino acid matches
-      for (const [, groupResidues] of Object.entries(matchingGroups)) {
-        if (groupResidues.includes(residue)) {
-          // Add counts from other residues in the same group
-          groupResidues.forEach(otherResidue => {
-            if (otherResidue !== residue && residueCounts[otherResidue]) {
-              matchCounts[residue] = (matchCounts[residue] || 0) + residueCounts[otherResidue];
-            }
-          });
-          break;
-        }
-      }
-    });
-
-    // Calculate match percentage based on ALL sequences (including gaps)
-    const totalMatches = matchCounts[mostConservedAA] || residueCounts[mostConservedAA] || 0;
-    const matchPercentage = totalSequencesInAlignment > 0 ? (totalMatches / totalSequencesInAlignment) * 100 : 0;
-
-    return {
-      matchPercentage,
-      residueCounts,
-      totalSequences: totalSequencesInAlignment,
-      mostConservedAA,
-      matchCounts
-    };
-  }, []);
-
-  // Enhanced position logo data calculation
+  // Enhanced position logo data calculation (entropy-based only)
   const calculateEnhancedPositionLogoData = useCallback((position: number, sequences: string[]): {
     informationContent: number;
     letterHeights: Record<string, number>;
@@ -902,30 +983,8 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
     mostConservedAA?: string;
     matchCounts?: Record<string, number>;
   } => {
-    if (useSimpleConservation) {
-      const simpleResult = calculateSimpleConservation(position, sequences);
-      
-      // Create letter heights based on match percentage
-      const letterHeights: Record<string, number> = {};
-      Object.keys(simpleResult.residueCounts).forEach(residue => {
-        const frequency = simpleResult.residueCounts[residue] / simpleResult.totalSequences;
-        // Scale height by match percentage (normalized to 0-4.32 range)
-        letterHeights[residue] = frequency * (simpleResult.matchPercentage / 100) * 4.32;
-      });
-      
-      return {
-        informationContent: (simpleResult.matchPercentage / 100) * 4.32,
-        letterHeights,
-        residueCounts: simpleResult.residueCounts,
-        totalSequences: simpleResult.totalSequences,
-        matchPercentage: simpleResult.matchPercentage,
-        mostConservedAA: simpleResult.mostConservedAA,
-        matchCounts: simpleResult.matchCounts
-      };
-    } else {
-      return calculatePositionLogoData(position, sequences);
-    }
-  }, [useSimpleConservation, calculatePositionLogoData, calculateSimpleConservation]);
+    return calculatePositionLogoData(position, sequences);
+  }, [calculatePositionLogoData]);
 
   // Calculate cross-alignment conservation for a specific position
   const calculateCrossAlignmentConservation = useCallback((position: number, allAlignmentData: Record<string, Record<number, PositionLogoData>>): {
@@ -1046,26 +1105,14 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
 
     const processData = async () => {
       console.log('🔄 Processing data for alignments:', [...selectedAlignments, ...selectedClassAlignments]);
-      setIsProcessing(true);
       
-      /* ── Build HRH2-based filter set, if any ── */
-      const filterActive = filterTokens.length > 0 && !!referenceMaps['HRH2'];
-      const filterMsaColumns = new Set<number>();
-      if (filterActive) {
-        const hrh2Map = referenceMaps['HRH2']; // msaCol -> gpcrdb or residue number string
-        hrh2Map.forEach((val: string, colIdx: number) => {
-          if (!val) return;
-          if (filterTokens.includes(val.toUpperCase())) {
-            filterMsaColumns.add(colIdx);
-          }
-        });
-      }
+      // HRH2-based filtering removed
 
       // First pass: collect all possible positions and their data for each alignment
       const alignmentPositionData: Record<string, Record<number, PositionLogoData>> = {};
       let globalMaxPosition = 0;
 
-              // Process custom alignments (existing logic)
+      // Process custom alignments - map to acc1 residue coordinate system
         const processAlignment = async (name: string) => {
           const entry = allData.find(d => d.name === name);
           if (!entry || !entry.sequences.length) {
@@ -1073,33 +1120,206 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
             return;
           }
 
-          // Use existing logic for custom alignments (no class detection)
-          const sequences = entry.sequences.map(s => s.sequence);
-          const maxLength = Math.max(...sequences.map(s => s.length));
-          globalMaxPosition = Math.max(globalMaxPosition, maxLength);
+        // Determine if this alignment has an acc1 to define coordinate system
+        const familyKey = fileBaseToFamily[name];
+        const acc1 = familyKey ? familyToAcc1[familyKey] : undefined;
+        const acc2 = familyKey ? familyToAcc2[familyKey] : undefined;
+
+        // Prefer precomputed mapping JSON to avoid runtime MSA parsing
+        try {
+          if (familyKey) {
+            const resp = await fetch(`/mappings/${familyKey}.json`);
+            if (resp.ok) {
+              const mapping = await resp.json();
+              const posData: Record<number, PositionLogoData> = {};
+              const positions = mapping.positions || [];
+              for (let supCol = 0; supCol < positions.length; supCol++) {
+                const p = positions[supCol] || null;
+                if (!p) continue;
+                posData[supCol] = {
+                  position: supCol + 1,
+                  msaColumn: supCol,
+                  residueCounts: p.residueCounts || {},
+                  totalSequences: p.totalSequences || 0,
+                  informationContent: p.informationContent || 0,
+                  letterHeights: p.letterHeights || {},
+                  gpcrdb: p.gpcrdb || undefined
+                };
+              }
+              alignmentPositionData[name] = posData;
+              if (positions.length > 0) {
+                globalMaxPosition = Math.max(globalMaxPosition, positions.length - 1);
+              }
+              return;
+            }
+          }
+        } catch (e) {
+          console.warn('Failed to load mapping JSON for', name, e);
+        }
+        
+        // Find acc1 in sup_reps to get the reference sequence
+        let supRepSeq: Sequence | undefined;
+        if (acc1 && supRepSequences.length > 0) {
+          supRepSeq = supRepSequences.find(seq => {
+            const parts1 = seq.header.split('|');
+            const seqAcc = parts1.length > 1 ? parts1[1].trim() : seq.header.split('_')[1]?.trim();
+            return seqAcc === acc1;
+          });
+        }
+
+        // Find acc1 and acc2 in family alignment
+        const findByAcc = (acc: string) => entry.sequences.find(s => {
+          if (s.header.includes(acc)) return true;
+          const p = s.header.split('|');
+          if (p.length > 1 && p[1].trim() === acc) return true;
+          const u = s.header.split('_');
+          if (u.length > 1 && u[1].trim() === acc) return true;
+          return false;
+        });
+        
+        const famAcc1Seq = acc1 ? findByAcc(acc1) : undefined;
+        const famAcc2Seq = acc2 ? findByAcc(acc2) : undefined;
+        
+        // Load conservation data for GPCRdb mapping (if acc2 exists)
+        const conservationData: Record<string, string> = {}; // residue_number -> gpcrdb_number
+        if (famAcc2Seq) {
+          try {
+            const parts = famAcc2Seq.header.split('|');
+            if (parts.length > 2) {
+              const geneName = parts[2].trim().split('_')[0];
+              const conservationResponse = await fetch(`/conservation_files/${geneName}_conservation.txt`);
+              if (conservationResponse.ok) {
+                const conservationText = await conservationResponse.text();
+                conservationText.split('\n').forEach(line => {
+                  const parts = line.split('\t');
+                  if (parts[0] && parts[0].trim().toLowerCase() !== 'residue_number' && parts.length >= 6) {
+                    const resNum = parts[0].trim();
+                    const gpcrdb = parts[5].trim();
+                    conservationData[resNum] = gpcrdb;
+                  }
+                });
+              }
+            }
+          } catch (error) {
+            console.warn(`Could not load conservation data for ${name}:`, error);
+          }
+        }
+        
+        // Build mapping: acc1_residue_position → family_alignment_column
+        // This maps which family column corresponds to each acc1 residue position
+        const acc1ResiduePosToFamCol: Record<number, number> = {};
+        
+        if (supRepSeq && famAcc1Seq) {
+          // Extract ranges for both acc1 sequences
+          const famRange = extractSeqRange(famAcc1Seq.header);
+          const famOffset = famRange ? famRange.start - 1 : 0;
           
+          // For each column in family alignment, track which real residue it corresponds to
+          let famResCount = 0;
+          for (let famCol = 0; famCol < famAcc1Seq.sequence.length; famCol++) {
+            if (famAcc1Seq.sequence[famCol] !== '-') {
+              famResCount++;
+              const realRes = famOffset + famResCount;
+              // Store: real residue number → family column
+              acc1ResiduePosToFamCol[realRes] = famCol;
+            }
+          }
+        }
+
+        // Build acc2 residue map for GPCRdb labels
+        let acc2ResidueMap: Record<number, number> | null = null;
+        if (famAcc2Seq) {
+          const acc2Range = extractSeqRange(famAcc2Seq.header);
+          const acc2Offset = acc2Range ? acc2Range.start - 1 : 0;
+          
+          acc2ResidueMap = {};
+          let running = 0;
+          for (let i = 0; i < famAcc2Seq.sequence.length; i++) {
+            const aa = famAcc2Seq.sequence[i];
+            if (aa !== '-') {
+              running++;
+              acc2ResidueMap[i] = acc2Offset + running;
+            } else {
+              acc2ResidueMap[i] = 0;
+            }
+          }
+        }
+
+        // Process based on acc1 positions (from sup_reps) - include ALL columns even gaps
+        const sequences = entry.sequences.map(s => s.sequence);
           const positionData: Record<number, PositionLogoData> = {};
 
-          for (let pos = 0; pos < maxLength; pos++) {
-            const calculatedData = calculateEnhancedPositionLogoData(pos, sequences);
+        if (supRepSeq) {
+          // Walk through ENTIRE sup_reps acc1 sequence (including gaps)
+          const supRange = extractSeqRange(supRepSeq.header);
+          const supOffset = supRange ? supRange.start - 1 : 0;
+          
+          let resCount = 0;
+          for (let supCol = 0; supCol < supRepSeq.sequence.length; supCol++) {
+            const aa = supRepSeq.sequence[supCol];
             
-            // Only include positions that have meaningful data
-            const hasMeaningfulData = calculatedData.informationContent > 0 || 
-                                     (calculatedData.matchPercentage && calculatedData.matchPercentage > 0) ||
-                                     Object.keys(calculatedData.letterHeights).length > 0;
-            
-            if (calculatedData.totalSequences > 0 && hasMeaningfulData) {
-              positionData[pos] = {
-                position: pos + 1, // 1-based position (will be renumbered later)
-                msaColumn: pos, // Original MSA column position (0-based)
+            if (aa === '-') {
+              // Gap in acc1 - store empty position data to maintain alignment
+              positionData[supCol] = {
+                position: supCol + 1,
+                msaColumn: supCol,
+                residueCounts: {},
+                totalSequences: 0,
+                informationContent: 0,
+                letterHeights: {},
+                matchPercentage: 0,
+                mostConservedAA: '-',
+                matchCounts: {}
+              };
+            } else {
+              // Residue in acc1
+              resCount++;
+              const realResNum = supOffset + resCount;
+              
+              // Find corresponding family column
+              const famCol = acc1ResiduePosToFamCol[realResNum];
+              
+              if (famCol !== undefined) {
+                // Calculate logo from family alignment at this column
+                const calculatedData = calculateEnhancedPositionLogoData(famCol, sequences);
+                
+                // Get GPCRdb label: acc2 residue number -> conservation data lookup
+                let gpcrFromAcc2: string | undefined = undefined;
+                if (acc2ResidueMap && acc2ResidueMap[famCol]) {
+                  const acc2ResNum = String(acc2ResidueMap[famCol]);
+                  gpcrFromAcc2 = conservationData[acc2ResNum] || undefined;
+                }
+                
+                // Store at sup_reps column position
+                positionData[supCol] = {
+                  position: supCol + 1,
+                  msaColumn: supCol,
                 residueCounts: calculatedData.residueCounts,
                 totalSequences: calculatedData.totalSequences,
                 informationContent: calculatedData.informationContent,
                 letterHeights: calculatedData.letterHeights,
                 matchPercentage: calculatedData.matchPercentage,
                 mostConservedAA: calculatedData.mostConservedAA,
-                matchCounts: calculatedData.matchCounts
-              };
+                  matchCounts: calculatedData.matchCounts,
+                  gpcrdb: gpcrFromAcc2 || undefined
+                };
+              } else {
+                // No family data for this acc1 position - store empty
+                positionData[supCol] = {
+                  position: supCol + 1,
+                  msaColumn: supCol,
+                  residueCounts: {},
+                  totalSequences: 0,
+                  informationContent: 0,
+                  letterHeights: {},
+                  matchPercentage: 0,
+                  mostConservedAA: '-',
+                  matchCounts: {}
+                };
+              }
+            }
+            
+            globalMaxPosition = Math.max(globalMaxPosition, supCol);
             }
           }
 
@@ -1121,79 +1341,112 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
             return;
           }
 
-          // Find representative sequence from human refs
-          const representativeName = classToRepresentative[className];
-          const representativeSeq = humanRefSequences.find(seq => 
-            seq.header.includes(`${representativeName}_HUMAN`)
-          );
+          // Find representative sequence from sup_reps using acc1
+          const familyKey = classToFamilyKey[className];
+          const acc1 = familyKey ? familyToAcc1[familyKey] : undefined;
+          
+          if (!acc1) {
+            console.warn(`No acc1 mapping found for ${className}`);
+            return;
+          }
+          
+          // Find sequence by acc1 accession
+          const representativeSeq = humanRefSequences.find(seq => {
+            const parts1 = seq.header.split('|');
+            const seqAcc = parts1.length > 1 ? parts1[1].trim() : seq.header.split('_')[1]?.trim();
+            return seqAcc === acc1;
+          });
           
           if (!representativeSeq) {
-            console.warn(`Representative sequence ${representativeName}_HUMAN not found in human refs`);
+            console.warn(`Representative sequence with acc1=${acc1} not found in sup_reps for ${className}`);
             return;
           }
 
           // Use pre-loaded family sequences
           const familySequences = classData.familySequences;
           
-          // Find representative sequence in family alignment
-          const familyRepSeq = familySequences.find(seq => 
-            seq.header.includes(`${representativeName}_HUMAN`)
-          );
+          // Find representative sequence in family alignment by acc1
+          const familyRepSeq = familySequences.find(seq => {
+            if (seq.header.includes(acc1)) return true;
+            const p = seq.header.split('|');
+            if (p.length > 1 && p[1].trim() === acc1) return true;
+            const u = seq.header.split('_');
+            if (u.length > 1 && u[1].trim() === acc1) return true;
+            return false;
+          });
           
           if (!familyRepSeq) {
-            console.warn(`Representative sequence ${representativeName}_HUMAN not found in family alignment`);
+            console.warn(`Representative sequence with acc1=${acc1} not found in family alignment`);
             return;
           }
 
           // Use pre-loaded conservation data
           const conservationData = classData.conservationData;
 
+          // Build acc1→acc2 residue mapping for GPCRdb lookups
+          const acc2 = familyKey ? familyToAcc2[familyKey] : undefined;
+          const acc1ToAcc2ResMap: Record<number, number> = {};
+          
+          if (acc2) {
+            const findByAcc = (acc: string) => familySequences.find(s => {
+              if (s.header.includes(acc)) return true;
+              const p = s.header.split('|');
+              if (p.length > 1 && p[1].trim() === acc) return true;
+              const u = s.header.split('_');
+              if (u.length > 1 && u[1].trim() === acc) return true;
+              return false;
+            });
+            
+            const famAcc2Seq = findByAcc(acc2);
+            
+            if (famAcc2Seq && familyRepSeq) {
+              const acc1Range = extractSeqRange(familyRepSeq.header);
+              const acc2Range = extractSeqRange(famAcc2Seq.header);
+              const acc1Offset = acc1Range ? acc1Range.start - 1 : 0;
+              const acc2Offset = acc2Range ? acc2Range.start - 1 : 0;
+              
+              let acc1Running = 0;
+              let acc2Running = 0;
+              const familyLen = Math.max(familyRepSeq.sequence.length, famAcc2Seq.sequence.length);
+              
+              for (let famCol = 0; famCol < familyLen; famCol++) {
+                const aa1 = familyRepSeq.sequence[famCol] || '-';
+                const aa2 = famAcc2Seq.sequence[famCol] || '-';
+                
+                if (aa1 !== '-') acc1Running++;
+                if (aa2 !== '-') acc2Running++;
+                
+                if (aa1 !== '-' && aa2 !== '-') {
+                  const realAcc1Res = acc1Offset + acc1Running;
+                  const realAcc2Res = acc2Offset + acc2Running;
+                  acc1ToAcc2ResMap[realAcc1Res] = realAcc2Res;
+                }
+              }
+            }
+          }
+
           console.log(`\n=== Processing ${className} alignment ===`);
-          console.log(`Representative: ${representativeName}_HUMAN`);
-          console.log(`Human refs sequence length: ${representativeSeq.sequence.length}`);
+          console.log(`Representative acc1: ${acc1}`);
+          console.log(`Sup_reps sequence length: ${representativeSeq.sequence.length}`);
           console.log(`Family alignment sequence length: ${familyRepSeq.sequence.length}`);
           
-          // For class-wide alignments, generate ALL positions with data (independent of custom alignments)
-          const visualizedDisplayPositions: Record<number, number> = {}; // displayPos -> residueNumber
+          // For class-wide alignments, use sup_reps positions directly
+          const visualizedDisplayPositions: Record<number, number> = {}; // supRepCol -> residueNumber
           
-          console.log('\n--- Generating all meaningful positions for class-wide alignment ---');
+          console.log('\n--- Generating positions from sup_reps for class-wide alignment ---');
           
-          // If there are custom alignments, use their positions
-          if (Object.keys(alignmentPositionData).length > 0) {
-            console.log('Using positions from existing custom alignments:');
-            Object.entries(alignmentPositionData).forEach(([alignmentName, posData]) => {
-              console.log(`Checking alignment: ${alignmentName}`);
-              Object.keys(posData).forEach(msaColStr => {
-                const displayPos = parseInt(msaColStr);
-                
-                // Find corresponding residue number in human_refs
-                let residueNumber = 0;
-                for (let i = 0; i <= displayPos && i < representativeSeq.sequence.length; i++) {
-                  if (representativeSeq.sequence[i] !== '-') {
-                    residueNumber++;
-                  }
-                }
-                
-                if (displayPos < representativeSeq.sequence.length && representativeSeq.sequence[displayPos] !== '-') {
-                  visualizedDisplayPositions[displayPos] = residueNumber;
-                  console.log(`  Display pos ${displayPos} → residue #${residueNumber} (AA: ${representativeSeq.sequence[displayPos]})`);
-                }
-              });
-            });
-          } else {
-            // No custom alignments - generate ALL meaningful positions from human_refs
-            console.log('No custom alignments, generating all positions from human_refs:');
-            for (let displayPos = 0; displayPos < representativeSeq.sequence.length; displayPos++) {
-              if (representativeSeq.sequence[displayPos] !== '-') {
-                let residueNumber = 0;
-                for (let i = 0; i <= displayPos; i++) {
-                  if (representativeSeq.sequence[i] !== '-') {
-                    residueNumber++;
-                  }
-                }
-                visualizedDisplayPositions[displayPos] = residueNumber;
-                console.log(`  Display pos ${displayPos} → residue #${residueNumber} (AA: ${representativeSeq.sequence[displayPos]})`);
-              }
+          // Generate positions from sup_reps (our universal coordinate system)
+          // Extract sup_reps range offset
+          const supRange = extractSeqRange(representativeSeq.header);
+          const supOffset = supRange ? supRange.start - 1 : 0;
+          
+          let supResCount = 0;
+          for (let supCol = 0; supCol < representativeSeq.sequence.length; supCol++) {
+            if (representativeSeq.sequence[supCol] !== '-') {
+              supResCount++;
+              const realResidueNum = supOffset + supResCount;
+              visualizedDisplayPositions[supCol] = realResidueNum;
+              console.log(`  Sup_reps col ${supCol} → real residue #${realResidueNum} (AA: ${representativeSeq.sequence[supCol]})`);
             }
           }
 
@@ -1205,28 +1458,33 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
 
           console.log('\n--- Mapping to family alignment columns ---');
           
-          // For each display position that will be visualized
-          Object.entries(visualizedDisplayPositions).forEach(([displayPosStr, residueNumber]) => {
-            const displayPos = parseInt(displayPosStr);
-            console.log(`\nMapping display pos ${displayPos} (residue #${residueNumber}):`);
+          // For each sup_reps position that will be visualized
+          Object.entries(visualizedDisplayPositions).forEach(([supColStr, realResidueNum]) => {
+            const supCol = parseInt(supColStr);
+            console.log(`\nMapping sup_reps col ${supCol} (real residue #${realResidueNum}):`);
             
-            // Find the MSA column in family alignment for this residue number
+            // Find the family alignment column for this REAL residue number
+            // Extract family acc1 range offset
+            const famRange = extractSeqRange(familyRepSeq.header);
+            const famOffset = famRange ? famRange.start - 1 : 0;
+            
             let familyCol = -1;
-            let familyResidueCount = 0;
+            let famResCount = 0;
             
             for (let i = 0; i < familyRepSeq.sequence.length; i++) {
               if (familyRepSeq.sequence[i] !== '-') {
-                familyResidueCount++;
-                if (familyResidueCount === residueNumber) {
+                famResCount++;
+                const famRealRes = famOffset + famResCount;
+                if (famRealRes === realResidueNum) {
                   familyCol = i;
-                  console.log(`  Found residue #${residueNumber} at family col ${familyCol} (AA: ${familyRepSeq.sequence[i]})`);
+                  console.log(`  Found real residue #${realResidueNum} at family col ${familyCol} (AA: ${familyRepSeq.sequence[i]})`);
                   break;
                 }
               }
             }
 
             if (familyCol === -1) {
-              console.warn(`  ❌ Could not find family alignment column for residue ${residueNumber}`);
+              console.warn(`  ❌ Could not find family alignment column for real residue ${realResidueNum}`);
               return;
             }
 
@@ -1246,15 +1504,17 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
             
             if (calculatedData.totalSequences > 0 && hasMeaningfulData) {
               // Get GPCRdb number from conservation data
-              const consData = conservationData[residueNumber.toString()];
-              const gpcrdb = consData?.gpcrdb || residueNumber.toString();
+              // Map acc1 real residue to acc2 real residue, then look up conservation
+              const acc2ResNum = acc1ToAcc2ResMap[realResidueNum] || realResidueNum;
+              const consData = conservationData[acc2ResNum.toString()];
+              const gpcrdb = consData?.gpcrdb || acc2ResNum.toString();
               
-              console.log(`  GPCRdb: residue #${residueNumber} → "${gpcrdb}"`);
+              console.log(`  GPCRdb: acc1 real res #${realResidueNum} → acc2 real res #${acc2ResNum} → "${gpcrdb}"`);
               
-              // Use SAME display position key as custom alignments for consistent visualization
-              positionData[displayPos] = {
-                position: displayPos + 1, // 1-based position (will be renumbered during display)
-                msaColumn: displayPos, // Use display position for consistent alignment
+              // Store at sup_reps column position for aligned visualization
+              positionData[supCol] = {
+                position: supCol + 1,
+                msaColumn: supCol,
                 residueCounts: calculatedData.residueCounts,
                 totalSequences: calculatedData.totalSequences,
                 informationContent: calculatedData.informationContent,
@@ -1262,10 +1522,10 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
                 matchPercentage: calculatedData.matchPercentage,
                 mostConservedAA: calculatedData.mostConservedAA,
                 matchCounts: calculatedData.matchCounts,
-                gpcrdb: gpcrdb // Add GPCRdb numbering
+                gpcrdb: gpcrdb
               };
               
-              console.log(`  ✅ Created logo for display pos ${displayPos} (was family col ${familyCol})`);
+              console.log(`  ✅ Created logo for sup_reps col ${supCol} (was family col ${familyCol})`);
             } else {
               console.log(`  ⚠️ Skipping - no meaningful data`);
             }
@@ -1322,12 +1582,56 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
         ...allSelected.filter(name => !selectionOrder.includes(name))  // New selections not yet in order
       ];
       
+      // Pre-filter positions based on conservation criteria
+      const allowedPositions = new Set<number>();
+      for (let pos = 0; pos < globalMaxPosition; pos++) {
+        // Check if all alignments have gaps at this position
+        const allGaps = allSelectedAlignments.every(alignmentName => {
+          const d = alignmentPositionData[alignmentName]?.[pos];
+          if (!d) return true;
+          const counts = d.residueCounts || {};
+          return Object.keys(counts).length === 0;
+        });
+        
+        if (allGaps) {
+          continue; // Skip gap-only columns
+        }
+        
+        // Conservation filtering: Check if enough families meet the conservation threshold
+        if (minConservationThreshold > 0 && minFamiliesCount > 0) {
+          let familiesAboveThreshold = 0;
+          
+          allSelectedAlignments.forEach(alignmentName => {
+            const posData = alignmentPositionData[alignmentName]?.[pos];
+            if (posData && posData.residueCounts) {
+              const totalSequences = posData.totalSequences || 0;
+              if (totalSequences > 0) {
+                const maxCount = Math.max(...Object.values(posData.residueCounts));
+                const conservationPercentage = (maxCount / totalSequences) * 100;
+                
+                if (conservationPercentage >= minConservationThreshold) {
+                  familiesAboveThreshold++;
+                }
+              }
+            }
+          });
+          
+          // Only allow this position if enough families meet the conservation threshold
+          if (familiesAboveThreshold >= minFamiliesCount) {
+            allowedPositions.add(pos);
+          }
+        } else {
+          // No conservation filtering, allow all non-gap positions
+          allowedPositions.add(pos);
+        }
+      }
+      
       allSelectedAlignments.forEach(name => {
         const positionData = alignmentPositionData[name] || {};
         const processedPositions: Record<number, PositionLogoData> = {};
         
-        // Include all positions that have data in any alignment
-        for (let pos = 0; pos < globalMaxPosition; pos++) {
+        // Include only pre-filtered positions
+        for (const pos of allowedPositions) {
           // Check if this position has data in any alignment
           const hasDataInAnyAlignment = allSelectedAlignments.some(alignmentName => 
             alignmentPositionData[alignmentName]?.[pos]
@@ -1387,10 +1691,7 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
         // Get all positions and sort them
         const allPositions = Object.keys(positionData).map(Number).sort((a, b) => a - b);
 
-        // Apply HRH2 filter if active
-        const positionsToInclude = filterActive
-          ? allPositions.filter(pos => filterMsaColumns.has(pos))
-          : allPositions;
+        const positionsToInclude = allPositions;
         
         positionsToInclude.forEach((pos, index) => {
           const data = positionData[pos];
@@ -1404,7 +1705,6 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
       });
 
       setProcessedReceptorData(finalData);
-      setIsProcessing(false);
       console.log('✅ Data processing complete:', finalData.length, 'alignments processed');
     };
 
@@ -1418,12 +1718,17 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
     conservationThreshold, 
     useSimpleConservation, 
     calculateCrossAlignmentConservation, 
-    filterTokens, 
+    minConservationThreshold,
+    minFamiliesCount,
     referenceMaps, 
     humanRefSequences,
     classWideData,
     classDataLoaded,
-    selectionOrder
+    selectionOrder,
+    familyToAcc1,
+    familyToAcc2,
+    supRepSequences,
+    folder
   ]);
 
   // Calculate display statistics
@@ -1438,22 +1743,14 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
     }
 
     const totalPositions = receptorData[0].logoData.length;
-    let blurredPositions = 0;
+    const blurredPositions = 0;
 
-    if (useSimpleConservation) {
-      receptorData.forEach(d => {
-        d.logoData.forEach(position => {
-          if (position.crossAlignmentData?.shouldBlur) {
-            blurredPositions++;
-          }
-        });
-      });
-    }
-
+    // Simple conservation logic removed
+    
     const displayedPositions = totalPositions;
 
     return { totalPositions, displayedPositions, blurredPositions };
-  }, [dataLoaded, allData, selectedAlignments, selectedClassAlignments, processedReceptorData, useSimpleConservation]);
+  }, [dataLoaded, allData, selectedAlignments, selectedClassAlignments, processedReceptorData]);
 
   // Download SVG function
   const downloadSVG = () => {
@@ -1588,13 +1885,16 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
     const currentDataHash = JSON.stringify({
       receptorNames: receptorData.map(d => d.receptorName).sort(),
       positionCount: receptorData[0]?.logoData.length || 0,
-      useSimpleConservation,
-      conservationThreshold,
       rowHeight,
       hideMaskedColumns,
       overlapMinRows,
       dotMinConservation,
-      hrh2RegionCount: hrh2ConservationData.length
+      minConservationThreshold,
+      minFamiliesCount,
+      showDotPlot,
+      hrh2RegionCount: hrh2ConservationData.length,
+      manualClassifications: JSON.stringify(manualClassifications),
+      hiddenPositions: Array.from(hiddenPositions).sort()
     });
 
     // Only rebuild if data actually changed
@@ -1618,7 +1918,8 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
       if (!yAxisContainer || !chartContainer) return;
 
       const margin = { top: 20, right: 20, bottom: 20, left: 20 };
-      const yAxisWidth = 120;
+      const groupLabelWidth = 50; // Space for group labels on the left
+      const yAxisWidth = 120 + groupLabelWidth; // Increased to accommodate group labels
       const barWidthEstimate = 18;
 
       // Map: position -> amino acid -> array of row indices (which receptor rows share that AA)
@@ -1707,77 +2008,52 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
         displayToOriginalPos[displayIndex + 1] = originalPos; // displayIndex + 1 because positions are 1-based
       });
 
-      // Check if HRH2 filter is active
-      const filterActive = filterTokens.length > 0 && !!referenceMaps['HRH2'];
-      
-      // Calculate gaps between non-consecutive residues when HRH2 filter is active
-      const getHrh2ResidueNumber = (position: number): number | null => {
-        if (!filterActive || !referenceMaps['HRH2']) return null;
-        
-        // Find the logo data for this position to get msaColumn
-        const logoData = data[0]?.logoData.find(d => d.position === position);
-        if (!logoData) return null;
-        
-        const msaCol = logoData.msaColumn;
-        const hrh2Map = referenceMaps['HRH2'];
-        
-        if (msaCol >= hrh2Map.length) return null;
-        
-        // Calculate residue number for this MSA column
-        let residueCount = 0;
-        for (let i = 0; i <= msaCol && i < hrh2Map.length; i++) {
-          if (hrh2Map[i]) {
-            residueCount++;
-          }
-        }
-        return residueCount;
-      };
+      // Removed HRH2-specific gap logic; using positional gaps instead
 
-      // Build positions array with gap indicators for non-consecutive residues
+      // Build positions array with gap indicators for non-consecutive columns
       const positionsWithGaps: Array<{ position: number; isGap: boolean }> = [];
-      
       positionsWithData.forEach((pos, index) => {
         if (index === 0) {
           positionsWithGaps.push({ position: pos, isGap: false });
         } else {
-          const currentResidueNum = getHrh2ResidueNumber(pos);
-          const prevResidueNum = getHrh2ResidueNumber(positionsWithData[index - 1]);
-          
-          // Add gap if residues are not consecutive (more than 1 apart)
-          if (filterActive && currentResidueNum && prevResidueNum && 
-              currentResidueNum - prevResidueNum > 1) {
-            positionsWithGaps.push({ position: -1, isGap: true }); // Gap marker
+          const prevPos = positionsWithData[index - 1];
+          if (pos - prevPos > 1) {
+            positionsWithGaps.push({ position: -1, isGap: true }); // small gap separator
           }
-          
           positionsWithGaps.push({ position: pos, isGap: false });
         }
       });
 
-      const gapWidth = barWidthEstimate * 0.5; // Half column width for gaps
+      const gapWidth = barWidthEstimate * 0.3; // Small gap between non-consecutive columns
 
       // Total width accounting for gaps
       const regularColumns = positionsWithGaps.filter(p => !p.isGap).length;
       const gapColumns = positionsWithGaps.filter(p => p.isGap).length;
-      const totalWidth = (regularColumns * barWidthEstimate) + (gapColumns * gapWidth) + margin.left + margin.right;
+      const chartContentWidth = (regularColumns * barWidthEstimate) + (gapColumns * gapWidth);
+      const totalWidth = chartContentWidth + margin.left + margin.right;
       
       const gapBetweenReceptors = 5; // No gap between rows to eliminate unwanted spacing
       const logoAreaHeight = rowHeight;
-      const conservationBarHeight = useSimpleConservation ? 60 : 0; // Only show if using simple conservation
+      const conservationBarHeight = 0; // Simple conservation removed
       // UpSet-style dot plot settings
       const dotTopPadding = 5; // reduced from 10
       const dotRowHeight = 16;
-      const dotPlotHeight = dotTopPadding + (dotRowHeight * data.length) + (gapBetweenReceptors * (data.length - 1)) + 8; // reduced buffer for tighter spacing
+      const dotPlotHeight = showDotPlot ? dotTopPadding + (dotRowHeight * data.length) + (gapBetweenReceptors * (data.length - 1)) + 8 : 0; // reduced buffer for tighter spacing
 
       // Reference gpcrdb rows (optional)
       const referenceRowHeight = 30; // Increased from 16 to better fit GPCRdb numbers
-      const referenceAreaHeight = (showReferenceRows && referenceDataLoaded) ? (referenceInfo.length * referenceRowHeight + 4) : 0; // tighter padding
+      const referenceAreaHeight = (showReferenceRows && referenceInfo.length > 0) ? (referenceInfo.length * referenceRowHeight + 4) : 0; // tighter padding
 
       // HRH2 region blocks (optional)
       const hrh2RegionHeight = 25;
       const hrh2RegionAreaHeight = hrh2ConservationData.length > 0 ? hrh2RegionHeight + 8 : 0; // include padding
 
-      // Total chart height: logos + dot plot + optional reference rows + HRH2 regions + conservation bar + margins
-      const totalHeight = (logoAreaHeight * data.length) + (gapBetweenReceptors * (data.length - 1)) + dotPlotHeight + referenceAreaHeight + hrh2RegionAreaHeight + conservationBarHeight + margin.top + margin.bottom + 20;
+      // Evolutionary pattern row (between GPCRdb and logos)
+      const evolutionaryPatternHeight = 30;
+      const evolutionaryPatternAreaHeight = evolutionaryPatternHeight + 8; // include padding
+
+      // Total chart height: logos + dot plot + optional reference rows + evolutionary pattern + HRH2 regions + conservation bar + margins
+      const totalHeight = (logoAreaHeight * data.length) + (gapBetweenReceptors * (data.length - 1)) + dotPlotHeight + referenceAreaHeight + evolutionaryPatternAreaHeight + hrh2RegionAreaHeight + conservationBarHeight + margin.top + margin.bottom + 20;
 
       // Create SVGs
       const yAxisSvg = d3
@@ -1830,22 +2106,18 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
         const yLabel = yAxisSvg
           .append('text')
           .attr('text-anchor', 'end')
-          .attr('x', yAxisWidth - 10)
+          .attr('x', yAxisWidth - 10) // Position after group labels
           .attr('y', receptorY + logoAreaHeight / 2 + 5)
           .attr('class', 'text-foreground fill-current')
           .style('font-size', '12px')
           .style('font-family', 'Helvetica');
 
         // Format receptor name: ClassX -> Class X, except ClassOlf -> Olfactory
-        const formatReceptorName = (name: string) => {
-          if (name === 'ClassOlf') return 'Olfactory';
-          if (name.startsWith('Class') && name.length > 5) {
-            return 'Class ' + name.substring(5);
-          }
-          return name;
-        };
+        const displayName = getPlotDisplayName 
+          ? getPlotDisplayName(receptorData.receptorName) 
+          : receptorData.receptorName.split('_')[0];
         
-        yLabel.append('tspan').text(formatReceptorName(receptorData.receptorName.split('_')[0]));
+        yLabel.append('tspan').text(displayName);
         // yLabel.append('tspan').attr('x', 0).attr('dy', '1.2em').text('Information');
         // yLabel.append('tspan').attr('x', 0).attr('dy', '1.2em').text('Content (bits)');
         
@@ -1865,6 +2137,51 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
           .call(g => g.select('.domain')
                          .attr('stroke', '#888')
                          .attr('stroke-width', 2));
+      });
+
+      // Draw group annotations
+      receptorGroups.forEach(group => {
+        // Find which selected receptors belong to this group
+        const groupReceptorIndices: number[] = [];
+        data.forEach((receptorData, index) => {
+          if (group.members.includes(receptorData.receptorName)) {
+            groupReceptorIndices.push(index);
+          }
+        });
+
+        // Only draw if group has members in current selection
+        if (groupReceptorIndices.length > 0) {
+          const firstIndex = Math.min(...groupReceptorIndices);
+          const lastIndex = Math.max(...groupReceptorIndices);
+          
+          // Calculate Y positions to span the full height of the group rows
+          const groupStartY = margin.top + firstIndex * (logoAreaHeight + gapBetweenReceptors);
+          const groupEndY = margin.top + lastIndex * (logoAreaHeight + gapBetweenReceptors) + logoAreaHeight;
+          const groupCenterY = (groupStartY + groupEndY) / 2;
+          
+          // Draw vertical line spanning the full height of the group rows
+          const lineX = yAxisWidth - 80; // Position line closer to row labels
+          yAxisSvg.append('line')
+            .attr('x1', lineX)
+            .attr('y1', groupStartY)
+            .attr('x2', lineX)
+            .attr('y2', groupEndY)
+            .attr('stroke', '#666')
+            .attr('stroke-width', 2)
+            .attr('class', 'text-foreground stroke-current');
+          
+          // Draw vertical text label (larger than row labels, positioned near the line)
+          const textX = lineX - 20;
+          yAxisSvg.append('text')
+            .attr('x', textX)
+            .attr('y', groupCenterY)
+            .attr('text-anchor', 'middle')
+            .attr('transform', `rotate(-90, ${textX}, ${groupCenterY})`)
+            .attr('class', 'text-foreground fill-current')
+            .style('font-size', '14px')
+            .style('font-family', 'Helvetica')
+            .text(group.name);
+        }
       });
 
       const letterPromises: Promise<void>[] = [];
@@ -1983,38 +2300,15 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
 
                   nestedSvg
                     .on('mouseover', (event) => {
-                      let tooltipContent = `<strong>Alignment:</strong> ${receptorData.receptorName}<br/>` +
+                      const alignmentDisplayName = getDisplayName 
+                        ? getDisplayName(receptorData.receptorName) 
+                        : receptorData.receptorName;
+                      let tooltipContent = `<strong>Alignment:</strong> ${alignmentDisplayName}<br/>` +
                         `<strong>Position:</strong> ${d.position}<br/>` +
                         `<strong>Residue:</strong> ${residue}<br/>` +
                         `<strong>Count:</strong> ${d.residueCounts[residue]} / ${d.totalSequences}<br/>` +
                         `<strong>Frequency:</strong> ${((d.residueCounts[residue] / d.totalSequences) * 100).toFixed(1)}%<br/>`;
                       
-                      if (useSimpleConservation && d.crossAlignmentData) {
-                        tooltipContent += `<strong>Cross-Alignment Conservation:</strong> ${d.matchPercentage!.toFixed(1)}%<br/>`;
-                        tooltipContent += `<strong>Most Conserved Across Alignments:</strong> ${d.mostConservedAA}<br/>`;
-                        tooltipContent += `<strong>Match Count:</strong> ${d.crossAlignmentData.matchCount} / ${d.crossAlignmentData.totalAlignments} alignments<br/>`;
-                        
-                        // Show amino acids from each alignment
-                        tooltipContent += `<strong>Alignment AAs:</strong><br/>`;
-                        Object.entries(d.crossAlignmentData.alignmentAAs).forEach(([alignment, aa]) => {
-                          const isMatch = aa === d.mostConservedAA || 
-                            (d.mostConservedAA && ['E','D'].includes(d.mostConservedAA) && ['E','D'].includes(aa)) ||
-                            (d.mostConservedAA && ['W','Y','H','F'].includes(d.mostConservedAA) && ['W','Y','H','F'].includes(aa)) ||
-                            (d.mostConservedAA && ['R','K'].includes(d.mostConservedAA) && ['R','K'].includes(aa)) ||
-                            (d.mostConservedAA && ['Q','N'].includes(d.mostConservedAA) && ['Q','N'].includes(aa)) ||
-                            (d.mostConservedAA && ['V','I'].includes(d.mostConservedAA) && ['V','I'].includes(aa)) ||
-                            (d.mostConservedAA && ['M','L'].includes(d.mostConservedAA) && ['M','L'].includes(aa));
-                          tooltipContent += `&nbsp;&nbsp;${alignment}: <span style="color: ${isMatch ? '#22c55e' : '#ef4444'}">${aa}</span><br/>`;
-                        });
-                      } else if (useSimpleConservation && d.matchPercentage !== undefined) {
-                        tooltipContent += `<strong>Within-Alignment Match %:</strong> ${d.matchPercentage.toFixed(1)}%<br/>`;
-                        if (d.mostConservedAA) {
-                          tooltipContent += `<strong>Most Conserved:</strong> ${d.mostConservedAA}<br/>`;
-                        }
-                        if (d.matchCounts && d.matchCounts[residue]) {
-                          tooltipContent += `<strong>Match Count:</strong> ${d.matchCounts[residue]} / ${d.totalSequences}<br/>`;
-                        }
-                      }
                       
                       tooltipContent += `<strong>Information:</strong> ${height.toFixed(2)} bits`;
                       
@@ -2040,38 +2334,15 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
                     .text(residue)
                     .style('cursor', 'pointer')
                     .on('mouseover', (event) => {
-                      let tooltipContent = `<strong>Alignment:</strong> ${receptorData.receptorName}<br/>` +
+                      const alignmentDisplayName = getDisplayName 
+                        ? getDisplayName(receptorData.receptorName) 
+                        : receptorData.receptorName;
+                      let tooltipContent = `<strong>Alignment:</strong> ${alignmentDisplayName}<br/>` +
                         `<strong>Position:</strong> ${d.position}<br/>` +
                         `<strong>Residue:</strong> ${residue}<br/>` +
                         `<strong>Count:</strong> ${d.residueCounts[residue]} / ${d.totalSequences}<br/>` +
                         `<strong>Frequency:</strong> ${((d.residueCounts[residue] / d.totalSequences) * 100).toFixed(1)}%<br/>`;
                       
-                      if (useSimpleConservation && d.crossAlignmentData) {
-                        tooltipContent += `<strong>Cross-Alignment Conservation:</strong> ${d.crossAlignmentData.conservationPercentage.toFixed(1)}%<br/>`;
-                        tooltipContent += `<strong>Most Conserved Across Alignments:</strong> ${d.mostConservedAA}<br/>`;
-                        tooltipContent += `<strong>Match Count:</strong> ${d.crossAlignmentData.matchCount} / ${d.crossAlignmentData.totalAlignments} alignments<br/>`;
-                        
-                        // Show amino acids from each alignment
-                        tooltipContent += `<strong>Alignment AAs:</strong><br/>`;
-                        Object.entries(d.crossAlignmentData.alignmentAAs).forEach(([alignment, aa]) => {
-                          const isMatch = aa === d.mostConservedAA || 
-                            (d.mostConservedAA && ['E','D'].includes(d.mostConservedAA) && ['E','D'].includes(aa)) ||
-                            (d.mostConservedAA && ['W','Y','H','F'].includes(d.mostConservedAA) && ['W','Y','H','F'].includes(aa)) ||
-                            (d.mostConservedAA && ['R','K'].includes(d.mostConservedAA) && ['R','K'].includes(aa)) ||
-                            (d.mostConservedAA && ['Q','N'].includes(d.mostConservedAA) && ['Q','N'].includes(aa)) ||
-                            (d.mostConservedAA && ['V','I'].includes(d.mostConservedAA) && ['V','I'].includes(aa)) ||
-                            (d.mostConservedAA && ['M','L'].includes(d.mostConservedAA) && ['M','L'].includes(aa));
-                          tooltipContent += `&nbsp;&nbsp;${alignment}: <span style="color: ${isMatch ? '#22c55e' : '#ef4444'}">${aa}</span><br/>`;
-                        });
-                      } else if (useSimpleConservation && d.matchPercentage !== undefined) {
-                        tooltipContent += `<strong>Within-Alignment Match %:</strong> ${d.matchPercentage.toFixed(1)}%<br/>`;
-                        if (d.mostConservedAA) {
-                          tooltipContent += `<strong>Most Conserved:</strong> ${d.mostConservedAA}<br/>`;
-                        }
-                        if (d.matchCounts && d.matchCounts[residue]) {
-                          tooltipContent += `<strong>Match Count:</strong> ${d.matchCounts[residue]} / ${d.totalSequences}<br/>`;
-                        }
-                      }
                       
                       tooltipContent += `<strong>Information:</strong> ${height.toFixed(2)} bits`;
                       
@@ -2109,8 +2380,9 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
       });
 
       // === After logos are rendered, draw separate overlap dot plot ===
-      const dotGap = gapBetweenReceptors;
-      const overlapPlotOffset = margin.top + logoAreaHeight * data.length + dotGap * (data.length - 1) + dotTopPadding;
+      if (showDotPlot) {
+        const dotGap = gapBetweenReceptors;
+        const overlapPlotOffset = margin.top + logoAreaHeight * data.length + dotGap * (data.length - 1) + dotTopPadding;
 
       // expand chartSvg height to accommodate dot plot (already accounted for in totalHeight below)
 
@@ -2119,7 +2391,7 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
         chartSvg.append('rect')
           .attr('x', 0)
           .attr('y', overlapPlotOffset + rIdx * (dotRowHeight + dotGap))
-          .attr('width', totalWidth)
+          .attr('width', chartContentWidth)
           .attr('height', dotRowHeight)
           .attr('fill', '#000000')
           .attr('fill-opacity', rIdx % 2 ? 0.03 : 0.06);
@@ -2300,36 +2572,34 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
         Promise.all(letterPromises).then(drawMasks);
       }
 
-      // Y-axis labels for dot plot
-      data.forEach((receptorData, rIdx) => {
-        const labelY = overlapPlotOffset + rIdx * (dotRowHeight + dotGap) + dotRowHeight / 2 + 4; // small vertical offset
-        yAxisSvg.append('text')
-          .attr('text-anchor', 'end')
-          .attr('x', yAxisWidth - 10)
-          .attr('y', labelY)
-          .attr('class', 'text-foreground fill-current')
-          .style('font-size', '12px')
-          .style('font-family', 'Helvetica')
-          .text((() => {
-            const name = receptorData.receptorName.split('_')[0];
-            if (name === 'ClassOlf') return 'Olfactory';
-            if (name.startsWith('Class') && name.length > 5) {
-              return 'Class ' + name.substring(5);
-            }
-            return name;
-          })());
-      });
+        // Y-axis labels for dot plot
+        data.forEach((receptorData, rIdx) => {
+          const labelY = overlapPlotOffset + rIdx * (dotRowHeight + dotGap) + dotRowHeight / 2 + 4; // small vertical offset
+          const displayName = getPlotDisplayName 
+            ? getPlotDisplayName(receptorData.receptorName) 
+            : receptorData.receptorName.split('_')[0];
+          
+          yAxisSvg.append('text')
+            .attr('text-anchor', 'end')
+            .attr('x', yAxisWidth - 10)
+            .attr('y', labelY)
+            .attr('class', 'text-foreground fill-current')
+            .style('font-size', '12px')
+            .style('font-family', 'Helvetica')
+            .text(displayName);
+        });
+      } // End of showDotPlot conditional
 
       /* ─── Reference GPCRdb rows ───────────────────────────── */
-      if (showReferenceRows && referenceDataLoaded) {
-        const referencePlotOffset = margin.top + (logoAreaHeight * data.length) + (gapBetweenReceptors * (data.length - 1)) + dotPlotHeight + 2; // tighter padding
+      if (showReferenceRows && referenceInfo.length > 0) {
+        const referencePlotOffset = margin.top + (logoAreaHeight * data.length) + (gapBetweenReceptors * (data.length - 1)) + dotPlotHeight + evolutionaryPatternAreaHeight + 2; // tighter padding
 
         // Background stripes for readability
         referenceInfo.forEach((_, idx) => {
           chartSvg.append('rect')
             .attr('x', 0)
             .attr('y', referencePlotOffset + idx * referenceRowHeight)
-            .attr('width', totalWidth)
+            .attr('width', chartContentWidth)
             .attr('height', referenceRowHeight)
             .attr('fill', '#000000')
             .attr('fill-opacity', idx % 2 ? 0.03 : 0.06);
@@ -2339,6 +2609,11 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
           const rowCenterY = referencePlotOffset + refIdx * referenceRowHeight + referenceRowHeight / 2;
 
           // Y-axis label for the reference gene
+          // Convert label to match logo row format (e.g., classA -> Class A)
+          const refDisplayName = getPlotDisplayName 
+            ? getPlotDisplayName(ref.label + '_genes_filtered_db_FAMSA.ref_trimmed') 
+            : ref.label;
+          
           yAxisSvg.append('text')
             .attr('text-anchor', 'end')
             .attr('x', yAxisWidth - 10)
@@ -2346,7 +2621,7 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
             .attr('class', 'text-foreground fill-current')
             .style('font-size', '12px')
             .style('font-family', 'Helvetica')
-            .text(ref.geneName);
+            .text(refDisplayName);
 
           // Get the first receptor's logo data to access msaColumn information
           const firstReceptorData = data[0];
@@ -2374,9 +2649,362 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
         });
       }
 
+      /* ─── Evolutionary Pattern Row ─────────────────────────────────── */
+      const evolutionaryPatternOffset = margin.top + (logoAreaHeight * data.length) + (gapBetweenReceptors * (data.length - 1)) + dotPlotHeight + 4;
+
+      // Amino acid class helpers (used for cross-group comparisons)
+      // Single-letter class mapping for similarity buckets
+      // B: RK, A: DE, L: ML, V: IV, F: FYHW, others keep themselves
+
+      // Map residue to a single-letter class label (for simpler set counting)
+      const getAAClassLetter = (aa: string): string => {
+        if (aa === 'R' || aa === 'K') return 'R';   // Basic group represented by R
+        if (aa === 'D' || aa === 'E') return 'D';   // Acidic group represented by D
+        if (aa === 'Q' || aa === 'N') return 'Q';   // Polar group (Q,N) represented by Q
+        if (aa === 'M' || aa === 'L') return 'L';   // ML class represented by L
+        if (aa === 'I' || aa === 'V') return 'V';   // IV class represented by V
+        if (aa === 'F' || aa === 'Y' || aa === 'H' || aa === 'W') return 'F'; // Aromatic bucket represented by F
+        return aa; // other residues keep themselves
+      };
+
+      // Calculate crown group conservation patterns
+      // Focus on 3 key families: classA, cAMP, classC
+      const calculateEvolutionaryPatterns = () => {
+        const patterns: Record<number, {
+          crownGroupConservedAAs: Record<string, string[]>; // crown family name -> array of conserved AAs
+          crownGroupResidueBreakdown?: Record<string, { conserved: string[]; notConserved: string[] }>; // detailed per family
+          crownGroupClassLetters?: Record<string, string[]>; // crown family -> class letters
+          sharedLetters?: string[]; // class letters shared across families
+          matchType: 'global' | 'ancestral' | 'convergent' | 'multi-class' | 'lineage-specific';
+        }> = {};
+        
+        // Define the 3 crown group families
+        const crownFamilies = {
+          'classA': 'classA_genes_filtered_db_FAMSA.ref_trimmed',
+          'cAMP': 'cAMP_genes_filtered_db_FAMSA.ref_trimmed',
+          'classC': 'classC_genes_filtered_db_FAMSA.ref_trimmed'
+        };
+
+        // For each position in the alignment
+        positionsWithData.forEach(pos => {
+          const crownGroupConservedAAs: Record<string, string[]> = {};
+          const crownGroupResidueBreakdown: Record<string, { conserved: string[]; notConserved: string[] }> = {};
+          const crownGroupClassLetters: Record<string, Set<string>> = {};
+
+          // Check each crown family
+          Object.entries(crownFamilies).forEach(([familyKey, familyFileName]) => {
+            // Find this family in the data
+            const familyData = data.find(d => d.receptorName === familyFileName);
+            if (!familyData) return; // Family not in current selection
+
+            const posData = familyData.logoData.find(d => d.position === pos);
+            if (!posData || !posData.residueCounts) return;
+
+            const familyResidueCounts = posData.residueCounts;
+            const familyTotalSequences = posData.totalSequences;
+            
+            // Calculate conserved residues for this crown family
+            const familyConservedAAs: string[] = [];
+            const familyConservedClasses = new Set<string>();
+            let topAAForFamily = '';
+            let maxCountForFamily = 0;
+
+            // Check individual residues first
+            Object.entries(familyResidueCounts).forEach(([aa, count]) => {
+              if (count > maxCountForFamily) { 
+                maxCountForFamily = count; 
+                topAAForFamily = aa; 
+              }
+              const conservationPercentage = (count / familyTotalSequences) * 100;
+              if (conservationPercentage >= minConservationThreshold) {
+                familyConservedAAs.push(aa);
+              }
+            });
+
+            // Check residue classes (similarity buckets)
+            const familyClassToCount: Record<string, number> = {};
+            Object.entries(familyResidueCounts).forEach(([aa, count]) => {
+              const letter = getAAClassLetter(aa);
+              familyClassToCount[letter] = (familyClassToCount[letter] || 0) + count;
+            });
+
+            Object.entries(familyClassToCount).forEach(([letter, sumCount]) => {
+              const pct = (sumCount / familyTotalSequences) * 100;
+              if (pct >= minConservationThreshold) {
+                familyConservedClasses.add(letter);
+                // Add all residues from this class observed in this family
+                Object.keys(familyResidueCounts).forEach(aa => {
+                  if (getAAClassLetter(aa) === letter && !familyConservedAAs.includes(aa)) {
+                    familyConservedAAs.push(aa);
+                  }
+                });
+              }
+            });
+
+            // Fallback: if nothing passes threshold, use top residue
+            if (familyConservedAAs.length === 0 && topAAForFamily) {
+              familyConservedAAs.push(topAAForFamily);
+              familyConservedClasses.add(getAAClassLetter(topAAForFamily));
+            }
+
+            // Store conserved data for this crown family
+            crownGroupConservedAAs[familyKey] = familyConservedAAs.sort();
+            crownGroupClassLetters[familyKey] = familyConservedClasses;
+
+            // Build conserved vs not conserved lists for tooltip
+            const observedResidues = Object.keys(familyResidueCounts);
+            const notConserved = observedResidues
+              .filter(aa => !familyConservedAAs.includes(aa))
+              .sort();
+            crownGroupResidueBreakdown[familyKey] = {
+              conserved: [...familyConservedAAs].sort(),
+              notConserved
+            };
+          });
+
+          // Determine match type based on which crown families have shared class letters
+          const presentFamilies = Object.keys(crownGroupConservedAAs);
+          
+          if (presentFamilies.length === 0) return; // No data for this position
+
+          // Find shared class letters across families
+          const allSharedLetters = new Set<string>();
+          const letterToFamilies = new Map<string, Set<string>>();
+          
+          Object.entries(crownGroupClassLetters).forEach(([familyKey, classSet]) => {
+            classSet.forEach(letter => {
+              if (!letterToFamilies.has(letter)) {
+                letterToFamilies.set(letter, new Set());
+              }
+              letterToFamilies.get(letter)!.add(familyKey);
+            });
+          });
+
+          // Find letters that appear in at least 2 families
+          letterToFamilies.forEach((families, letter) => {
+            if (families.size >= 2) {
+              allSharedLetters.add(letter);
+            }
+          });
+
+          // Determine match type based on the new classification system
+          let matchType: 'global' | 'ancestral' | 'convergent' | 'multi-class' | 'lineage-specific' = 'lineage-specific';
+
+          // Check for shared classes across families
+          const sharedWithAll = Array.from(letterToFamilies.entries())
+            .filter(([, families]) => families.size === 3)
+            .map(([letter]) => letter);
+          
+          const sharedCAMPandClassC = Array.from(letterToFamilies.entries())
+            .filter(([, families]) => families.has('cAMP') && families.has('classC') && !families.has('classA'))
+            .map(([letter]) => letter);
+            
+          const sharedClassAandClassC = Array.from(letterToFamilies.entries())
+            .filter(([, families]) => families.has('classA') && families.has('classC') && !families.has('cAMP'))
+            .map(([letter]) => letter);
+            
+          const sharedClassAandCAMP = Array.from(letterToFamilies.entries())
+            .filter(([, families]) => families.has('classA') && families.has('cAMP') && !families.has('classC'))
+            .map(([letter]) => letter);
+
+          // Classification logic
+          if (sharedWithAll.length > 0) {
+            matchType = 'global'; // Present in all 3
+          } else if (sharedCAMPandClassC.length > 0) {
+            matchType = 'ancestral'; // cAMP + classC (not classA)
+          } else if (sharedClassAandClassC.length > 0) {
+            matchType = 'convergent'; // classA + classC (not cAMP)
+          } else if (sharedClassAandCAMP.length > 0) {
+            matchType = 'multi-class'; // classA + cAMP (not classC)
+          } else {
+            matchType = 'lineage-specific'; // Only one family
+          }
+
+          // Prepare data structures for tooltip
+          const crownGroupClassLettersArray: Record<string, string[]> = {};
+          Object.entries(crownGroupClassLetters).forEach(([name, classSet]) => {
+            crownGroupClassLettersArray[name] = Array.from(classSet).sort();
+          });
+
+          patterns[pos] = {
+            crownGroupConservedAAs,
+            crownGroupResidueBreakdown,
+            crownGroupClassLetters: crownGroupClassLettersArray,
+            sharedLetters: Array.from(allSharedLetters).sort(),
+            matchType
+          };
+        });
+
+        return patterns;
+      };
+
+      const evolutionaryPatterns = calculateEvolutionaryPatterns();
+
+      // Define colors for evolutionary pattern visualization
+      const charcoal = '#36454F';
+      const charcoalLight = 'rgba(54, 69, 79, 0.70)'; // 85% opacity for ancestral
+      
+      // All patterns will be drawn directly on boxes:
+      // - Lineage-specific: Single diagonal line
+      // - Multi-class: X pattern (two diagonal lines) - classA + cAMP
+      // - Convergent: X pattern (two diagonal lines) - classA + classC
+      // - Ancestral: Solid with 85% opacity (cAMP + classC, not classA)
+      // - Global: Solid black (all 3 families)
+
+      // Draw Y-axis label for evolutionary pattern row
+      yAxisSvg.append('text')
+        .attr('text-anchor', 'end')
+        .attr('x', yAxisWidth - 10)
+        .attr('y', evolutionaryPatternOffset + evolutionaryPatternHeight / 2 + 4)
+        .attr('class', 'text-foreground fill-current')
+        .style('font-size', '12px')
+        .style('font-family', 'Helvetica')
+        .text('Overlaps');
+
+      // Draw boxes for each position
+      positionsWithData.forEach(pos => {
+        const pattern = evolutionaryPatterns[pos];
+        if (!pattern) return;
+        
+        // Skip hidden positions
+        if (hiddenPositions.has(pos)) return;
+
+        const posX = x.getX(pos.toString());
+        // Make squares: use side length as min of bandwidth and pattern height
+        const side = Math.min(x.bandwidth(), evolutionaryPatternHeight);
+
+        // Calculate box position
+        const boxX = posX + (x.bandwidth() - side) / 2;
+        const boxY = evolutionaryPatternOffset + (evolutionaryPatternHeight - side) / 2;
+        
+        // Check if there's a manual override for this position
+        const effectiveMatchType = manualClassifications[pos] || pattern.matchType;
+        
+        // Determine fill pattern based on match type
+        let fillPattern = '#ffffff'; // Default white background
+        
+        if (effectiveMatchType === 'global') {
+          fillPattern = charcoal; // Solid black for global (all 3)
+        } else if (effectiveMatchType === 'ancestral') {
+          fillPattern = charcoalLight; // 85% opacity solid (cAMP + classC, not classA)
+        }
+
+        // Draw box background (no stroke/edge)
+        const boxRect = chartSvg.append('rect')
+          .attr('x', boxX)
+          .attr('y', boxY)
+          .attr('width', side)
+          .attr('height', side)
+          .attr('fill', fillPattern)
+          .attr('stroke', 'none')
+          .style('cursor', 'pointer');
+
+        // Draw pattern lines directly on the box based on match type
+        // Lines are 20% shorter (10% inset from each edge)
+        const inset = side * 0.1;
+        
+        if (effectiveMatchType === 'lineage-specific') {
+          // Single diagonal line (top-left to bottom-right, 20% shorter)
+          chartSvg.append('line')
+            .attr('x1', boxX + inset)
+            .attr('y1', boxY + inset)
+            .attr('x2', boxX + side - inset)
+            .attr('y2', boxY + side - inset)
+            .attr('stroke', charcoal)
+            .attr('stroke-width', 2.5)
+            .attr('stroke-linecap', 'round')
+            .style('pointer-events', 'none');
+        } else if (effectiveMatchType === 'multi-class' || effectiveMatchType === 'convergent') {
+          // X pattern: two diagonal lines crossing (both 20% shorter)
+          // Diagonal 1: top-left to bottom-right
+          chartSvg.append('line')
+            .attr('x1', boxX + inset)
+            .attr('y1', boxY + inset)
+            .attr('x2', boxX + side - inset)
+            .attr('y2', boxY + side - inset)
+            .attr('stroke', charcoal)
+            .attr('stroke-width', 2.5)
+            .attr('stroke-linecap', 'round')
+            .style('pointer-events', 'none');
+          
+          // Diagonal 2: top-right to bottom-left
+          chartSvg.append('line')
+            .attr('x1', boxX + side - inset)
+            .attr('y1', boxY + inset)
+            .attr('x2', boxX + inset)
+            .attr('y2', boxY + side - inset)
+            .attr('stroke', charcoal)
+            .attr('stroke-width', 2.5)
+            .attr('stroke-linecap', 'round')
+            .style('pointer-events', 'none');
+        }
+
+        // Add hover events to the box
+        boxRect
+          .on('mouseover', (event) => {
+            // Build tooltip showing crown family conservation
+            const familyInfo = Object.entries(pattern.crownGroupResidueBreakdown || {})
+              .map(([family, lists]) => {
+                const c = lists.conserved.length ? lists.conserved.join(', ') : '—';
+                const n = lists.notConserved.length ? lists.notConserved.join(', ') : '—';
+                return `${family}: <em>conserved</em> [${c}] | <em>not</em> [${n}]`;
+              })
+              .join('<br/>');
+
+            const classInfo = pattern.crownGroupClassLetters
+              ? Object.entries(pattern.crownGroupClassLetters)
+                  .map(([family, letters]) => `${family} → ${letters.join(', ')}`)
+                  .join('<br/>')
+              : '';
+
+            const sharedInfo = pattern.sharedLetters && pattern.sharedLetters.length
+              ? pattern.sharedLetters.join(', ')
+              : '—';
+
+            // Pattern label with description (use effective match type)
+            let patternLabel = '';
+            const isManual = manualClassifications[pos] !== undefined;
+            if (effectiveMatchType === 'global') {
+              patternLabel = 'Global (all 3 families)';
+            } else if (effectiveMatchType === 'ancestral') {
+              patternLabel = 'Ancestral (cAMP + classC)';
+            } else if (effectiveMatchType === 'convergent') {
+              patternLabel = 'Convergent (classA + classC)';
+            } else if (effectiveMatchType === 'multi-class') {
+              patternLabel = 'Multi-class (classA + cAMP)';
+            } else {
+              patternLabel = 'Lineage-specific (one family)';
+            }
+            
+            if (isManual) {
+              patternLabel += ' (manually set)';
+            }
+
+            const tooltipContent = `<strong>Position:</strong> ${pos}<br/>` +
+              `<strong>Classification:</strong> ${patternLabel}<br/>` +
+              `<strong>Crown family residues:</strong><br/>${familyInfo}<br/>` +
+              (classInfo ? `<strong>Residue classes:</strong><br/>${classInfo}<br/>` : '') +
+              `<strong>Shared classes:</strong> ${sharedInfo}<br/>` +
+              `<em>Click to change classification</em>`;
+            showTooltip(event, tooltipContent);
+          })
+          .on('mouseout', hideTooltip)
+          .on('mousemove', updateTooltipPosition)
+          .on('click', (event) => {
+            event.stopPropagation();
+            hideTooltip();
+            setClassificationMenu({
+              visible: true,
+              x: event.clientX,
+              y: event.clientY,
+              position: pos
+            });
+          });
+      });
+
       /* ─── HRH2 Region blocks ─────────────────────────────────── */
       if (hrh2ConservationData.length > 0) {
-        const hrh2RegionPlotOffset = margin.top + (logoAreaHeight * data.length) + (gapBetweenReceptors * (data.length - 1)) + dotPlotHeight + referenceAreaHeight + 4;
+        const hrh2RegionPlotOffset = margin.top + (logoAreaHeight * data.length) + (gapBetweenReceptors * (data.length - 1)) + dotPlotHeight + referenceAreaHeight + evolutionaryPatternAreaHeight + 4;
 
         // Group consecutive residues with the same region
         type RegionGroup = { region: string; startResidue: number; endResidue: number };
@@ -2571,7 +3199,7 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
           .append('rect')
           .attr('x', 0)
           .attr('y', barChartY)
-          .attr('width', totalWidth)
+          .attr('width', chartContentWidth)
           .attr('height', conservationBarHeight)
           .attr('fill', 'rgba(240, 240, 240, 0.5)')
           .attr('stroke', 'rgba(200, 200, 200, 0.8)')
@@ -2618,7 +3246,7 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
           chartSvg
             .append('line')
             .attr('x1', 0)
-            .attr('x2', totalWidth)
+            .attr('x2', chartContentWidth)
             .attr('y1', thresholdY)
             .attr('y2', thresholdY)
             .attr('stroke', '#dc2626')
@@ -2667,45 +3295,31 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
           .text('Conservation %');
       }
 
-      // ─── Add column numbers on top ─────────────────────────────────────────
-      // Use the display positions (1-based) for labeling
-      chartSvg.selectAll('text.column-number')
-        .data(positionsWithData.map((pos, i) => ({ pos, display: i + 1 })))
-        .enter()
-        .append('text')
-        .attr('class', 'column-number')
-        // nudge the row slightly right by adding a small x-offset (e.g., 4px)
-        .attr('transform', d => {
-          const xPos = x.getX(d.pos.toString()) + x.bandwidth() / 2 + 4;
-          const yPos = margin.top / 2;
-          return `translate(${xPos},${yPos}) rotate(-90)`;
-        })
-        .attr('text-anchor', 'middle')
-        .style('font-weight', 'bold')
-        .text(d => d.display);
+      // Removed column numbering on top
       // ─────────────────────────────────────────────────────────────────────────
     }
 
     return () => {
       setTooltip(prev => ({ ...prev, visible: false }));
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     dataLoaded, 
     selectedAlignments, 
     selectedClassAlignments, 
     processedReceptorData, 
-    useSimpleConservation, 
-    conservationThreshold, 
     rowHeight, 
     gapBetweenReceptors,
     hideMaskedColumns, 
     overlapMinRows, 
     dotMinConservation,
+    minConservationThreshold,
+    minFamiliesCount,
+    showDotPlot,
     showReferenceRows,
     referenceDataLoaded,
     referenceInfo,
     hrh2ConservationData,
-    filterTokens,
     referenceMaps,
     previousDataHash,
     // Stable function references - these rarely change
@@ -2713,14 +3327,14 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
     loadCustomSvgLetter, 
     showTooltip, 
     hideTooltip, 
-    updateTooltipPosition
+    updateTooltipPosition,
+    getDisplayName,
+    getPlotDisplayName,
+    receptorGroups
+    // Note: manualClassifications is tracked via the hash (previousDataHash) to avoid reference issues
   ]);
 
-  if (!dataLoaded) return <div>Loading custom alignments...</div>;
-  
-  if (!classDataLoaded) return <div>Loading class-wide alignments...</div>;
-
-  if (isProcessing) return <div>Processing receptor data...</div>;
+  // Keep chart mounted during loading/processing; show non-blocking overlay instead
 
   return (
     <div className="max-w-7xl mx-auto bg-card text-card-foreground rounded-lg p-6 shadow-md">
@@ -2753,74 +3367,151 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
         </div>
 
         {/* Display controls */}
-        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-          <div className="flex items-center gap-2">
-            <label className="text-sm font-medium">Row Height:</label>
-            <input
-              type="range"
-              min="20"
-              max="200"
-              value={rowHeight}
-              onChange={(e) => setRowHeight(Number(e.target.value))}
-              className="w-24"
-            />
-            <span className="text-sm text-muted-foreground">{rowHeight}px</span>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {/* Row Height Control */}
+          <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg border">
+            <h4 className="text-sm font-semibold mb-3">Display Settings</h4>
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium w-20 flex-shrink-0">Row Height:</label>
+              <input
+                type="range"
+                min="20"
+                max="200"
+                value={rowHeight}
+                onChange={(e) => setRowHeight(Number(e.target.value))}
+                className="flex-1"
+              />
+              <input
+                type="text"
+                value={rowHeightInput}
+                onChange={(e) => setRowHeightInput(e.target.value)}
+                onBlur={(e) => {
+                  const val = parseInt(e.target.value) || 20;
+                  setRowHeight(Math.min(200, Math.max(20, val)));
+                }}
+                className="w-12 px-1 py-1 text-xs border-2 border-gray-300 rounded bg-white dark:bg-gray-700 text-center font-medium"
+              />
+              <span className="text-xs text-muted-foreground w-6 flex-shrink-0">px</span>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <label className="text-sm font-medium">Min Conservation:</label>
-            <input
-              type="range"
-              min="0"
-              max="100"
-              value={conservationThreshold}
-              onChange={(e) => setConservationThreshold(Number(e.target.value))}
-              className="w-24"
-            />
-            <span className="text-sm text-muted-foreground">{conservationThreshold}%</span>
+          {/* Overlap Controls */}
+          <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg border">
+            <h4 className="text-sm font-semibold mb-3">Overlap Analysis</h4>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-medium w-20 flex-shrink-0">Dot Min:</label>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={dotMinConservation}
+                  onChange={(e) => setDotMinConservation(Number(e.target.value))}
+                  className="flex-1"
+                />
+                <input
+                  type="text"
+                  value={dotMinInput}
+                  onChange={(e) => setDotMinInput(e.target.value)}
+                  onBlur={(e) => {
+                    const val = parseInt(e.target.value) || 0;
+                    setDotMinConservation(Math.min(100, Math.max(0, val)));
+                  }}
+                  className="w-12 px-1 py-1 text-xs border-2 border-gray-300 rounded bg-white dark:bg-gray-700 text-center font-medium"
+                />
+                <span className="text-xs text-muted-foreground w-6 flex-shrink-0">%</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-medium w-20 flex-shrink-0">Min Rows:</label>
+                <input
+                  type="range"
+                  min="1"
+                  max={Math.max(1, selectedAlignments.length + selectedClassAlignments.length)}
+                  value={overlapMinRows}
+                  onChange={(e) => setOverlapMinRows(Number(e.target.value))}
+                  className="flex-1"
+                />
+                <input
+                  type="text"
+                  value={minRowsInput}
+                  onChange={(e) => setMinRowsInput(e.target.value)}
+                  onBlur={(e) => {
+                    const val = parseInt(e.target.value) || 1;
+                    const max = Math.max(1, selectedAlignments.length + selectedClassAlignments.length);
+                    setOverlapMinRows(Math.min(max, Math.max(1, val)));
+                  }}
+                  className="w-12 px-1 py-1 text-xs border-2 border-gray-300 rounded bg-white dark:bg-gray-700 text-center font-medium"
+                />
+                <span className="text-xs text-muted-foreground w-8 flex-shrink-0">rows</span>
+              </div>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <label className="text-sm font-medium">Dot Plot Min %:</label>
-            <input
-              type="range"
-              min="0"
-              max="100"
-              value={dotMinConservation}
-              onChange={(e) => setDotMinConservation(Number(e.target.value))}
-              className="w-24"
-            />
-            <span className="text-sm text-muted-foreground">{dotMinConservation}%</span>
+          {/* Conservation Filtering Controls */}
+          <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg border">
+            <h4 className="text-sm font-semibold mb-3">Conservation Filter</h4>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-medium w-20 flex-shrink-0">Min Cons:</label>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={minConservationThreshold}
+                  onChange={(e) => setMinConservationThreshold(Number(e.target.value))}
+                  className="flex-1"
+                />
+                <input
+                  type="text"
+                  value={minConsInput}
+                  onChange={(e) => setMinConsInput(e.target.value)}
+                  onBlur={(e) => {
+                    const val = parseInt(e.target.value) || 0;
+                    setMinConservationThreshold(Math.min(100, Math.max(0, val)));
+                  }}
+                  className="w-12 px-1 py-1 text-xs border-2 border-gray-300 rounded bg-white dark:bg-gray-700 text-center font-medium"
+                />
+                <span className="text-xs text-muted-foreground w-6 flex-shrink-0">%</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-medium w-20 flex-shrink-0">Min Fams:</label>
+                <input
+                  type="range"
+                  min="0"
+                  max={Math.max(1, selectedAlignments.length + selectedClassAlignments.length)}
+                  value={minFamiliesCount}
+                  onChange={(e) => setMinFamiliesCount(Number(e.target.value))}
+                  className="flex-1"
+                />
+                <input
+                  type="text"
+                  value={minFamsInput}
+                  onChange={(e) => setMinFamsInput(e.target.value)}
+                  onBlur={(e) => {
+                    const val = parseInt(e.target.value) || 0;
+                    const max = Math.max(1, selectedAlignments.length + selectedClassAlignments.length);
+                    setMinFamiliesCount(Math.min(max, Math.max(0, val)));
+                  }}
+                  className="w-12 px-1 py-1 text-xs border-2 border-gray-300 rounded bg-white dark:bg-gray-700 text-center font-medium"
+                />
+                <span className="text-xs text-muted-foreground w-10 flex-shrink-0">fams</span>
+              </div>
+            </div>
           </div>
-
-          <div className="flex items-center gap-2">
-            <label className="text-sm font-medium">Min Overlap Rows:</label>
-            <input
-              type="range"
-              min="1"
-              max={Math.max(1, selectedAlignments.length + selectedClassAlignments.length)}
-              value={overlapMinRows}
-              onChange={(e) => setOverlapMinRows(Number(e.target.value))}
-              className="w-24"
-            />
-            <span className="text-sm text-muted-foreground">{overlapMinRows}</span>
-          </div>
-
-          {/* Mask width control removed */}
-
+        </div>
+        
+        {/* Checkboxes */}
+        <div className="flex flex-wrap gap-4 mt-4">
           <div className="flex items-center gap-2">
             <input
               type="checkbox"
-              id="use-simple-conservation"
-              checked={useSimpleConservation}
-              onChange={(e) => setUseSimpleConservation(e.target.checked)}
-              className="w-4 h-4 text-blue-600 rounded border-gray-300"
+              id="show-dot-plot"
+              checked={showDotPlot}
+              onChange={(e)=>setShowDotPlot(e.target.checked)}
             />
-            <label htmlFor="use-simple-conservation" className="text-sm font-medium cursor-pointer">
-              Use Simple Conservation
-            </label>
+            <label htmlFor="show-dot-plot" className="text-sm font-medium cursor-pointer">Show Overlap Dot Plot</label>
           </div>
-
+          
           <div className="flex items-center gap-2">
             <input
               type="checkbox"
@@ -2855,8 +3546,8 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
                 onChange={() => handleAlignmentToggle(name)}
                 className="w-4 h-4 text-blue-600 rounded border-gray-300"
               />
-              <label htmlFor={`alignment-${name}`} className="text-sm font-medium cursor-pointer">
-                {name}
+              <label htmlFor={`alignment-${name}`} className="text-sm font-medium cursor-pointer" title={name}>
+                {getDisplayName ? getDisplayName(name) : name.split('_')[0]}
               </label>
             </div>
           ))}
@@ -2865,96 +3556,10 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
           Selected: {selectedAlignments.length} / {fastaNames.length} alignments
         </div>
 
-        {/* Class-wide Alignments Section */}
-        <div className="mt-6">
-          <h3 className="text-lg font-semibold mb-4">Class-wide Alignments</h3>
-          <div className="flex flex-wrap gap-2 items-center mb-4">
-            <span className="text-sm font-medium">Select Class Alignments:</span>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={selectAllClassAlignments}>
-                Select All Classes
-              </Button>
-              <Button variant="outline" size="sm" onClick={selectNoClassAlignments}>
-                Select None
-              </Button>
-            </div>
-          </div>
-          
-          {/* GPCR Classes */}
-          <div className="mb-4">
-            <h4 className="text-md font-medium mb-2">GPCR Classes</h4>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-              {['ClassA', 'ClassB1', 'ClassB2', 'ClassC', 'ClassF', 'ClassT', 'ClassOlf'].map((className: string) => (
-                <div key={className} className="flex items-center gap-2 bg-blue-50 rounded px-3 py-2">
-                  <input
-                    type="checkbox"
-                    id={`class-${className}`}
-                    checked={selectedClassAlignments.includes(className)}
-                    onChange={() => handleClassAlignmentToggle(className)}
-                    className="w-4 h-4 text-blue-600 rounded border-gray-300"
-                  />
-                  <label htmlFor={`class-${className}`} className="text-sm font-medium cursor-pointer">
-                    {className === 'ClassOlf' ? 'ClassOlf' : className}
-                  </label>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Individual Receptor Orthologs */}
-          <div className="mb-4">
-            <h4 className="text-md font-medium mb-2">Individual Receptor Orthologs</h4>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-              {['GP157', 'GP143'].map((className: string) => (
-                <div key={className} className="flex items-center gap-2 bg-purple-50 rounded px-3 py-2">
-                  <input
-                    type="checkbox"
-                    id={`class-${className}`}
-                    checked={selectedClassAlignments.includes(className)}
-                    onChange={() => handleClassAlignmentToggle(className)}
-                    className="w-4 h-4 text-blue-600 rounded border-gray-300"
-                  />
-                  <label htmlFor={`class-${className}`} className="text-sm font-medium cursor-pointer">
-                    {className}
-                  </label>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="mt-3 text-sm text-muted-foreground">
-            Selected: {selectedClassAlignments.length} / {availableClassAlignments.length} class alignments
-            {selectedClassAlignments.length > 0 && (
-              <span className="ml-2 text-blue-600">
-                (Using family-wide human sequences: {selectedClassAlignments.map(c => classToRepresentative[c]).join(', ')})
-              </span>
-            )}
-          </div>
-        </div>
+      {/* Class-wide Alignments Section removed – using mapping files via top checkboxes only */}
 
         {/* HRH2 filter input on its own line below checkboxes */}
-        <div className="flex items-center gap-2 mt-4">
-          <label className="text-sm font-medium">Filter HRH2 Residues:</label>
-          <input
-            type="text"
-            value={filterInput}
-            onChange={(e) => setFilterInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                applyFilter();
-              }
-            }}
-            placeholder="e.g. 45, 49, 110"
-            className="border rounded px-2 py-1 text-sm"
-          />
-          <Button variant="outline" size="sm" onClick={applyFilter}>
-            Apply
-          </Button>
-          {filterTokens.length > 0 && (
-            <Button variant="outline" size="sm" onClick={clearFilter}>
-              Clear
-            </Button>
-          )}
-        </div>
+          {/* HRH2 filter removed */}
 
         {/* Display statistics */}
         {(selectedAlignments.length > 0 || selectedClassAlignments.length > 0) && (() => {
@@ -2963,23 +3568,12 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
             <div className="mt-2 text-sm text-muted-foreground">
               <div>
                 Positions: {stats.displayedPositions} displayed
-                {stats.blurredPositions > 0 && useSimpleConservation && (
-                  <span> • {stats.blurredPositions} columns blurred (below {conservationThreshold}% conservation)</span>
-                )}
-                {conservationThreshold > 0 && !useSimpleConservation && (
-                  <span> • Conservation ≥ {conservationThreshold}%</span>
-                )}
               </div>
 
               <div className="mt-1">
                 <span className="font-medium">
-                  Conservation Method: {useSimpleConservation ? 'Cross-Alignment Match-based' : 'Shannon Entropy (Within-Alignment)'}
+                  Conservation Method: Shannon Entropy (Within-Alignment)
                 </span>
-                {useSimpleConservation && (
-                  <span className="text-xs ml-2">
-                    (Conserved across alignments: E-D matches, aromatic W-Y-H-F, basic R-K, polar Q-N, V-I, M-L)
-                  </span>
-                )}
               </div>
             </div>
           );
@@ -3031,6 +3625,15 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
         >
           Reset
         </button>
+        {hiddenPositions.size > 0 && (
+          <button
+            onClick={() => setHiddenPositions(new Set())}
+            className="ml-2 px-3 py-1 text-xs bg-blue-500 hover:bg-blue-600 text-white rounded border transition-colors"
+            title="Show all hidden overlap symbols"
+          >
+            Show {hiddenPositions.size} Hidden
+          </button>
+        )}
       </div>
 
       {/* Tooltip via portal */}
@@ -3044,6 +3647,78 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder }) => {
         >
           <div dangerouslySetInnerHTML={{ __html: tooltip.content }} />
         </div>,
+        document.body
+      )}
+
+      {/* Classification menu via portal */}
+      {classificationMenu.visible && typeof window !== 'undefined' && createPortal(
+        <>
+          {/* Backdrop to close menu */}
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setClassificationMenu({ visible: false, x: 0, y: 0, position: 0 })}
+          />
+          {/* Menu */}
+          <div
+            className="fixed z-50 bg-white dark:bg-gray-800 text-black dark:text-white rounded-lg border-2 border-gray-300 dark:border-gray-600 shadow-xl"
+            style={{
+              left: Math.min(classificationMenu.x, window.innerWidth - 250),
+              top: Math.min(classificationMenu.y, window.innerHeight - 300),
+            }}
+          >
+            <div className="p-2">
+              <div className="text-sm font-semibold mb-2 px-2 py-1 border-b border-gray-300 dark:border-gray-600">
+                Position {classificationMenu.position} - Select Classification
+              </div>
+              {([
+                { value: 'global', label: 'Global (all 3 families)', desc: 'Solid black' },
+                { value: 'ancestral', label: 'Ancestral (cAMP + classC)', desc: 'Solid 85% opacity' },
+                { value: 'convergent', label: 'Convergent (classA + classC)', desc: 'X pattern' },
+                { value: 'multi-class', label: 'Multi-class (classA + cAMP)', desc: 'X pattern' },
+                { value: 'lineage-specific', label: 'Lineage-specific (one family)', desc: 'Single diagonal' }
+              ] as Array<{ value: 'global' | 'ancestral' | 'convergent' | 'multi-class' | 'lineage-specific'; label: string; desc: string }>).map((option) => (
+                <button
+                  key={option.value}
+                  onClick={() => {
+                    setManualClassifications(prev => ({
+                      ...prev,
+                      [classificationMenu.position]: option.value
+                    }));
+                    setClassificationMenu({ visible: false, x: 0, y: 0, position: 0 });
+                  }}
+                  className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors text-sm"
+                >
+                  <div className="font-medium">{option.label}</div>
+                  <div className="text-xs text-gray-600 dark:text-gray-400">{option.desc}</div>
+                </button>
+              ))}
+              <div className="border-t border-gray-300 dark:border-gray-600 mt-2 pt-2 space-y-1">
+                <button
+                  onClick={() => {
+                    setManualClassifications(prev => {
+                      const newClassifications = { ...prev };
+                      delete newClassifications[classificationMenu.position];
+                      return newClassifications;
+                    });
+                    setClassificationMenu({ visible: false, x: 0, y: 0, position: 0 });
+                  }}
+                  className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors text-sm text-blue-600 dark:text-blue-400"
+                >
+                  Reset to Auto
+                </button>
+                <button
+                  onClick={() => {
+                    setHiddenPositions(prev => new Set(prev).add(classificationMenu.position));
+                    setClassificationMenu({ visible: false, x: 0, y: 0, position: 0 });
+                  }}
+                  className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors text-sm text-red-600 dark:text-red-400"
+                >
+                  Hide Symbol
+                </button>
+              </div>
+            </div>
+          </div>
+        </>,
         document.body
       )}
     </div>

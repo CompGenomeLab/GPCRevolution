@@ -26,6 +26,8 @@ interface AlignmentData {
 interface PairwiseOverlapProps {
   fastaNames: string[];
   folder: string;
+  selectAllOrder?: string[];
+  getDisplayName?: (fileName: string) => string;
 }
 
 // Define amino acid matching groups (same as CustomSequenceLogo)
@@ -38,7 +40,7 @@ const matchingGroups = {
   'hydrophobic_ml': ['M', 'L']
 };
 
-const PairwiseOverlapMatrix: React.FC<PairwiseOverlapProps> = ({ fastaNames, folder }) => {
+const PairwiseOverlapMatrix: React.FC<PairwiseOverlapProps> = ({ fastaNames, folder, selectAllOrder, getDisplayName }) => {
   const [selectedAlignments, setSelectedAlignments] = useState<string[]>([]);
   const [alignmentData, setAlignmentData] = useState<AlignmentData[]>([]);
   const [loading, setLoading] = useState(false);
@@ -255,7 +257,8 @@ const PairwiseOverlapMatrix: React.FC<PairwiseOverlapProps> = ({ fastaNames, fol
   };
 
   const selectAll = () => {
-    setSelectedAlignments([...fastaNames]);
+    const orderedNames = selectAllOrder || fastaNames;
+    setSelectedAlignments([...orderedNames]);
   };
 
   const selectNone = () => {
@@ -319,7 +322,7 @@ const PairwiseOverlapMatrix: React.FC<PairwiseOverlapProps> = ({ fastaNames, fol
                   className="text-sm font-mono cursor-pointer truncate"
                   title={name}
                 >
-                  {name}
+                  {getDisplayName ? getDisplayName(name) : name.split('_')[0]}
                 </label>
               </div>
             ))}
@@ -349,7 +352,7 @@ const PairwiseOverlapMatrix: React.FC<PairwiseOverlapProps> = ({ fastaNames, fol
                         title={alignment.name}
                       >
                         <div className="transform -rotate-45 origin-center whitespace-nowrap">
-                          {alignment.name}
+                          {getDisplayName ? getDisplayName(alignment.name) : alignment.name}
                         </div>
                       </th>
                     ))}
@@ -362,7 +365,7 @@ const PairwiseOverlapMatrix: React.FC<PairwiseOverlapProps> = ({ fastaNames, fol
                         className="border bg-gray-100 p-2 text-xs font-semibold max-w-32"
                         title={alignment.name}
                       >
-                        <div className="truncate">{alignment.name}</div>
+                        <div className="truncate">{getDisplayName ? getDisplayName(alignment.name) : alignment.name}</div>
                       </td>
                       {overlapMatrix[i]?.map((overlap, j) => {
                         const isDiagonal = i === j;
@@ -378,8 +381,8 @@ const PairwiseOverlapMatrix: React.FC<PairwiseOverlapProps> = ({ fastaNames, fol
                             }`}
                             title={
                               isDiagonal 
-                                ? `Conserved positions in ${alignment.name}: ${overlap} (≥${conservationThreshold}% conservation)`
-                                : `Shared conserved positions between ${alignmentData[i]?.name} and ${alignmentData[j]?.name}: ${overlap}`
+                                ? `Conserved positions in ${getDisplayName ? getDisplayName(alignment.name) : alignment.name}: ${overlap} (≥${conservationThreshold}% conservation)`
+                                : `Shared conserved positions between ${getDisplayName ? getDisplayName(alignmentData[i]?.name) : alignmentData[i]?.name} and ${getDisplayName ? getDisplayName(alignmentData[j]?.name) : alignmentData[j]?.name}: ${overlap}`
                             }
                           >
                             {overlap}

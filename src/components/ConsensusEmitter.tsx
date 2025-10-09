@@ -14,6 +14,8 @@ interface Props {
   customFastaNames: string[];
   /** Public folder for the custom fastas (e.g., '/custom_msa') */
   customFolder: string;
+  /** Optional function to get display name for a file */
+  getDisplayName?: (fileName: string) => string;
 }
 
 const CLASS_ALIGNMENTS: { label: string; filename: string }[] = [
@@ -59,7 +61,7 @@ function parseFasta(text: string): Sequence[] {
 }
 
 
-const ConsensusEmitter: React.FC<Props> = ({ customFastaNames, customFolder }) => {
+const ConsensusEmitter: React.FC<Props> = ({ customFastaNames, customFolder, getDisplayName }) => {
   const [selectedCustom, setSelectedCustom] = useState<string[]>([]);
   const [selectedClass, setSelectedClass] = useState<string[]>([]);
   const [customCounts, setCustomCounts] = useState<Record<string, number>>({});
@@ -195,28 +197,28 @@ const ConsensusEmitter: React.FC<Props> = ({ customFastaNames, customFolder }) =
           const text = await res.text();
           const sequences = parseFasta(text);
           const n = classCounts[filename] || 1;
-          // Map custom display positions -> residue numbers in human_refs rep -> class family columns
-          let humanRefs: Sequence[] = [];
-          try { humanRefs = await loadFasta(`/custom_msa/human_refs.fasta`); } catch {}
+          // Map custom display positions -> residue numbers in sup_reps rep -> class family columns
+          let supReps: Sequence[] = [];
+          try { supReps = await loadFasta(`/custom_msa/sup_reps_noClassC_noSTE3_linsi_trimends_treein_einsi_ep0.123_missing_added_reps_only.fasta`); } catch {}
           const rep = FILENAME_TO_REP[filename];
-          const humanRep = rep ? (humanRefs.find(s => s.header.includes(`${rep}_HUMAN`)) || humanRefs.find(s => s.header.toUpperCase().includes(rep.toUpperCase()))) : undefined;
+          const supRep = rep ? (supReps.find(s => s.header.includes(`${rep}_HUMAN`)) || supReps.find(s => s.header.toUpperCase().includes(rep.toUpperCase()))) : undefined;
           const familyRep = rep ? (sequences.find(s => s.header.includes(`${rep}_HUMAN`)) || sequences.find(s => s.header.toUpperCase().includes(rep.toUpperCase()))) : undefined;
 
           const results: string[] = new Array(n).fill('');
-          // Precompute running residue counts for humanRep
-          let humanRunning: number[] = [];
-          if (humanRep) {
-            humanRunning = new Array(humanRep.sequence.length).fill(0);
+          // Precompute running residue counts for supRep
+          let supRunning: number[] = [];
+          if (supRep) {
+            supRunning = new Array(supRep.sequence.length).fill(0);
             let cnt = 0;
-            for (let i = 0; i < humanRep.sequence.length; i++) { if (humanRep.sequence[i] !== '-') cnt++; humanRunning[i] = cnt; }
+            for (let i = 0; i < supRep.sequence.length; i++) { if (supRep.sequence[i] !== '-') cnt++; supRunning[i] = cnt; }
           }
           for (const disp of displayPositions) {
             // if no valid mapping, emit '-'
-            if (!humanRep || !familyRep || disp >= humanRep.sequence.length || humanRep.sequence[disp] === '-') {
+            if (!supRep || !familyRep || disp >= supRep.sequence.length || supRep.sequence[disp] === '-') {
               for (let k = 0; k < n; k++) results[k] += '-';
               continue;
             }
-            const residueNumber = humanRunning[disp];
+            const residueNumber = supRunning[disp];
             // find column in familyRep with same running residue count
             let famCol = -1; let cnt = 0;
             for (let i = 0; i < familyRep.sequence.length; i++) { if (familyRep.sequence[i] !== '-') { cnt++; if (cnt === residueNumber) { famCol = i; break; } } }
@@ -299,7 +301,7 @@ const ConsensusEmitter: React.FC<Props> = ({ customFastaNames, customFolder }) =
                     onChange={() => toggleCustom(name)}
                     className="rounded border-gray-300"
                   />
-                  <span className="text-sm font-mono flex-1 truncate" title={name}>{name}</span>
+                  <span className="text-sm font-mono flex-1 truncate" title={name}>{getDisplayName ? getDisplayName(name) : name.split('_')[0]}</span>
                   <input
                     type="number"
                     min={1}
