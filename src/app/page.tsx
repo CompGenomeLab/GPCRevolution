@@ -194,7 +194,7 @@ export default function Home() {
                 <ul className="space-y-1 sm:space-y-2 text-sm sm:text-base text-muted-foreground">
                   <li>• Residue-level evolutionary information</li>
                   <li>• High-quality multiple-sequence alignments</li>
-                  <li>• Rigorously curated phylogenetic trees</li>
+                  <li>• Phylogenetic trees of human GPCR orthologs</li>
                 </ul>
               </div>
             </div>
