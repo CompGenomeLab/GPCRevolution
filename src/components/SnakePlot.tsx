@@ -194,14 +194,129 @@ export default function SnakePlot({ svgPath, conservationFile, onLoaded }: Snake
 
   const downloadSVG = () => {
     const svgElement = document.getElementById('snakeplot');
-    if (!svgElement) {
+    if (!svgElement || !(svgElement instanceof SVGElement)) {
       toast.error('SVG element not found');
       return;
     }
 
-    const clonedSvg = svgElement.cloneNode(true) as SVGElement;
+    const sourceSvg = svgElement;
+    const clonedSvg = sourceSvg.cloneNode(true) as SVGElement;
     const currentFillColor = fillColor;
     const currentTextColor = textColor;
+
+    // Ensure standalone SVG has namespaces when opened outside the app
+    if (!clonedSvg.getAttribute('xmlns')) {
+      clonedSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    }
+    if (!clonedSvg.getAttribute('xmlns:xlink')) {
+      clonedSvg.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+    }
+
+    /**
+     * IMPORTANT: The on-screen snakeplot relies on page CSS/fonts.
+     * When we export, external viewers won't have that CSS, so <text> can reflow.
+     * Fix by inlining the computed text styling into the exported SVG.
+     */
+    const bakeResidueTextCenteringForIllustrator = (svg: SVGSVGElement) => {
+      // The GPCRdb snakeplot uses circle ids like "83" and matching residue text ids like "83t".
+      // Illustrator ignores dominant-baseline, so we:
+      // - remove dominant-baseline/alignment-baseline on those texts
+      // - measure where they render with default baseline
+      // - translate them so their bbox center matches the circle center
+      const host = document.createElement('div');
+      host.style.position = 'fixed';
+      host.style.left = '-10000px';
+      host.style.top = '-10000px';
+      host.style.width = '1px';
+      host.style.height = '1px';
+      host.style.overflow = 'hidden';
+      host.style.visibility = 'hidden';
+
+      document.body.appendChild(host);
+      host.appendChild(svg);
+
+      try {
+        const texts = Array.from(svg.querySelectorAll<SVGTextElement>('text.rtext[id$="t"]'));
+        for (const t of texts) {
+          const id = t.getAttribute('id') ?? '';
+          if (!id.endsWith('t')) continue;
+          const circleId = id.slice(0, -1);
+          const circle = svg.querySelector<SVGCircleElement>(`circle[id="${circleId}"]`);
+          if (!circle) continue;
+
+          const cx = Number(circle.getAttribute('cx'));
+          const cy = Number(circle.getAttribute('cy'));
+          if (!Number.isFinite(cx) || !Number.isFinite(cy)) continue;
+
+          // Remove baseline attributes that Illustrator ignores
+          t.removeAttribute('dominant-baseline');
+          t.removeAttribute('alignment-baseline');
+          t.removeAttribute('baseline-shift');
+          t.removeAttribute('dy');
+
+          // Measure rendered bbox (with default baseline) and translate to circle center
+          const bb = t.getBBox();
+          if (!Number.isFinite(bb.x) || !Number.isFinite(bb.y) || bb.width === 0 || bb.height === 0) continue;
+          const bbCx = bb.x + bb.width / 2;
+          const bbCy = bb.y + bb.height / 2;
+          const dx = cx - bbCx;
+          const dy = cy - bbCy;
+
+          if (!Number.isFinite(dx) || !Number.isFinite(dy)) continue;
+          const existing = t.getAttribute('transform');
+          t.setAttribute('transform', `${existing ? `${existing} ` : ''}translate(${dx} ${dy})`);
+        }
+      } finally {
+        host.remove();
+      }
+    };
+
+    const inlineComputedTextStyles = (src: SVGElement, dst: SVGElement) => {
+      const srcTexts = Array.from(src.querySelectorAll('text'));
+      const dstTexts = Array.from(dst.querySelectorAll('text'));
+
+      // Inline computed font/text properties as SVG presentation attributes.
+      // Don't try to "fix" baseline here; we bake exact residue text transforms below.
+      const propsToInline = [
+        'font-family',
+        'font-size',
+        'font-weight',
+        'font-style',
+        'letter-spacing',
+        'word-spacing',
+        'text-anchor',
+        'fill',
+        'text-rendering',
+      ] as const;
+
+      const n = Math.min(srcTexts.length, dstTexts.length);
+      for (let i = 0; i < n; i++) {
+        const s = srcTexts[i];
+        const d = dstTexts[i];
+        const cs = window.getComputedStyle(s);
+
+        // Inline computed font styles as attributes
+        for (const p of propsToInline) {
+          const v = cs.getPropertyValue(p);
+          if (v && v.trim()) {
+            d.setAttribute(p, v.trim());
+          }
+        }
+
+        // Preserve any per-node transforms that affect final placement.
+        const transform = s.getAttribute('transform');
+        if (transform && !d.getAttribute('transform')) {
+          d.setAttribute('transform', transform);
+        }
+      }
+    };
+
+    inlineComputedTextStyles(sourceSvg, clonedSvg);
+
+    // Bake residue letter centering into explicit transforms for Illustrator
+    if (clonedSvg instanceof SVGSVGElement) {
+      bakeResidueTextCenteringForIllustrator(clonedSvg);
+    }
 
     const defs = clonedSvg.querySelector('defs');
     if (defs) {
@@ -219,7 +334,8 @@ export default function SnakePlot({ svgPath, conservationFile, onLoaded }: Snake
 
     const textElements = clonedSvg.querySelectorAll('text.rtext');
     textElements.forEach(text => {
-      text.setAttribute('style', `fill: ${currentTextColor};`);
+      // Prefer presentation attribute for portability across SVG viewers.
+      text.setAttribute('fill', currentTextColor);
     });
 
     const serializer = new XMLSerializer();

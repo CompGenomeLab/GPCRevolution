@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface CategorizedResidue {
@@ -105,6 +106,93 @@ export default function SnakePlotVisualization({
         circle.setAttribute('fill', fill);
       }
     });
+
+    // Inline computed font/text styles and then bake residue text centering into transforms.
+    // This avoids a guessed dy constant and makes Illustrator import match the on-screen view.
+    const srcTexts = Array.from(svgElement.querySelectorAll('text'));
+    const dstTexts = Array.from(clonedSvg.querySelectorAll('text'));
+    const propsToInline = [
+      'font-family',
+      'font-size',
+      'font-weight',
+      'font-style',
+      'letter-spacing',
+      'word-spacing',
+      'text-anchor',
+      'fill',
+      'text-rendering',
+    ];
+
+    for (let i = 0; i < Math.min(srcTexts.length, dstTexts.length); i++) {
+      const srcText = srcTexts[i];
+      const dstText = dstTexts[i];
+      const cs = window.getComputedStyle(srcText);
+
+      for (const prop of propsToInline) {
+        const val = cs.getPropertyValue(prop);
+        if (val && val.trim()) {
+          dstText.setAttribute(prop, val.trim());
+        }
+      }
+
+      const transform = srcText.getAttribute('transform');
+      if (transform && !dstText.getAttribute('transform')) {
+        dstText.setAttribute('transform', transform);
+      }
+    }
+
+    const bakeResidueTextCenteringForIllustrator = (svg: SVGSVGElement) => {
+      // GPCRdb snakeplots: circle ids like "83", matching residue text ids like "83t".
+      const host = document.createElement('div');
+      host.style.position = 'fixed';
+      host.style.left = '-10000px';
+      host.style.top = '-10000px';
+      host.style.width = '1px';
+      host.style.height = '1px';
+      host.style.overflow = 'hidden';
+      host.style.visibility = 'hidden';
+
+      document.body.appendChild(host);
+      host.appendChild(svg);
+
+      try {
+        const texts = Array.from(svg.querySelectorAll<SVGTextElement>('text.rtext[id$="t"]'));
+        for (const t of texts) {
+          const id = t.getAttribute('id') ?? '';
+          if (!id.endsWith('t')) continue;
+          const circleId = id.slice(0, -1);
+          const circle = svg.querySelector<SVGCircleElement>(`circle[id="${circleId}"]`);
+          if (!circle) continue;
+
+          const cx = Number(circle.getAttribute('cx'));
+          const cy = Number(circle.getAttribute('cy'));
+          if (!Number.isFinite(cx) || !Number.isFinite(cy)) continue;
+
+          // Remove baseline attributes (Illustrator ignores them)
+          t.removeAttribute('dominant-baseline');
+          t.removeAttribute('alignment-baseline');
+          t.removeAttribute('baseline-shift');
+          t.removeAttribute('dy');
+
+          const bb = t.getBBox();
+          if (!Number.isFinite(bb.x) || !Number.isFinite(bb.y) || bb.width === 0 || bb.height === 0) continue;
+          const bbCx = bb.x + bb.width / 2;
+          const bbCy = bb.y + bb.height / 2;
+          const dx = cx - bbCx;
+          const dy = cy - bbCy;
+          if (!Number.isFinite(dx) || !Number.isFinite(dy)) continue;
+
+          const existing = t.getAttribute('transform');
+          t.setAttribute('transform', `${existing ? `${existing} ` : ''}translate(${dx} ${dy})`);
+        }
+      } finally {
+        host.remove();
+      }
+    };
+
+    if (clonedSvg instanceof SVGSVGElement) {
+      bakeResidueTextCenteringForIllustrator(clonedSvg);
+    }
 
     const serializer = new XMLSerializer();
     const svgString = serializer.serializeToString(clonedSvg);
@@ -250,9 +338,14 @@ export default function SnakePlotVisualization({
 
         <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
           {/* Download SVG button */}
-          <Button onClick={downloadSVG} variant="outline" size="sm" className="w-full sm:w-auto">
+          <button
+            type="button"
+            onClick={downloadSVG}
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border text-sm hover:bg-accent w-full sm:w-auto"
+          >
+            <Download className="h-4 w-4" />
             Download SVG
-          </Button>
+          </button>
 
           {/* Receptor toggle buttons */}
           <div className="flex gap-1 sm:gap-2">

@@ -2317,7 +2317,7 @@
     "geneName": "GP156",
     "class": "C",
     "numOrthologs": 255,
-    "lca": "Metazoa",
+    "lca": "Gnathostomata",
     "tree": "receptor_trees/GP156_orthologs_tree.nwk",
     "alignment": "alignments/GP156_orthologs_MSA.fasta",
     "gpcrdbId": "gp156_human",

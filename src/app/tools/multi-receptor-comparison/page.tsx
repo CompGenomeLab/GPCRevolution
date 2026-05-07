@@ -41,6 +41,7 @@ import {
 import { Input } from '@/components/ui/input';
 import React from 'react';
 import { toast } from 'sonner';
+import { Download } from 'lucide-react';
 import dynamic from 'next/dynamic';
 
 const MultiReceptorLogoChart = dynamic(
@@ -93,6 +94,7 @@ export default function ReceptorTablePage() {
   const [processedReferenceReceptor, setProcessedReferenceReceptor] = useState<string>('');
   const resultRef = useRef<HTMLDivElement>(null);
   const [sorting, setSorting] = useState<SortingState>([]);
+  const [logoHeight, setLogoHeight] = useState(150);
 
   const [targetInputValue, setTargetInputValue] = useState('');
   const [targetSuggestions, setTargetSuggestions] = useState<Receptor[]>([]);
@@ -702,8 +704,9 @@ export default function ReceptorTablePage() {
                 of {table.getFilteredRowModel().rows.length} entries
               </span>
             </div>
-            <Button
-              className="mt-2 sm:mt-0 w-full sm:w-auto"
+            <button
+              type="button"
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border text-sm hover:bg-accent mt-2 sm:mt-0 w-full sm:w-auto"
               onClick={() => {
                 const headers = resultColumns.join('\t');
                 const rows = resultData.map(row =>
@@ -720,11 +723,10 @@ export default function ReceptorTablePage() {
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
               }}
-              variant="outline"
-              size="sm"
             >
+              <Download className="h-4 w-4" />
               Download TSV
-            </Button>
+            </button>
           </div>
 
           <div className="border rounded-lg max-h-[600px] overflow-y-auto overflow-x-scroll scrollbar-thin">
@@ -767,6 +769,8 @@ export default function ReceptorTablePage() {
                 resultData={resultData}
                 receptorNames={processedReceptorNames}
                 referenceReceptor={processedReferenceReceptor}
+                logoHeight={logoHeight}
+                onLogoHeightChange={setLogoHeight}
               />
             )}
           </div>

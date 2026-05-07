@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, memo } from 'react';
 import { Button } from '@/components/ui/button';
+import { Download } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -289,10 +290,10 @@ const ResultsTable = memo(function ResultsTable({ initialResult }: ResultsTableP
           {/* ─── Export buttons ───────────────── */}
           <div className="flex flex-wrap gap-2 mt-2 sm:mt-0">
           {(['tsv', 'csv'] as const).map(ext => (
-            <Button
+            <button
               key={ext}
-              variant="outline"
-              size="sm"
+              type="button"
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border text-sm hover:bg-accent"
               onClick={() => {
                 if (!result) return;
 
@@ -350,8 +351,9 @@ const ResultsTable = memo(function ResultsTable({ initialResult }: ResultsTableP
                 URL.revokeObjectURL(url);
               }}
             >
+              <Download className="h-4 w-4" />
               {`Download ${ext.toUpperCase()}`}
-            </Button>
+            </button>
           ))}
           </div>
         </div>

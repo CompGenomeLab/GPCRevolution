@@ -124,6 +124,118 @@
   --node-colour: #a5b4ff;  /* indigo-300 — light indigo   */
 }
 
+/* Range input slider styling */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 0.375rem;
+  background: #F5F2ED;
+  border-radius: 9999px;
+  cursor: pointer;
+  outline: none;
+}
+
+/* Webkit browsers (Chrome, Safari, Edge) */
+input[type="range"]::-webkit-slider-track {
+  background: #F5F2ED;
+  height: 0.375rem;
+  border-radius: 9999px;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 1rem;
+  width: 1rem;
+  background: #434E71;
+  border-radius: 9999px;
+  border: 2px solid #434E71;
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+  box-shadow: 0 0 0 8px rgba(67, 78, 113, 0.15);
+}
+
+input[type="range"]:focus::-webkit-slider-thumb {
+  box-shadow: 0 0 0 8px rgba(67, 78, 113, 0.15);
+}
+
+/* Firefox */
+input[type="range"]::-moz-range-track {
+  background: #F5F2ED;
+  height: 0.375rem;
+  border-radius: 9999px;
+}
+
+input[type="range"]::-moz-range-thumb {
+  height: 0.75rem;
+  width: 0.75rem;
+  background: #434E71;
+  border-radius: 9999px;
+  border: 2px solid #434E71;
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  cursor: pointer;
+}
+
+input[type="range"]::-moz-range-thumb:hover {
+  box-shadow: 0 0 0 8px rgba(67, 78, 113, 0.15);
+}
+
+input[type="range"]:focus::-moz-range-thumb {
+  box-shadow: 0 0 0 8px rgba(67, 78, 113, 0.15);
+}
+
+/* Dark mode range inputs */
+.dark input[type="range"] {
+  background: #3A3A3A;
+}
+
+.dark input[type="range"]::-webkit-slider-track {
+  background: #3A3A3A;
+}
+
+.dark input[type="range"]::-webkit-slider-thumb {
+  background: #DBD6F9;
+  border-color: #DBD6F9;
+}
+
+.dark input[type="range"]::-webkit-slider-thumb:hover {
+  box-shadow: 0 0 0 8px rgba(219, 214, 249, 0.15);
+}
+
+.dark input[type="range"]:focus::-webkit-slider-thumb {
+  box-shadow: 0 0 0 8px rgba(219, 214, 249, 0.15);
+}
+
+.dark input[type="range"]::-moz-range-track {
+  background: #3A3A3A;
+}
+
+.dark input[type="range"]::-moz-range-thumb {
+  background: #DBD6F9;
+  border-color: #DBD6F9;
+}
+
+.dark input[type="range"]::-moz-range-thumb:hover {
+  box-shadow: 0 0 0 8px rgba(219, 214, 249, 0.15);
+}
+
+.dark input[type="range"]:focus::-moz-range-thumb {
+  box-shadow: 0 0 0 8px rgba(219, 214, 249, 0.15);
+}
+
+/* Checkbox styling */
+input[type="checkbox"] {
+  accent-color: #434E71;
+  cursor: pointer;
+}
+
+.dark input[type="checkbox"] {
+  accent-color: #DBD6F9;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

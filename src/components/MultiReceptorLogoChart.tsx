@@ -3,7 +3,6 @@
 import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import * as d3 from 'd3';
-import { Button } from '@/components/ui/button';
 
 
 interface ResidueMapping {
@@ -40,6 +39,10 @@ interface MultiReceptorLogoChartProps {
   resultData: ResidueMapping[];
   receptorNames: string[];
   referenceReceptor: string;
+  /** Height per receptor logo row (default 150) */
+  logoHeight?: number;
+  /** Callback when logo height changes */
+  onLogoHeightChange?: (height: number) => void;
 }
 
 // Define amino acid groups and their default colors
@@ -57,12 +60,32 @@ type RegionGroup = { region: string; startPosition: number; endPosition: number 
 const MultiReceptorLogoChart: React.FC<MultiReceptorLogoChartProps> = ({ 
   resultData, 
   receptorNames, 
-  referenceReceptor 
+  referenceReceptor,
+  logoHeight = 150,
+  onLogoHeightChange
 }) => {
   const yAxisContainerRef = useRef<HTMLDivElement>(null);
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
   
+  // Local state for height text input (only commits on Enter/blur)
+  const [heightInputValue, setHeightInputValue] = useState(String(logoHeight));
+  
+  // Sync input value when prop changes externally
+  React.useEffect(() => {
+    setHeightInputValue(String(logoHeight));
+  }, [logoHeight]);
+
+  const handleHeightInputCommit = () => {
+    const val = Number(heightInputValue);
+    if (!isNaN(val) && val >= 30 && val <= 300) {
+      onLogoHeightChange?.(val);
+    } else {
+      // Reset to current valid value if invalid
+      setHeightInputValue(String(logoHeight));
+    }
+  };
+
   // State for tooltip
   const [tooltip, setTooltip] = useState<{
     visible: boolean;
@@ -541,6 +564,21 @@ const MultiReceptorLogoChart: React.FC<MultiReceptorLogoChartProps> = ({
     chartClone.setAttribute('y', '0');
     combinedSvg.appendChild(chartClone);
 
+    // Preserve text attributes that don't transfer via cloneNode for external viewers
+    const preserveTextAttrs = (srcSvg: Element, dstSvg: Element) => {
+      const srcTexts = Array.from(srcSvg.querySelectorAll('text'));
+      const dstTexts = Array.from(dstSvg.querySelectorAll('text'));
+      const attrsToPreserve = ['dominant-baseline', 'text-anchor', 'font-family', 'font-size', 'font-weight'];
+      for (let i = 0; i < Math.min(srcTexts.length, dstTexts.length); i++) {
+        for (const attr of attrsToPreserve) {
+          const val = srcTexts[i].getAttribute(attr);
+          if (val) dstTexts[i].setAttribute(attr, val);
+        }
+      }
+    };
+    preserveTextAttrs(yAxisSvg, yAxisClone);
+    preserveTextAttrs(chartSvg, chartClone);
+
     // Serialize to string
     const serializer = new XMLSerializer();
     const svgString = serializer.serializeToString(combinedSvg);
@@ -598,7 +636,7 @@ const MultiReceptorLogoChart: React.FC<MultiReceptorLogoChartProps> = ({
       const gapBetweenReceptors = 15; // Gap between receptor rows
       
       // Calculate dynamic height based on number of receptors - remove human AA row
-      const logoAreaHeight = 150; // Fixed height per receptor logo area
+      const logoAreaHeight = logoHeight; // Height per receptor logo area (configurable via prop)
       const totalHeight = (logoAreaHeight + gapBetweenReceptors) * data.length - gapBetweenReceptors + 
                          infoRowHeight + regionBlockHeight + margin.top + margin.bottom + 8;
 
@@ -644,7 +682,10 @@ const MultiReceptorLogoChart: React.FC<MultiReceptorLogoChartProps> = ({
         const receptorY = margin.top + receptorIndex * (logoAreaHeight + gapBetweenReceptors);
         
         // Create individual Y-axis for this receptor
-        const yAxis = d3.axisLeft(y).ticks(5).tickFormat(d => `${Number(d).toFixed(1)}`);
+        // Use fewer ticks when height is small to avoid overlap
+        const yAxis = logoHeight < 60
+          ? d3.axisLeft(y).tickValues([0, 4]).tickFormat(d => `${Number(d).toFixed(0)}`)
+          : d3.axisLeft(y).ticks(5).tickFormat(d => `${Number(d).toFixed(1)}`);
         yAxisSvg
           .append('g')
           .attr('transform', `translate(${yAxisWidth - 1}, ${receptorY})`)
@@ -654,14 +695,20 @@ const MultiReceptorLogoChart: React.FC<MultiReceptorLogoChartProps> = ({
           .style('font-size', '12px');
 
         // Add Y-axis label for this receptor with receptor name
+        // Use horizontal layout for small heights (< 60px), vertical for larger
+        const useHorizontalLabel = logoHeight < 60;
+        
         const yLabel = yAxisSvg
           .append('text')
           .attr('text-anchor', 'middle')
-          .attr('transform', `translate(${yAxisWidth - 75}, ${receptorY + logoAreaHeight / 2}) rotate(-90)`)
+          .attr('transform', useHorizontalLabel 
+            ? `translate(${yAxisWidth - 75}, ${receptorY + logoAreaHeight / 2})`
+            : `translate(${yAxisWidth - 75}, ${receptorY + logoAreaHeight / 2}) rotate(-90)`)
           .attr('class', 'text-foreground fill-current')
           .style('font-size', '12px');
 
-        yLabel.append('tspan').attr('x', 0).text(`${receptorData.receptorName}`);
+        // Offset first line by -1.2em to center the 3-line text block vertically
+        yLabel.append('tspan').attr('x', 0).attr('dy', '-0.6em').text(`${receptorData.receptorName}`);
         yLabel.append('tspan').attr('x', 0).attr('dy', '1.2em').text('Information');
         yLabel.append('tspan').attr('x', 0).attr('dy', '1.2em').text('Content (bits)');
       });
@@ -881,7 +928,7 @@ const MultiReceptorLogoChart: React.FC<MultiReceptorLogoChartProps> = ({
     return () => {
       setTooltip(prev => ({ ...prev, visible: false }));
     };
-  }, [resultData, receptorNames, referenceReceptor, groupColors, isDarkMode, isLoadingAlignments, isLoadingConservation, processReceptorData, getResidueColor, loadCustomSvgLetter, showTooltip, hideTooltip, updateTooltipPosition]);
+  }, [resultData, receptorNames, referenceReceptor, groupColors, isDarkMode, isLoadingAlignments, isLoadingConservation, processReceptorData, getResidueColor, loadCustomSvgLetter, showTooltip, hideTooltip, updateTooltipPosition, logoHeight]);
 
   // Don't render anything if no data
   if (!resultData.length || !receptorNames.length) {
@@ -912,20 +959,54 @@ const MultiReceptorLogoChart: React.FC<MultiReceptorLogoChartProps> = ({
   }
 
   return (
-    <div className="max-w-7xl mx-auto bg-card text-card-foreground rounded-lg p-6 shadow-md">
-      <h2 className="text-2xl font-bold mb-4">Multi-Receptor Sequence Logos</h2>
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
-        <div className="flex items-center gap-2 mt-2 sm:mt-0">
-          <Button onClick={downloadSVG} variant="outline" size="sm">
-            Download SVG
-          </Button>
-        </div>
+    <div className="max-w-7xl mx-auto bg-card text-card-foreground rounded-lg shadow-md">
+      {/* Header with title and download button */}
+      <div className="p-6 border-b border-border flex items-center justify-between">
+        <h2 className="text-xl font-semibold text-foreground">Multi-Receptor Sequence Logos</h2>
+        <button
+          type="button"
+          onClick={downloadSVG}
+          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border text-sm hover:bg-accent"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
+            <path d="M12 16l4-5h-3V4h-2v7H8l4 5z" />
+            <path d="M4 18h16v2H4z" />
+          </svg>
+          Download SVG
+        </button>
       </div>
+      
+      <div className="p-6">
+        {/* Row Height Control */}
+        <div className="mb-4 flex items-center gap-4">
+          <label className="text-sm font-medium whitespace-nowrap">Row Height:</label>
+          <input
+            type="range"
+            min="30"
+            max="300"
+            value={logoHeight}
+            onChange={(e) => onLogoHeightChange?.(Number(e.target.value))}
+            className="flex-1 max-w-xs"
+          />
+          <input
+            type="text"
+            value={heightInputValue}
+            onChange={(e) => setHeightInputValue(e.target.value)}
+            onBlur={handleHeightInputCommit}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                handleHeightInputCommit();
+                (e.target as HTMLInputElement).blur();
+              }
+            }}
+            className="w-16 px-2 py-1 text-sm border rounded bg-background text-foreground text-center"
+          />
+        </div>
     
       <div 
         className="relative w-full flex overflow-hidden mb-4" 
         style={{ 
-          height: `${(150 + 15) * receptorNames.length - 15 + 40 + 22 + 40 + 8}px`,
+          height: `${(logoHeight + 15) * receptorNames.length - 15 + 40 + 22 + 40 + 8}px`,
           visibility: isLoadingAlignments || isLoadingConservation ? 'hidden' : 'visible',
           opacity: 1,
         }}
@@ -966,6 +1047,7 @@ const MultiReceptorLogoChart: React.FC<MultiReceptorLogoChartProps> = ({
         >
           Reset
         </button>
+      </div>
       </div>
 
       {/* Tooltip rendered via portal */}

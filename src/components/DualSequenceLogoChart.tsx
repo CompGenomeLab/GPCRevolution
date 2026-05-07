@@ -2,7 +2,7 @@
 
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import * as d3 from 'd3';
-import { Button } from '@/components/ui/button';
+import { Download } from 'lucide-react';
 import useCleanedSequences from '@/hooks/useCleanedSequence';
 
 interface CategorizedResidue {
@@ -361,6 +361,21 @@ const DualSequenceLogoChart: React.FC<DualSequenceLogoChartProps> = ({
     chartClone.setAttribute('x', yAxisWidth.toString());
     chartClone.setAttribute('y', '0');
     combinedSvg.appendChild(chartClone);
+
+    // Preserve text attributes that don't transfer via cloneNode for external viewers
+    const preserveTextAttrs = (srcSvg: Element, dstSvg: Element) => {
+      const srcTexts = Array.from(srcSvg.querySelectorAll('text'));
+      const dstTexts = Array.from(dstSvg.querySelectorAll('text'));
+      const attrsToPreserve = ['dominant-baseline', 'text-anchor', 'font-family', 'font-size', 'font-weight'];
+      for (let i = 0; i < Math.min(srcTexts.length, dstTexts.length); i++) {
+        for (const attr of attrsToPreserve) {
+          const val = srcTexts[i].getAttribute(attr);
+          if (val) dstTexts[i].setAttribute(attr, val);
+        }
+      }
+    };
+    preserveTextAttrs(yAxisSvg, yAxisClone);
+    preserveTextAttrs(chartSvg, chartClone);
 
     const serializer = new XMLSerializer();
     const svgString = serializer.serializeToString(combinedSvg);
@@ -763,9 +778,14 @@ const DualSequenceLogoChart: React.FC<DualSequenceLogoChartProps> = ({
           <h2 className="text-xl font-semibold text-foreground">Dual Sequence Logo Comparison</h2>
           <div className="flex items-center gap-2 mt-2 sm:mt-0">
             {categorizedResidues.length > 0 && (
-              <Button onClick={downloadSVG} variant="outline" size="sm">
+              <button
+                type="button"
+                onClick={downloadSVG}
+                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border text-sm hover:bg-accent"
+              >
+                <Download className="h-4 w-4" />
                 Download SVG
-              </Button>
+              </button>
             )}
           </div>
         </div>

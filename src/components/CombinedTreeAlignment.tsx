@@ -365,9 +365,11 @@ export function CombinedTreeAlignment({
   
   // Fine-tune vertical gaps relative to the header bottom (configurable)
   const headerToSeqGapPx = useMemo(() => {
-    // If headerGapPx provided, use it; otherwise default to ~0.5em of current font size
-    return Math.max(0, headerGapPx ?? Math.round(fontSize * 0.5));
-  }, [headerGapPx, fontSize]);
+    // If headerGapPx is provided, use it; otherwise keep a tiny default gap.
+    // This avoids rotated header text slightly overlapping the first sequence row
+    // across different SVG renderers while still looking "flush".
+    return Math.max(0, Math.round(headerGapPx ?? 2));
+  }, [headerGapPx]);
 
   // Use fixed row spacing - no dynamic calculation based on container
   const dynamicRowSpacing = leafRowSpacing;
@@ -578,7 +580,7 @@ export function CombinedTreeAlignment({
                   gpcrdbNumbers={gpcrdbNumbers}
                   charWidth={columnCharWidth}
                   headerHeight={alignmentHeaderHeight}
-                  xOffset={0}
+                  xOffset={5}
                 />
               </g>
             </svg>
@@ -706,6 +708,7 @@ export function CombinedTreeAlignment({
                 guideColor={leafGuideColor}
                 textColor={textColor}
                 fontSize={fontSize}
+                charWidth={columnCharWidth}
                 sequences={cleanedSequences}
                 fallbackText={alignmentText}
                 isDarkMode={effectiveDarkMode}
@@ -959,7 +962,7 @@ function AlignmentColumnHeaders({
 
   const headerFont = "Arial, sans-serif";
   // Anchor labels to the bottom of the header so rotation doesn't clip at the top
-  const yAnchor = Math.max(2, headerHeight - 2);
+  const yAnchor = Math.max(2, headerHeight - 2); // -10 moves headers up
   
   // Only render if we have sequences
   if (sequences.length === 0) return null;
@@ -967,7 +970,10 @@ function AlignmentColumnHeaders({
   // Create individual text elements for each column position; left-align each label within its column
   const headers = [];
   for (let i = 0; i < sequenceLength; i++) {
-    const x = i * charWidth + xOffset; // adjustable padding inside each column cell
+    // Center the label within the same column centers used by sequence tspans.
+    // This prevents the first label (x=0) from being clipped after rotation and keeps
+    // GPCRdb numbers aligned with residues.
+    const x = i * charWidth + charWidth / 2 + xOffset;
     
     // Use GPCRdb number if available, otherwise fall back to sequential numbering
     const displayNumber = gpcrdbNumbers.length > i ? gpcrdbNumbers[i] : (i + 1).toString();
@@ -985,8 +991,10 @@ function AlignmentColumnHeaders({
         fontSize={fontSize}
         fill={textColor}
         fontFamily={headerFont}
+        fontWeight="bold"
         textAnchor="start"
-        dominantBaseline="hanging"
+        // Use alphabetic baseline so rotated text extends upward (prevents overlap with sequences)
+        dominantBaseline="alphabetic"
         transform={`rotate(-90, ${x}, ${yAnchor})`}
       >
         {displayNumber}
@@ -1008,6 +1016,7 @@ function AlignmentOnly({
   leaves,
   textColor,
   fontSize,
+  charWidth,
   sequences,
   fallbackText,
   isDarkMode,
@@ -1019,6 +1028,7 @@ function AlignmentOnly({
   guideColor: string;
   textColor: string;
   fontSize: number;
+  charWidth: number;
   sequences: { header: string; sequence: string }[];
   fallbackText: string;
   isDarkMode: boolean;
@@ -1026,16 +1036,6 @@ function AlignmentOnly({
 }) {
   const monoFont = "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace";
   const rows: React.ReactNode[] = [];
-
-  // Center sequences within columns using tspans with explicit x positions
-  const charWidth = React.useMemo(() => {
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return fontSize * (0.6 + LETTER_SPACING_EM);
-    ctx.font = `bold ${fontSize}px ${monoFont}`;
-    const baseWidth = ctx.measureText('M').width;
-    return baseWidth + fontSize * LETTER_SPACING_EM;
-  }, [fontSize, monoFont]);
 
   // Function to match leaf name to sequence
   const getSequenceForLeaf = (leafName: string): string | null => {

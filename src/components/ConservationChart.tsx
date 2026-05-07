@@ -435,6 +435,21 @@ const ConservationChart: React.FC<ConservationChartProps> = ({ conservationFile,
                 chartClone.setAttribute('y', '0');
                 combinedSvg.appendChild(chartClone);
 
+                // Preserve text attributes that don't transfer via cloneNode for external viewers
+                const preserveTextAttrs = (srcSvg: SVGElement, dstSvg: SVGElement) => {
+                  const srcTexts = Array.from(srcSvg.querySelectorAll('text'));
+                  const dstTexts = Array.from(dstSvg.querySelectorAll('text'));
+                  const attrsToPreserve = ['dominant-baseline', 'text-anchor', 'font-family', 'font-size', 'font-weight'];
+                  for (let i = 0; i < Math.min(srcTexts.length, dstTexts.length); i++) {
+                    for (const attr of attrsToPreserve) {
+                      const val = srcTexts[i].getAttribute(attr);
+                      if (val) dstTexts[i].setAttribute(attr, val);
+                    }
+                  }
+                };
+                preserveTextAttrs(yAxisSvg, yAxisClone);
+                preserveTextAttrs(chartSvg, chartClone);
+
                 const serializer = new XMLSerializer();
                 const svgString = serializer.serializeToString(combinedSvg);
                 const svgWithDeclaration = `<?xml version="1.0" encoding="UTF-8"?>\n${svgString}`;

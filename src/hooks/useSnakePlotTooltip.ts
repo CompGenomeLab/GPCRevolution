@@ -97,6 +97,10 @@ export function useSnakePlotTooltip() {
       const lines = text
         .split(/\r?\n/)
         .filter(line => line.trim() !== '' && !line.toLowerCase().startsWith('residue'));
+      const conservationFileName = conservationFilePath.split('/').pop()?.toLowerCase() ?? '';
+      const isCrfr1DisplayRemap = conservationFileName === 'crfr1_conservation.txt';
+      const insertionStartResidue = 145;
+      const insertionShift = 29;
 
       interface ConservationData {
         conservation: number;
@@ -129,6 +133,19 @@ export function useSnakePlotTooltip() {
           }
         }
       });
+
+      // CRFR1 has an inserted 29-aa block in the conservation table that is absent
+      // from the snakeplot template. For display only, remap snakeplot residue ids
+      // >=145 to conservation rows shifted by +29.
+      const getConservationForSnakeResidue = (snakeResidue: string): ConservationData | undefined => {
+        if (!isCrfr1DisplayRemap) return conservationMap[snakeResidue];
+        const n = Number(snakeResidue);
+        if (!Number.isFinite(n)) return conservationMap[snakeResidue];
+        if (n >= insertionStartResidue) {
+          return conservationMap[String(n + insertionShift)];
+        }
+        return conservationMap[snakeResidue];
+      };
 
       const elem = document.getElementById('snakeplot');
       if (!(elem instanceof SVGElement)) {
@@ -187,7 +204,7 @@ export function useSnakePlotTooltip() {
         if (!residueMatch) return;
 
         const residueNumber = residueMatch[0];
-        const consData = conservationMap[residueNumber];
+        const consData = getConservationForSnakeResidue(residueNumber);
         if (!consData) return;
 
         const consValue = consData.conservation;
@@ -251,7 +268,7 @@ export function useSnakePlotTooltip() {
         if (!residueMatch) return;
 
         const residueId = residueMatch[0];
-        const consData = conservationMap[residueId];
+        const consData = getConservationForSnakeResidue(residueId);
         if (!consData) return;
 
         const consValue = consData.conservation;
