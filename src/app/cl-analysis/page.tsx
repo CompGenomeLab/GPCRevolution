@@ -382,11 +382,11 @@ export default function CustomLogoAnalysisPage() {
           <h3 className="font-semibold">Instructions:</h3>
           <ol className="list-decimal list-inside space-y-1">
             <li>Upload a FASTA alignment file containing your sequences</li>
-            <li>By default, sequences with "_HUMAN" in headers mark new receptor groups</li>
+            <li>By default, sequences with <code>_HUMAN</code> in headers mark new receptor groups</li>
             <li>Alternatively, specify a reference sequence ID (e.g., ADRB1_MELGA) to use instead</li>
             <li>Enter 1-3 receptor names (the part before the species identifier)</li>
             <li>Optionally filter by specific residue numbers from the reference sequence</li>
-            <li>Click "Generate Logos" to create the visualization</li>
+            <li>Click <span className="font-medium">Generate Logos</span> to create the visualization</li>
             <li>Use the download button in the results to save the SVG</li>
           </ol>
           

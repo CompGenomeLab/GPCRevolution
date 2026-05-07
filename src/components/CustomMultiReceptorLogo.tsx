@@ -158,7 +158,7 @@ const CustomMultiReceptorLogo: React.FC<CustomMultiReceptorLogoProps> = ({
       const result: LetterSvgData = { path: pathData, viewBox, transformAttr };
       svgPathCache.current[letter] = result;
       return result;
-    } catch (error) {
+    } catch {
       return null;
     }
   }, []);
@@ -495,7 +495,7 @@ const CustomMultiReceptorLogo: React.FC<CustomMultiReceptorLogoProps> = ({
                 let svgData = null;
                 try {
                   svgData = await loadCustomSvgLetter(residue);
-                } catch (error) {
+                } catch {
                   svgData = null;
                 }
 

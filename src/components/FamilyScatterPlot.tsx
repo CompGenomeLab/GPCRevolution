@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import * as d3 from 'd3';
+import type { Axis, BrushBehavior, D3BrushEvent, NumberValue, Selection } from 'd3';
 import { Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -63,9 +64,10 @@ type ScatterPoint = {
   familiesUsed: number;
 };
 
-const FamilyScatterPlot: React.FC<Props> = ({ fastaNames, folder, getDisplayName, onSelectionChange, height = 260, selectedFamilies, minConservationThreshold = 0, minFamiliesCount = 0 }) => {
+type AxisGroupSelection = Selection<SVGGElement, unknown, null, undefined>;
+
+const FamilyScatterPlot: React.FC<Props> = ({ fastaNames, folder, onSelectionChange, height = 260, selectedFamilies, minConservationThreshold = 0, minFamiliesCount = 0 }) => {
   const [mappings, setMappings] = useState<Record<string, FamilyMapping>>({});
-  const [loading, setLoading] = useState(false);
   const [selectedPositions, setSelectedPositions] = useState<Set<number>>(new Set());
   const [useThresholdMode, setUseThresholdMode] = useState(false);
   const [threshold, setThreshold] = useState<number>(70);
@@ -91,7 +93,6 @@ const FamilyScatterPlot: React.FC<Props> = ({ fastaNames, folder, getDisplayName
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
-      setLoading(true);
       try {
         const entries = await Promise.all(
           fastaNames.map(async (fileBase) => {
@@ -113,8 +114,8 @@ const FamilyScatterPlot: React.FC<Props> = ({ fastaNames, folder, getDisplayName
           if (e) map[e[0]] = e[1];
         });
         setMappings(map);
-      } finally {
-        if (!cancelled) setLoading(false);
+      } catch {
+        if (!cancelled) setMappings({});
       }
     };
     load();
@@ -272,12 +273,12 @@ const FamilyScatterPlot: React.FC<Props> = ({ fastaNames, folder, getDisplayName
     const yDomain = useThresholdMode ? [0, maxFamilies] : [0, 100];
     const y = d3.scaleLinear().domain(yDomain).range([innerHeight, 0]).nice();
 
-    const xAxis = d3.axisBottom(x).ticks(6);
-    const yAxis = d3.axisLeft(y).ticks(5);
+    const xAxis: Axis<NumberValue> = d3.axisBottom(x).ticks(6);
+    const yAxis: Axis<NumberValue> = d3.axisLeft(y).ticks(5);
 
     const xAxisGroup = g.append('g')
       .attr('transform', `translate(0,${innerHeight})`)
-      .call(xAxis as any)
+      .call(xAxis)
       .call((g) => g.select('.domain').attr('stroke-width', 2)) // Thicker axis line
       .call((g) => g.selectAll('.tick line').attr('stroke-width', 1.5)) // Thicker tick lines
       .call((g) => g.selectAll('.tick text').style('font-size', '13px')); // Larger tick labels
@@ -302,11 +303,11 @@ const FamilyScatterPlot: React.FC<Props> = ({ fastaNames, folder, getDisplayName
       .text('(Sequence Divergence Across Families)');
 
     g.append('g')
-      .call(yAxis as any)
+      .call(yAxis)
       .call((g) => g.select('.domain').attr('stroke-width', 2)) // Thicker axis line
       .call((g) => g.selectAll('.tick line').attr('stroke-width', 1.5)) // Thicker tick lines
       .call((g) => g.selectAll('.tick text').style('font-size', '13px')) // Larger tick labels
-      .call((ay) => (ay as any).append('text')
+      .call((ay: AxisGroupSelection) => ay.append('text')
         .attr('transform', 'rotate(-90)')
         .attr('x', -innerHeight / 2)
         .attr('y', -44)
@@ -363,9 +364,9 @@ const FamilyScatterPlot: React.FC<Props> = ({ fastaNames, folder, getDisplayName
       });
 
     // Brush
-    const brush = d3.brush()
+    const brush: BrushBehavior<unknown> = d3.brush()
       .extent([[0, 0], [innerWidth, innerHeight]])
-      .on('end', (event: any) => {
+      .on('end', (event: D3BrushEvent<unknown>) => {
         const sel = event.selection as [[number, number], [number, number]] | null;
         if (!sel) {
           setSelectedPositions(new Set());
@@ -388,8 +389,8 @@ const FamilyScatterPlot: React.FC<Props> = ({ fastaNames, folder, getDisplayName
         onSelectionChange?.(filteredChosen);
       });
 
-    g.append('g').attr('class', 'brush').call(brush as any);
-  }, [points, height, onSelectionChange, isDarkMode, selectedPositions, useThresholdMode, filteredPointsSet]);
+    g.append('g').attr('class', 'brush').call(brush);
+  }, [points, height, onSelectionChange, isDarkMode, selectedPositions, useThresholdMode, filteredPointsSet, mappings, selectedFamilies]);
 
   const clearSelection = () => {
     setSelectedPositions(new Set());
