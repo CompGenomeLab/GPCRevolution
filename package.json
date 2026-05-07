@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "precompute:mappings": "node --experimental-modules scripts/precompute-mappings.mjs"
+    "precompute:mappings": "node --experimental-modules scripts/precompute-mappings.mjs",
+    "precompute:identical-sequences": "node scripts/precompute-identical-sequences.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.0.1",
