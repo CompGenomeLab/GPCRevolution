@@ -39,3 +39,14 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local-only curation workflow (server API is not compatible with static export)
+/src/app/database-curation/
+/src/app/api/curation-masks/
+/src/components/CurationCombinedTreeAlignment.tsx
+
+# large local alignment sources and intermediate MSA experiments
+/public/custom_msa/*_genes_filtered_db_FAMSA.ref_trimmed.fasta
+/public/custom_msa/All_reps_*.fasta
+/public/custom_msa/sup_reps_*ginsi*.fasta
+/public/custom_msa/trimmed_kpicgappy_and_fullSTE23-classCV2R_reps_combined_linsi.fasta
