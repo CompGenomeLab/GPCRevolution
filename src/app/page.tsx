@@ -162,10 +162,10 @@ export default function Home() {
               GPCR Evolution Database
             </h1>
             <p className="text-lg sm:text-xl mb-6 sm:mb-8 text-muted-foreground">
-              Precision evolutionary insights for human G-protein-coupled receptors
+              Evolutionary insights for human G-protein-coupled receptors
             </p>
             <p className="text-sm sm:text-lg mb-8 sm:mb-12 text-muted-foreground max-w-3xl mx-auto hidden sm:block">
-              Rigorously curated, residue-level evolutionary information for every human GPCR, 
+              Residue-level evolutionary information for every human GPCR, 
               built from high-quality multiple-sequence alignments and phylogenetic trees.
             </p>
             <h2 className="text-2xl sm:text-3xl font-bold mb-6 sm:mb-8 text-foreground">Accelerating GPCR Research Through Evolution</h2>
@@ -194,7 +194,7 @@ export default function Home() {
                 <ul className="space-y-1 sm:space-y-2 text-sm sm:text-base text-muted-foreground">
                   <li>• Residue-level evolutionary information</li>
                   <li>• High-quality multiple-sequence alignments</li>
-                  <li>• Rigorously curated phylogenetic trees</li>
+                  <li>• Phylogenetic trees of human GPCR orthologs</li>
                 </ul>
               </div>
             </div>
