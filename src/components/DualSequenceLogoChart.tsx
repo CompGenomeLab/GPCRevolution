@@ -402,6 +402,7 @@ const DualSequenceLogoChart: React.FC<DualSequenceLogoChartProps> = ({
     if (!yAxisContainer || !chartContainer) return;
     if (!categorizedResidues.length) return;
     if (!cleanedReceptor1Sequences.length || !cleanedReceptor2Sequences.length) return;
+    let cancelled = false;
 
     // Call onLoaded when component mounts
     if (onLoaded) {
@@ -424,9 +425,13 @@ const DualSequenceLogoChart: React.FC<DualSequenceLogoChartProps> = ({
       receptor2Column: residue.resNum2 !== 'gap' ? parseInt(residue.resNum2) - 1 : -1
     }));
 
-    renderChart(positions);
+    Promise.all('ACDEFGHIKLMNPQRSTVWY'.split('').map(residue => loadCustomSvgLetter(residue))).then(() => {
+      if (cancelled) return;
+      renderChart(positions);
+    });
 
     function renderChart(positions: Position[]) {
+      if (cancelled) return;
       if (!yAxisContainer || !chartContainer) return;
 
       // Layout constants
@@ -618,6 +623,7 @@ const DualSequenceLogoChart: React.FC<DualSequenceLogoChartProps> = ({
         let stackY = baselineY; // Start from bottom
 
         for (const [residue, heightValue] of sortedResidues) {
+          if (cancelled) return;
           const height = heightValue as number;
           if (height > 0) {
             const letterHeightPx = baselineY - yScale(height);
@@ -766,6 +772,9 @@ const DualSequenceLogoChart: React.FC<DualSequenceLogoChartProps> = ({
     }
 
     return () => {
+      cancelled = true;
+      yAxisContainer.innerHTML = '';
+      chartContainer.innerHTML = '';
       // Cleanup - hide tooltip if component unmounts
       setTooltip(prev => ({ ...prev, visible: false }));
     };

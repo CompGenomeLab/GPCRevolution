@@ -437,14 +437,25 @@ const SequenceLogoChart: React.FC<SequenceLogoChartProps> = ({ sequences, conser
             }
           });
           
-          renderChart(logoData);
+          renderChartAfterGlyphPreload(logoData);
         })
         .catch(err => {
           console.error('Error loading conservation data:', err);
-          renderChart(logoData);
+          renderChartAfterGlyphPreload(logoData);
         });
     } else {
-      renderChart(logoData);
+      renderChartAfterGlyphPreload(logoData);
+    }
+
+    function renderChartAfterGlyphPreload(data: PositionLogoData[]) {
+      const residuesToPreload = Array.from(
+        new Set(data.flatMap(positionData => Object.keys(positionData.letterHeights)))
+      );
+
+      Promise.all(residuesToPreload.map(residue => loadCustomSvgLetter(residue))).then(() => {
+        if (cancelled) return;
+        renderChart(data);
+      });
     }
 
     function renderChart(data: PositionLogoData[]) {
@@ -626,19 +637,28 @@ const SequenceLogoChart: React.FC<SequenceLogoChartProps> = ({ sequences, conser
                   .on('mouseout', () => hideTooltip());
 
               } else {
-                /* ------- SVG failed, fallback to text ------- */
-                chartSvg
+                const targetWidth = residue === 'I' ? positionWidth * 0.2 : positionWidth * 0.9;
+                const fallbackSvg = chartSvg
+                  .append('svg')
+                  .attr('x', letterX - targetWidth / 2)
+                  .attr('y', letterBaselineY - letterHeightPx)
+                  .attr('width', targetWidth)
+                  .attr('height', letterHeightPx)
+                  .attr('viewBox', '0 0 100 100')
+                  .attr('preserveAspectRatio', 'none')
+                  .style('overflow', 'hidden')
+                  .style('cursor', 'pointer');
+
+                fallbackSvg
                   .append('text')
-                  .attr('x', letterX)
-                  .attr('y', letterBaselineY)
+                  .attr('x', 50)
+                  .attr('y', 88)
                   .attr('text-anchor', 'middle')
                   .attr('font-family', 'Helvetica')
                   .attr('font-weight', 'bold')
-                  .attr('font-size', 16)
-                  .attr('transform', `scale(1, ${letterHeightPx / 16}) translate(0, -1)`)
+                  .attr('font-size', 100)
                   .attr('fill', getResidueColor(residue))
-                  .text(residue)
-                  .style('cursor', 'pointer');
+                  .text(residue);
               }
 
               /* ------- Update stack position for next letter ------- */
@@ -760,6 +780,8 @@ const SequenceLogoChart: React.FC<SequenceLogoChartProps> = ({ sequences, conser
 
     return () => {
       cancelled = true;
+      yAxisContainer.innerHTML = '';
+      chartContainer.innerHTML = '';
       // Hide tooltip when component unmounts or data changes
       setTooltip(prev => ({ ...prev, visible: false }));
     };

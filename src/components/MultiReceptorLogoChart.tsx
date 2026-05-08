@@ -604,6 +604,7 @@ const MultiReceptorLogoChart: React.FC<MultiReceptorLogoChartProps> = ({
     const chartContainer = chartContainerRef.current;
 
     if (!yAxisContainer || !chartContainer) return;
+    let cancelled = false;
 
     // Always clean up first
     const oldTooltips = document.querySelectorAll('.logo-tooltip, .conservation-tooltip');
@@ -620,7 +621,18 @@ const MultiReceptorLogoChart: React.FC<MultiReceptorLogoChartProps> = ({
     const receptorData = processReceptorData();
     if (!receptorData.length || !receptorData[0].logoData.length) return;
 
-    renderChart(receptorData);
+    const residuesToPreload = Array.from(
+      new Set(
+        receptorData.flatMap(data =>
+          data.logoData.flatMap(positionData => Object.keys(positionData.letterHeights))
+        )
+      )
+    );
+
+    Promise.all(residuesToPreload.map(residue => loadCustomSvgLetter(residue))).then(() => {
+      if (cancelled) return;
+      renderChart(receptorData);
+    });
 
     function renderChart(data: ReceptorLogoData[]) {
       if (!yAxisContainer || !chartContainer) return;
@@ -731,6 +743,7 @@ const MultiReceptorLogoChart: React.FC<MultiReceptorLogoChartProps> = ({
           // Create custom SVG letters asynchronously
           const createCustomSvgLetters = async () => {
             for (const [residue, height] of sortedResidues) {
+              if (cancelled) return;
               if (height > 0) {
                 const letterHeightPx = y(0) - y(height);
                 const letterBaselineY = stackY;
@@ -796,19 +809,30 @@ const MultiReceptorLogoChart: React.FC<MultiReceptorLogoChartProps> = ({
                     .on('mouseout', () => hideTooltip());
 
                 } else {
-                  // Fallback to text
-                  chartSvg
+                  const targetWidth = residue === 'I' ? positionWidth * 0.2 : positionWidth * 0.9;
+                  const fallbackSvg = chartSvg
+                    .append('svg')
+                    .attr('x', letterX - targetWidth / 2)
+                    .attr('y', letterBaselineY - letterHeightPx)
+                    .attr('width', targetWidth)
+                    .attr('height', letterHeightPx)
+                    .attr('viewBox', '0 0 100 100')
+                    .attr('preserveAspectRatio', 'none')
+                    .style('overflow', 'hidden')
+                    .style('cursor', 'pointer');
+
+                  fallbackSvg
                     .append('text')
-                    .attr('x', letterX)
-                    .attr('y', letterBaselineY)
+                    .attr('x', 50)
+                    .attr('y', 88)
                     .attr('text-anchor', 'middle')
                     .attr('font-family', 'Helvetica')
                     .attr('font-weight', 'bold')
-                    .attr('font-size', 16)
-                    .attr('transform', `scale(1, ${letterHeightPx / 16}) translate(0, -1)`)
+                    .attr('font-size', 100)
                     .attr('fill', getResidueColor(residue))
-                    .text(residue)
-                    .style('cursor', 'pointer')
+                    .text(residue);
+
+                  fallbackSvg
                     .on('mouseover', (event) => {
                       showTooltip(event,
                         `<strong>Receptor:</strong> ${receptorData.receptorName}<br/>` +
@@ -926,6 +950,9 @@ const MultiReceptorLogoChart: React.FC<MultiReceptorLogoChartProps> = ({
     }
 
     return () => {
+      cancelled = true;
+      yAxisContainer.innerHTML = '';
+      chartContainer.innerHTML = '';
       setTooltip(prev => ({ ...prev, visible: false }));
     };
   }, [resultData, receptorNames, referenceReceptor, groupColors, isDarkMode, isLoadingAlignments, isLoadingConservation, processReceptorData, getResidueColor, loadCustomSvgLetter, showTooltip, hideTooltip, updateTooltipPosition, logoHeight]);

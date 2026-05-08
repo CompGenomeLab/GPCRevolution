@@ -1841,6 +1841,7 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder, getDisplayNam
     const chartContainer = chartContainerRef.current;
 
     if (!yAxisContainer || !chartContainer) return;
+    let cancelled = false;
 
     if (!dataLoaded || (selectedAlignments.length === 0 && selectedClassAlignments.length === 0)) {
       // Clear chart when no selections
@@ -1877,13 +1878,29 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder, getDisplayNam
       yAxisContainer.innerHTML = '';
       chartContainer.innerHTML = '';
 
-      renderChart(receptorData);
+      renderChartAfterGlyphPreload(receptorData);
       setPreviousDataHash(currentDataHash);
     } else {
       console.log('Data unchanged, skipping chart rebuild');
     }
 
+    function renderChartAfterGlyphPreload(data: ReceptorLogoData[]) {
+      const residuesToPreload = Array.from(
+        new Set(
+          data.flatMap(receptorData =>
+            receptorData.logoData.flatMap(positionData => Object.keys(positionData.letterHeights))
+          )
+        )
+      );
+
+      Promise.all(residuesToPreload.map(residue => loadCustomSvgLetter(residue))).then(() => {
+        if (cancelled) return;
+        renderChart(data);
+      });
+    }
+
     function renderChart(data: ReceptorLogoData[]) {
+      if (cancelled) return;
       if (!yAxisContainer || !chartContainer) return;
 
       const margin = { top: 20, right: 20, bottom: 20, left: 20 };
@@ -2241,6 +2258,7 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder, getDisplayNam
 
           const createCustomSvgLetters = async () => {
             for (const [residue, height] of sortedResidues) {
+              if (cancelled) return;
               if (height > 0) {
                 const letterHeightPx = y(0) - y(height);
                 const letterBaselineY = stackY;
@@ -2311,19 +2329,30 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder, getDisplayNam
                     .on('mouseout', () => hideTooltip());
 
                 } else {
-                  // Fallback to text
-                  chartSvg
+                  const targetWidth = residue === 'I' ? positionWidth * 0.2 : positionWidth * 0.9;
+                  const fallbackSvg = chartSvg
+                    .append('svg')
+                    .attr('x', letterX - targetWidth / 2)
+                    .attr('y', letterBaselineY - letterHeightPx)
+                    .attr('width', targetWidth)
+                    .attr('height', letterHeightPx)
+                    .attr('viewBox', '0 0 100 100')
+                    .attr('preserveAspectRatio', 'none')
+                    .style('overflow', 'hidden')
+                    .style('cursor', 'pointer');
+
+                  fallbackSvg
                     .append('text')
-                    .attr('x', letterX)
-                    .attr('y', letterBaselineY)
+                    .attr('x', 50)
+                    .attr('y', 88)
                     .attr('text-anchor', 'middle')
                     .attr('font-family', 'Helvetica')
                     .attr('font-weight', 'bold')
-                    .attr('font-size', 12)
-                    .attr('transform', `scale(1, ${letterHeightPx / 16}) translate(0, -1)`)
+                    .attr('font-size', 100)
                     .attr('fill', getResidueColor(residue))
-                    .text(residue)
-                    .style('cursor', 'pointer')
+                    .text(residue);
+
+                  fallbackSvg
                     .on('mouseover', (event) => {
                       const alignmentDisplayName = getDisplayName 
                         ? getDisplayName(receptorData.receptorName) 
@@ -2603,6 +2632,9 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder, getDisplayNam
     }
 
     return () => {
+      cancelled = true;
+      yAxisContainer.innerHTML = '';
+      chartContainer.innerHTML = '';
       setTooltip(prev => ({ ...prev, visible: false }));
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
