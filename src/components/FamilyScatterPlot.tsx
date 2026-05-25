@@ -17,7 +17,6 @@ type FamilyMapping = {
 
 interface Props {
   fastaNames: string[];
-  folder: string;
   getDisplayName?: (fileName: string) => string;
   onSelectionChange?: (positions: number[]) => void; // 0-based supRep columns
   height?: number;
@@ -66,7 +65,7 @@ type ScatterPoint = {
 
 type AxisGroupSelection = Selection<SVGGElement, unknown, null, undefined>;
 
-const FamilyScatterPlot: React.FC<Props> = ({ fastaNames, folder, onSelectionChange, height = 260, selectedFamilies, minConservationThreshold = 0, minFamiliesCount = 0 }) => {
+const FamilyScatterPlot: React.FC<Props> = ({ fastaNames, onSelectionChange, height = 260, selectedFamilies, minConservationThreshold = 0, minFamiliesCount = 0 }) => {
   const [mappings, setMappings] = useState<Record<string, FamilyMapping>>({});
   const [selectedPositions, setSelectedPositions] = useState<Set<number>>(new Set());
   const [useThresholdMode, setUseThresholdMode] = useState(false);
@@ -120,7 +119,7 @@ const FamilyScatterPlot: React.FC<Props> = ({ fastaNames, folder, onSelectionCha
     };
     load();
     return () => { cancelled = true; };
-  }, [fastaNames, folder]);
+  }, [fastaNames]);
 
   // Compute scatter data
   const points: ScatterPoint[] = useMemo(() => {

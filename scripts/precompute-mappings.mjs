@@ -8,10 +8,61 @@ const OUTPUT_DIR = path.join(ROOT, 'public', 'mappings');
 
 // Families to process are driven by trim_info.tsv
 const TRIM_INFO = path.join(CUSTOM_MSA_DIR, 'trim_info.tsv');
-const SUP_REPS = path.join(CUSTOM_MSA_DIR, 'sup_reps_noClassC_noSTE3_linsi_trimends_treein_einsi_ep0.123_missing_added_reps_only.fasta');
+const SUP_REPS = resolveFastaPath({
+  label: 'representative combined alignment',
+  preferredNames: [
+    'All_clust0.7_cov1_Oct25_minsize2_linsi_ep0.123_trimends_treein_ginsi_ep0.123_selected_reps.fasta',
+    'sup_reps_noClassC_noSTE3_linsi_trimends_treein_einsi_ep0.123_missing_added_reps_only.fasta'
+  ],
+  predicate: (fileName) => fileName.endsWith('_familyreps_only.fasta') || fileName.startsWith('sup_reps_')
+});
 
 function readText(filePath) {
   return fs.readFileSync(filePath, 'utf8');
+}
+
+function listCustomMsaFastas() {
+  return fs
+    .readdirSync(CUSTOM_MSA_DIR)
+    .filter((fileName) => fileName.toLowerCase().endsWith('.fasta'))
+    .sort();
+}
+
+function resolveFastaPath({ label, preferredNames = [], predicate }) {
+  for (const fileName of preferredNames) {
+    const filePath = path.join(CUSTOM_MSA_DIR, fileName);
+    if (fs.existsSync(filePath)) return filePath;
+  }
+
+  const candidates = listCustomMsaFastas().filter(predicate);
+  if (candidates.length === 0) {
+    throw new Error(`Could not find ${label} in ${CUSTOM_MSA_DIR}`);
+  }
+  if (candidates.length > 1) {
+    console.warn(`Multiple candidates for ${label}; using ${candidates[0]}`);
+  }
+  return path.join(CUSTOM_MSA_DIR, candidates[0]);
+}
+
+function resolveFamilyFasta(familyKey) {
+  const preferredName = `${familyKey}_genes_filtered_db_FAMSA.ref_trimmed.fasta`;
+  const preferredPath = path.join(CUSTOM_MSA_DIR, preferredName);
+  if (fs.existsSync(preferredPath)) return preferredPath;
+
+  const familyPrefix = familyKey.toLowerCase();
+  const candidates = listCustomMsaFastas().filter((fileName) => {
+    const baseName = path.basename(fileName, '.fasta').toLowerCase();
+    if (baseName.endsWith('_familyreps_only') || baseName.startsWith('sup_reps_') || baseName.startsWith('all_')) {
+      return false;
+    }
+    return baseName === familyPrefix || baseName.startsWith(`${familyPrefix}_`) || baseName.startsWith(`${familyPrefix}-`);
+  });
+
+  if (candidates.length === 0) return null;
+  if (candidates.length > 1) {
+    console.warn(`Multiple candidates for ${familyKey}; using ${candidates[0]}`);
+  }
+  return path.join(CUSTOM_MSA_DIR, candidates[0]);
 }
 
 function parseFasta(text) {
@@ -108,9 +159,9 @@ function findSequenceByAcc(sequences, acc) {
 }
 
 function precomputeForFamily({ familyKey, acc1, acc2, supRepMap, supRepSeqs }) {
-  const familyFasta = path.join(CUSTOM_MSA_DIR, `${familyKey}_genes_filtered_db_FAMSA.ref_trimmed.fasta`);
-  if (!fs.existsSync(familyFasta)) {
-    console.warn(`Skipping ${familyKey}: missing ${path.basename(familyFasta)}`);
+  const familyFasta = resolveFamilyFasta(familyKey);
+  if (!familyFasta) {
+    console.warn(`Skipping ${familyKey}: missing family alignment FASTA`);
     return null;
   }
 
@@ -237,6 +288,7 @@ function precomputeForFamily({ familyKey, acc1, acc2, supRepMap, supRepSeqs }) {
 function main() {
   fs.mkdirSync(OUTPUT_DIR, { recursive: true });
 
+  console.log(`Using representative alignment: ${path.relative(ROOT, SUP_REPS)}`);
   const supSeqs = parseFasta(readText(SUP_REPS));
   const supRepMap = {};
   for (const s of supSeqs) {

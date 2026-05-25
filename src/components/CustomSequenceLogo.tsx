@@ -4,12 +4,6 @@ import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom';
 import * as d3 from 'd3';
 import { Download } from 'lucide-react';
-import { readConservationData } from '@/lib/receptorComparison';
-
-interface Sequence {
-  header: string;
-  sequence: string;
-}
 
 interface PositionLogoData {
   position: number;
@@ -36,17 +30,22 @@ interface ReceptorLogoData {
   logoData: PositionLogoData[];
 }
 
-// Subset of receptor metadata used for reference annotation
-type ReceptorEntry = {
-  geneName: string;
-  conservationFile: string;
-};
+interface MappingPositionData {
+  residueCounts?: Record<string, number>;
+  totalSequences?: number;
+  informationContent?: number;
+  letterHeights?: Record<string, number>;
+  gpcrdb?: string;
+}
+
+interface FamilyMappingData {
+  familyKey?: string;
+  positions?: Array<MappingPositionData | null>;
+}
 
 interface Props {
   /** List of FASTA file base names (without extension) */
   fastaNames: string[];
-  /** Public folder path where FASTA files live */
-  folder: string;
   /** Optional function to get display name for a file (for UI elements) */
   getDisplayName?: (fileName: string) => string;
   /** Optional function to get display name for plot labels (shorter form) */
@@ -93,7 +92,7 @@ const aminoAcidGroups = {
 //   'GP143': 'GP143'
 // };
 
-// Map custom family FASTA base names -> family keys used in trim_info.tsv
+// Map family selection IDs to precomputed mapping JSON keys.
 const fileBaseToFamily: Record<string, string> = {
   'classA_genes_filtered_db_FAMSA.ref_trimmed': 'classA',
   'classB1_genes_filtered_db_FAMSA.ref_trimmed': 'classB1',
@@ -115,35 +114,12 @@ const fileBaseToFamily: Record<string, string> = {
   'Nematode_genes_filtered_db_FAMSA.ref_trimmed': 'Nematode'
 };
 
-// Map class-wide keys to family names in trim_info
-const classToFamilyKey: Record<string, string> = {
-  'ClassA': 'classA',
-  'ClassB1': 'classB1',
-  'ClassB2': 'classB2',
-  'ClassC': 'classC',
-  'ClassF': 'classF',
-  'ClassT': 'classT',
-  'ClassOlf': 'Olfactory',
-  'GP157': 'GP157',
-  'GP143': 'GP143'
-};
-
-// Removed unused inverse map
-// const familyKeyToClass: Record<string, string> = Object.entries(classToFamilyKey)
-//   .reduce((acc, [cls, fam]) => { acc[fam] = cls; return acc; }, {} as Record<string, string>);
-
-const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder, getDisplayName, getPlotDisplayName, filteredPositions, onSelectedAlignmentsChange, selectedAlignmentsExternal, showReferenceRowsExternal, showProteinRegionsExternal, rowHeightExternal, minConservationThresholdExternal, minFamiliesCountExternal }) => {
+const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotDisplayName, filteredPositions, onSelectedAlignmentsChange, selectedAlignmentsExternal, showReferenceRowsExternal, showProteinRegionsExternal, rowHeightExternal, minConservationThresholdExternal, minFamiliesCountExternal }) => {
   const yAxisContainerRef = useRef<HTMLDivElement>(null);
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
-  const [dataLoaded, setDataLoaded] = useState(false);
-  const [allData, setAllData] = useState<{
-    name: string;
-    sequences: Sequence[];
-  }[]>([]);
-  
-  // Sup-representatives sequences (from sup_reps*.fasta)
-  const [supRepSequences, setSupRepSequences] = useState<Sequence[]>([]);
+  const [mappingsLoaded, setMappingsLoaded] = useState(false);
+  const [mappingData, setMappingData] = useState<Record<string, FamilyMappingData>>({});
   
   // State for selected alignments (maintains order of selection)
   const [selectedAlignments, setSelectedAlignments] = useState<string[]>([]);
@@ -167,35 +143,6 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder, getDisplayNam
   
   // State for conservation threshold (as percentage) - FIXED VALUE
   const conservationThreshold = 0;
-
-  // Load trim_info.tsv → maps of family -> acc1 and acc2 accessions (if present)
-  const [familyToAcc2, setFamilyToAcc2] = useState<Record<string, string>>({});
-  const [familyToAcc1, setFamilyToAcc1] = useState<Record<string, string>>({});
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch('/custom_msa/trim_info.tsv');
-        if (!res.ok) return;
-        const text = await res.text();
-        const lines = text.trim().split(/\r?\n/);
-        const map2: Record<string, string> = {};
-        const map1: Record<string, string> = {};
-        for (let i = 1; i < lines.length; i++) { // skip header
-          const parts = lines[i].split('\t');
-          if (parts.length < 2) continue;
-          const acc1 = (parts[0] || '').trim();
-          const family = (parts[1] || '').trim();
-          const acc2 = (parts[2] || '').trim();
-          if (family) {
-            if (acc1) map1[family] = acc1;
-            if (acc2) map2[family] = acc2;
-          }
-        }
-        setFamilyToAcc1(map1);
-        setFamilyToAcc2(map2);
-      } catch {}
-    })();
-  }, []);
   
   // New conservation filtering controls
   const [minConservationThreshold, setMinConservationThreshold] = useState(0);
@@ -254,30 +201,6 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder, getDisplayNam
     }
   ], []);
 
-  // State for gap between receptor rows
-  const [gapBetweenReceptors] = useState(10);
-
-  // State for class-wide alignments
-  const [selectedClassAlignments] = useState<string[]>([]);
-  const [humanRefSequences, setHumanRefSequences] = useState<Sequence[]>([]);
-  
-  // Pre-loaded class-wide alignment data (similar to allData for custom alignments)
-  const [classWideData, setClassWideData] = useState<Record<string, {
-    familySequences: Sequence[];
-    conservationData: Record<string, {
-      conservation: number;
-      conservedAA: string;
-      aa: string;
-      region: string;
-      gpcrdb: string;
-    }>;
-  }>>({});
-  const [classDataLoaded, setClassDataLoaded] = useState(false);
-
-
-  // Available class-wide alignments (moved outside component to prevent re-creation)
-  const availableClassAlignments = useMemo(() => ['ClassA', 'ClassB1', 'ClassB2', 'ClassC', 'ClassF', 'ClassT', 'ClassOlf', 'GP157', 'GP143'], []);
-  
   // Selection order tracking removed - now handled by parent
 
   // HRH2 residue filter removed
@@ -300,25 +223,19 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder, getDisplayNam
     }
   }, [showProteinRegionsExternal]);
   
-  const [referenceDataLoaded, setReferenceDataLoaded] = useState(false);
-  // Map geneName → gpcrdb string array (indexed by alignment column, 0-based)
-  const [referenceMaps, setReferenceMaps] = useState<Record<string, string[]>>({});
-
-  // Computed array for current selection (order fixed by class mapping) – memoized so identity never changes  
-  // type ClassKey = 'ClassA' | 'ClassT' | 'ClassB1' | 'ClassB2' | 'ClassC' | 'ClassF' | 'ClassOlf' | 'GP157' | 'GP143';
-  // Removed unused map (we now use familyToAcc1 acc1 names directly)
-  // const classToGene: Record<ClassKey, string> = useMemo(() => ({
-  //   ClassA: 'HRH2',
-  //   ClassT: 'T2R39',
-  //   ClassB1: 'PTH1R',
-  //   ClassB2: 'AGRL3',
-  //   ClassC: 'CASR',
-  //   ClassF: 'FZD7',
-  //   ClassOlf: 'O52I2',
-  //   GP157: 'GP157',
-  //   GP143: 'GP143'
-  // }), []);
-  const [referenceInfo, setReferenceInfo] = useState<{ label: string; gpcrdbMap: string[] }[]>([]);
+  const referenceInfo = useMemo(() => {
+    return selectedAlignments
+      .map((name) => {
+        const positions = mappingData[name]?.positions || [];
+        const gpcrdbMap = positions.map((position) => position?.gpcrdb || '');
+        if (!gpcrdbMap.some(Boolean)) return null;
+        return {
+          label: fileBaseToFamily[name] || name,
+          gpcrdbMap
+        };
+      })
+      .filter((item): item is { label: string; gpcrdbMap: string[] } => Boolean(item));
+  }, [mappingData, selectedAlignments]);
 
   // (Column width slider removed – fixed width used)
   
@@ -479,489 +396,49 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder, getDisplayNam
     }
   }, []);
 
-  // Basic FASTA parser
-  function parseFasta(text: string): Sequence[] {
-    const lines = text.trim().split(/\r?\n/);
-    const seqs: Sequence[] = [];
-    let header = '';
-    let seq = '';
-    for (const line of lines) {
-      if (line.startsWith('>')) {
-        if (header) {
-          seqs.push({ header, sequence: seq });
-        }
-        header = line.substring(1).trim();
-        seq = '';
-      } else {
-        seq += line.trim();
-      }
-    }
-    if (header) seqs.push({ header, sequence: seq });
-    return seqs;
-  }
-
-  // Extract sequence range from header (e.g., "/27-335" -> {start: 27, end: 335})
-  function extractSeqRange(header: string): { start: number; end: number } | null {
-    const match = header.match(/\/(\d+)-(\d+)/);
-    if (match) {
-      return { start: parseInt(match[1]), end: parseInt(match[2]) };
-    }
-    return null;
-  }
-
-  // Removed unused helper to satisfy linter
-  // function getRealResidueNumber(msaColumn: number, sequence: string, header: string): number | null { return null; }
-
-  // Load all FASTA files once
+  // Load precomputed mapping JSON files once. Raw alignment FASTAs are build-time inputs only.
   useEffect(() => {
-    async function loadAll() {
-      const results = await Promise.all(
+    let cancelled = false;
+
+    async function loadMappings() {
+      setMappingsLoaded(false);
+      const entries = await Promise.all(
         fastaNames.map(async (name) => {
-          try {
-            const res = await fetch(`${folder}/${name}.fasta`);
-            if (!res.ok) {
-              console.warn(`Failed to load ${name}.fasta: ${res.status}`);
-              return { name, sequences: [] };
-            }
-            const text = await res.text();
-            return { name, sequences: parseFasta(text) };
-          } catch (error) {
-            console.error(`Error loading ${name}.fasta:`, error);
-            return { name, sequences: [] };
+          const familyKey = fileBaseToFamily[name];
+          if (!familyKey) return null;
+
+          const response = await fetch(`/mappings/${familyKey}.json`);
+          if (!response.ok) {
+            console.warn(`Failed to load mapping JSON for ${familyKey}: ${response.status}`);
+            return null;
           }
+
+          const mapping = (await response.json()) as FamilyMappingData;
+          return [name, mapping] as const;
         })
       );
-      setAllData(results);
-      setDataLoaded(true);
+      if (cancelled) return;
+
+      const nextMappingData: Record<string, FamilyMappingData> = {};
+      entries.forEach((entry) => {
+        if (entry) nextMappingData[entry[0]] = entry[1];
+      });
+      setMappingData(nextMappingData);
+      setMappingsLoaded(true);
     }
-    loadAll();
-  }, [fastaNames, folder]);
 
-  /* ─── Initial load of reference sequences & receptor metadata ─── */
-  useEffect(() => {
-    (async () => {
-      try {
-        // Load sup_reps sequences instead of human_refs
-        const fastaRes = await fetch('/custom_msa/sup_reps_noClassC_noSTE3_linsi_trimends_treein_einsi_ep0.123_missing_added_reps_only.fasta');
-        if (!fastaRes.ok) {
-          console.warn('Failed to load sup_reps alignment:', fastaRes.status);
-          return;
-        }
-        const fastaText = await fastaRes.text();
-        const refSeqsArr = parseFasta(fastaText);
-        setSupRepSequences(refSeqsArr);
-        
-        // Build map: accession (from sup_reps header) → sequence
-        const acc1ToSeq: Record<string, Sequence> = {};
-        refSeqsArr.forEach(seqObj => {
-          // Extract accession: split by | or _ and get second element
-          const parts1 = seqObj.header.split('|');
-          const acc = parts1.length > 1 ? parts1[1].trim() : seqObj.header.split('_')[1]?.trim();
-          if (acc) {
-            acc1ToSeq[acc] = seqObj;
-          }
-        });
-
-        // Wait for trim_info to load
-        // We'll trigger GPCRdb mapping computation in a separate effect after both are ready
-        console.log('Sup_reps sequences loaded:', Object.keys(acc1ToSeq));
-      } catch (err) {
-        console.error('Error loading sup_reps:', err);
-      }
-    })();
-  }, []);
-
-  // Build GPCRdb mapping after trim_info and sup_reps are loaded
-  useEffect(() => {
-    if (supRepSequences.length === 0 || Object.keys(familyToAcc1).length === 0) return;
-    
-    (async () => {
-      try {
-        // Build acc1 -> sup_reps sequence map
-        const acc1ToSupSeq: Record<string, Sequence> = {};
-        supRepSequences.forEach(seqObj => {
-          const parts1 = seqObj.header.split('|');
-          const acc = parts1.length > 1 ? parts1[1].trim() : seqObj.header.split('_')[1]?.trim();
-          if (acc) {
-            acc1ToSupSeq[acc] = seqObj;
-          }
-        });
-
-        // Load receptors metadata
-        const recRes = await fetch('/receptors.json');
-        if (!recRes.ok) {
-          console.warn('Failed to load receptors.json:', recRes.status);
-          return;
-        }
-        const receptorsList: ReceptorEntry[] = await recRes.json();
-        const geneToConsFile: Record<string, string> = {};
-        receptorsList.forEach(rec => {
-          geneToConsFile[rec.geneName.toUpperCase()] = rec.conservationFile;
-        });
-
-        // For each family, create acc1→acc2 mapping and build GPCRdb maps
-        const maps: Record<string, string[]> = {};
-        
-        for (const [family, acc1] of Object.entries(familyToAcc1)) {
-          const acc2 = familyToAcc2[family];
-          const supSeq = acc1ToSupSeq[acc1];
-          if (!supSeq) continue;
-
-          // Load family alignment to map acc1 columns to acc2 residue numbers
-            const familyFile = Object.entries(fileBaseToFamily).find((entry) => entry[1] === family)?.[0];
-          if (!familyFile) continue;
-
-          try {
-            const famRes = await fetch(`${folder}/${familyFile}.fasta`);
-            if (!famRes.ok) continue;
-            const famText = await famRes.text();
-            const famSeqs = parseFasta(famText);
-
-            // Find acc1 and acc2 sequences in family alignment
-            const findByAcc = (acc: string) => famSeqs.find(s => {
-              if (s.header.includes(acc)) return true;
-              const p = s.header.split('|');
-              if (p.length > 1 && p[1].trim() === acc) return true;
-              const u = s.header.split('_');
-              if (u.length > 1 && u[1].trim() === acc) return true;
-              return false;
-            });
-
-            const famAcc1Seq = findByAcc(acc1);
-            const famAcc2Seq = acc2 ? findByAcc(acc2) : null;
-
-            // If we have acc2, create mapping acc1_supCol → acc2_residueNum
-            const acc1ToAcc2ResMap: Record<number, number> = {};
-            let geneName: string | null = null;
-
-            if (famAcc2Seq && acc2) {
-              // Extract gene name from acc2 sequence header: split by | get 3rd, split by _ get 1st
-              const parts = famAcc2Seq.header.split('|');
-              if (parts.length > 2) {
-                const geneToken = parts[2].trim().split('_')[0];
-                geneName = geneToken;
-              }
-
-              // Build acc1→acc2 residue mapping via family alignment
-              // Extract sequence ranges to get real residue numbers
-              const acc1Range = famAcc1Seq ? extractSeqRange(famAcc1Seq.header) : null;
-              const acc2Range = extractSeqRange(famAcc2Seq.header);
-              const acc1Offset = acc1Range ? acc1Range.start - 1 : 0;
-              const acc2Offset = acc2Range ? acc2Range.start - 1 : 0;
-              
-              let acc1Running = 0;
-              let acc2Running = 0;
-              const familyLen = Math.max(famAcc1Seq?.sequence.length || 0, famAcc2Seq.sequence.length);
-              
-              for (let famCol = 0; famCol < familyLen; famCol++) {
-                const aa1 = famAcc1Seq?.sequence[famCol] || '-';
-                const aa2 = famAcc2Seq.sequence[famCol] || '-';
-                
-                if (aa1 !== '-') acc1Running++;
-                if (aa2 !== '-') acc2Running++;
-                
-                // Map acc1 REAL residue number to acc2 REAL residue number
-                if (aa1 !== '-' && aa2 !== '-') {
-                  const realAcc1Res = acc1Offset + acc1Running;
-                  const realAcc2Res = acc2Offset + acc2Running;
-                  acc1ToAcc2ResMap[realAcc1Res] = realAcc2Res;
-                }
-              }
-            }
-
-            // Now map sup_reps columns to GPCRdb
-            const gpcrdbMap: string[] = new Array(supSeq.sequence.length).fill('');
-            
-            if (geneName && acc1ToAcc2ResMap && Object.keys(acc1ToAcc2ResMap).length > 0) {
-              // Load conservation data for the gene
-              const consFile = geneToConsFile[geneName.toUpperCase()];
-              if (consFile) {
-                const consData = await readConservationData(`/${consFile}`);
-                
-                // Extract sup_reps acc1 sequence range offset
-                const supRange = extractSeqRange(supSeq.header);
-                const supOffset = supRange ? supRange.start - 1 : 0;
-                
-                // For each column in sup_reps (acc1 alignment)
-                let acc1ResCount = 0;
-                for (let supCol = 0; supCol < supSeq.sequence.length; supCol++) {
-                  const aa = supSeq.sequence[supCol];
-                  if (aa !== '-') {
-                    acc1ResCount++;
-                    const realAcc1Res = supOffset + acc1ResCount;
-                    
-                    // Map to acc2 REAL residue number
-                    const acc2ResNum = acc1ToAcc2ResMap[realAcc1Res];
-                    if (acc2ResNum) {
-                      // Get GPCRdb from conservation data using acc2's real residue number
-                      const residueData = consData[acc2ResNum.toString()];
-                      gpcrdbMap[supCol] = residueData?.gpcrdb || acc2ResNum.toString();
-                    }
-                  }
-                }
-              }
-            }
-
-            // Store the map using acc1 as key (since that's what sup_reps uses)
-            maps[acc1.toUpperCase()] = gpcrdbMap;
-            
-            } catch (err) {
-            console.warn(`Error processing family ${family}:`, err);
-            }
-          }
-
-        setReferenceMaps(maps);
-        setReferenceDataLoaded(true);
-      } catch (err) {
-        console.error('Error building GPCRdb maps:', err);
-      }
-    })();
-  }, [supRepSequences, familyToAcc1, familyToAcc2, folder]);
-
-  /* ─── Compute referenceInfo based on selected alignments ───────── */
-  useEffect(() => {
-    if (!referenceDataLoaded) return;
-
-    // Determine reference rows needed based on selected alignments using acc1 representatives
-    const neededGenes: string[] = [];
-
-    // From custom alignments
-    selectedAlignments.forEach(name => {
-      const familyKey = fileBaseToFamily[name];
-      if (!familyKey) return;
-      const acc1 = familyToAcc1[familyKey];
-      if (acc1) {
-        const geneKey = acc1.toUpperCase();
-        if (!neededGenes.includes(geneKey)) neededGenes.push(geneKey);
+    loadMappings().catch((error) => {
+      console.error('Error loading mapping JSONs:', error);
+      if (!cancelled) {
+        setMappingData({});
+        setMappingsLoaded(true);
       }
     });
 
-    // From any class-wide selections (if any remain)
-    selectedClassAlignments.forEach(className => {
-      const familyKey = classToFamilyKey[className];
-      if (!familyKey) return;
-      const acc1 = familyToAcc1[familyKey];
-      if (acc1) {
-        const geneKey = acc1.toUpperCase();
-        if (!neededGenes.includes(geneKey)) neededGenes.push(geneKey);
-      }
-    });
-
-    const newRefInfo: { label: string; gpcrdbMap: string[] }[] = [];
-    neededGenes.forEach(gene => {
-      const famKey = Object.entries(familyToAcc1).find(([, acc1]) => acc1.toUpperCase() === gene)?.[0];
-      const familyLabel = famKey || gene; // Prefer family name label if available
-      const map = referenceMaps[gene];
-      if (map && map.some(v => !!v)) { // only include rows that have any gpcrdb labels
-        newRefInfo.push({ label: familyLabel, gpcrdbMap: map });
-      }
-    });
-
-    setReferenceInfo(newRefInfo);
-  }, [selectedAlignments, selectedClassAlignments, referenceDataLoaded, referenceMaps, familyToAcc1]);
-
-  // Load sup_reps sequences and pre-load all class-wide alignment data (runs only once)
-  useEffect(() => {
-    console.log('🔄 useEffect for class-wide data loading triggered - should only run once!');
-    const loadAllClassWideData = async () => {
-      try {
-        console.log('🚀 Pre-loading all class-wide alignment data...');
-        
-        // Wait for sup_reps to be loaded (from previous effect)
-        if (supRepSequences.length === 0) {
-          console.log('Waiting for sup_reps to load...');
-          return;
-        }
-        setHumanRefSequences(supRepSequences);
-
-                 // Pre-load all class-wide alignments and their conservation data
-         const classData: Record<string, {
-           familySequences: Sequence[];
-           conservationData: Record<string, {
-             conservation: number;
-             conservedAA: string;
-             aa: string;
-             region: string;
-             gpcrdb: string;
-           }>;
-         }> = {};
-         
-         await Promise.all(availableClassAlignments.map(async (className: string) => {
-           try {
-             const familyKey = classToFamilyKey[className];
-             const acc2 = familyKey ? familyToAcc2[familyKey] : undefined;
-             
-             // Load family alignment from custom_msa
-             const familyFile = Object.entries(fileBaseToFamily).find((entry) => entry[1] === familyKey)?.[0];
-             if (!familyFile) {
-               console.warn(`No family file mapping for ${className}`);
-               return;
-             }
-             
-             const familyResponse = await fetch(`${folder}/${familyFile}.fasta`);
-             
-             if (!familyResponse.ok) {
-               console.warn(`Failed to pre-load ${className} family alignment: ${familyResponse.status}`);
-               return;
-             }
-             
-             const familyFastaText = await familyResponse.text();
-             const familySequences = parseFasta(familyFastaText);
-             
-             // Load conservation data using acc2's gene name
-             const conservationData: Record<string, {
-               conservation: number;
-               conservedAA: string;
-               aa: string;
-               region: string;
-               gpcrdb: string;
-             }> = {};
-            
-            if (acc2) {
-              // Find acc2 sequence to extract gene name
-              const acc2Seq = familySequences.find(s => {
-                if (s.header.includes(acc2)) return true;
-                const p = s.header.split('|');
-                if (p.length > 1 && p[1].trim() === acc2) return true;
-                const u = s.header.split('_');
-                if (u.length > 1 && u[1].trim() === acc2) return true;
-                return false;
-              });
-              
-              if (acc2Seq) {
-                const parts = acc2Seq.header.split('|');
-                if (parts.length > 2) {
-                  const geneName = parts[2].trim().split('_')[0];
-                  
-                  try {
-                    const conservationResponse = await fetch(`/conservation_files/${geneName}_conservation.txt`);
-              if (conservationResponse.ok) {
-                const conservationText = await conservationResponse.text();
-                conservationText.split('\n').forEach(line => {
-                  const parts = line.split('\t');
-                  if (parts[0] && parts[0].trim().toLowerCase() !== 'residue_number' && parts.length >= 6) {
-                    const resNum = parts[0].trim();
-                    conservationData[resNum] = {
-                      conservation: parseFloat(parts[1].trim()),
-                      conservedAA: parts[2].trim(),
-                      aa: parts[3].trim(),
-                      region: parts[4].trim(),
-                      gpcrdb: parts[5].trim(),
-                    };
-                  }
-                });
-              }
-            } catch (error) {
-                    console.warn(`Could not pre-load conservation data for ${geneName}:`, error);
-                  }
-                }
-              }
-            }
-            
-            classData[className] = {
-              familySequences,
-              conservationData
-            };
-            
-            console.log(`✅ Pre-loaded ${className} data (${familySequences.length} sequences)`);
-          } catch (error) {
-            console.error(`Error pre-loading ${className}:`, error);
-          }
-        }));
-
-        setClassWideData(classData);
-        setClassDataLoaded(true);
-        console.log('🎉 All class-wide alignment data pre-loaded!');
-        
-      } catch (error) {
-        console.error('Error loading class-wide alignment data:', error);
-      }
+    return () => {
+      cancelled = true;
     };
-
-         loadAllClassWideData();
-  }, [availableClassAlignments, supRepSequences, familyToAcc1, familyToAcc2, folder]);
-
-  // Class alignment selection disabled – using mapping files via top checkboxes only
-  // Remove unused handlers to satisfy linter
-
-  // Function to calculate position logo data
-  const calculatePositionLogoData = useCallback((position: number, sequences: string[]): {
-    informationContent: number;
-    letterHeights: Record<string, number>;
-    residueCounts: Record<string, number>;
-    totalSequences: number;
-  } => {
-    const residueCounts: Record<string, number> = {};
-    let nonGapSequences = 0;
-    const totalSequencesInAlignment = sequences.length; // Include gaps in total
-    
-    const standardAA = 'ACDEFGHIKLMNPQRSTVWY';
-    sequences.forEach(seq => {
-      const residue = seq[position]?.toUpperCase();
-      if (residue && standardAA.includes(residue)) {
-        residueCounts[residue] = (residueCounts[residue] || 0) + 1;
-        nonGapSequences++;
-      }
-      // Gaps are implicitly counted as reducing conservation
-    });
-    
-    // Skip positions with no amino acids at all
-    if (nonGapSequences === 0) {
-      return { 
-        informationContent: 0, 
-        letterHeights: {}, 
-        residueCounts: {},
-        totalSequences: totalSequencesInAlignment
-      };
-    }
-    
-    // Calculate frequencies against ALL sequences (including gaps)
-    const frequencies: Record<string, number> = {};
-    Object.keys(residueCounts).forEach(residue => {
-      frequencies[residue] = residueCounts[residue] / totalSequencesInAlignment; // Changed to include gaps
-    });
-    
-    // Add gap frequency for entropy calculation
-    const gapFrequency = (totalSequencesInAlignment - nonGapSequences) / totalSequencesInAlignment;
-    
-    let entropy = 0;
-    Object.values(frequencies).forEach(freq => {
-      if (freq > 0) {
-        entropy -= freq * Math.log2(freq);
-      }
-    });
-    
-    // Include gap contribution to entropy
-    if (gapFrequency > 0) {
-      entropy -= gapFrequency * Math.log2(gapFrequency);
-    }
-    
-    const maxBits = Math.log2(21); // 20 amino acids + gaps
-    const informationContent = Math.max(0, maxBits - entropy);
-    
-    const letterHeights: Record<string, number> = {};
-    Object.keys(residueCounts).forEach(residue => {
-      letterHeights[residue] = frequencies[residue] * informationContent;
-    });
-    
-    return { informationContent, letterHeights, residueCounts, totalSequences: totalSequencesInAlignment };
-  }, []);
-
-  // Simple conservation calculation removed - DISABLED
-  // const calculateSimpleConservation = useCallback((position: number, sequences: string[]): { ... } => { ... }, []);
-
-  // Enhanced position logo data calculation (entropy-based only)
-  const calculateEnhancedPositionLogoData = useCallback((position: number, sequences: string[]): {
-    informationContent: number;
-    letterHeights: Record<string, number>;
-    residueCounts: Record<string, number>;
-    totalSequences: number;
-    matchPercentage?: number;
-    mostConservedAA?: string;
-    matchCounts?: Record<string, number>;
-  } => {
-    return calculatePositionLogoData(position, sequences);
-  }, [calculatePositionLogoData]);
+  }, [fastaNames]);
 
   // Calculate cross-alignment conservation for a specific position
   const calculateCrossAlignmentConservation = useCallback((position: number, allAlignmentData: Record<string, Record<number, PositionLogoData>>): {
@@ -986,9 +463,7 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder, getDisplayNam
     const aaFrequency: Record<string, number> = {};
     let totalAlignments = 0;
 
-    // Process both custom and class-wide alignments
-    const allSelectedAlignments = [...selectedAlignments, ...selectedClassAlignments];
-    allSelectedAlignments.forEach(alignmentName => {
+    selectedAlignments.forEach(alignmentName => {
       const positionData = allAlignmentData[alignmentName]?.[position];
       if (positionData && positionData.residueCounts) {
         // Get the most frequent amino acid in this alignment at this position
@@ -1052,7 +527,7 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder, getDisplayNam
     });
 
     // Calculate percentage based on TOTAL selected alignments (including gaps)
-    const totalSelectedAlignments = allSelectedAlignments.length;
+    const totalSelectedAlignments = selectedAlignments.length;
     const matchPercentage = totalSelectedAlignments > 0 ? (matchCount / totalSelectedAlignments) * 100 : 0;
 
     return {
@@ -1062,651 +537,140 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder, getDisplayNam
       matchCount,
       totalAlignments: totalSelectedAlignments
     };
-  }, [selectedAlignments, selectedClassAlignments]);
+  }, [selectedAlignments]);
 
 
 
-  // Async processing of receptor data
+  // Build logo rows from precomputed mapping JSONs.
   useEffect(() => {
-    if (!dataLoaded || !allData.length) {
+    if (!mappingsLoaded || selectedAlignments.length === 0) {
       setProcessedReceptorData([]);
       return;
     }
 
-    // If class-wide alignments are selected, ensure class-wide data is pre-loaded
-    if (selectedClassAlignments.length > 0 && (!classDataLoaded || humanRefSequences.length === 0)) {
-      console.log('Waiting for class-wide alignment data to load...');
-      setProcessedReceptorData([]);
-      return;
-    }
+    const alignmentPositionData: Record<string, Record<number, PositionLogoData>> = {};
+    let globalMaxPosition = 0;
 
-    const processData = async () => {
-      console.log('🔄 Processing data for alignments:', [...selectedAlignments, ...selectedClassAlignments]);
-      
-      // HRH2-based filtering removed
+    selectedAlignments.forEach((name) => {
+      const positions = mappingData[name]?.positions || [];
+      const positionData: Record<number, PositionLogoData> = {};
 
-      // First pass: collect all possible positions and their data for each alignment
-      const alignmentPositionData: Record<string, Record<number, PositionLogoData>> = {};
-      let globalMaxPosition = 0;
+      positions.forEach((position, supCol) => {
+        if (!position) return;
 
-      // Process custom alignments - map to acc1 residue coordinate system
-        const processAlignment = async (name: string) => {
-          const entry = allData.find(d => d.name === name);
-          if (!entry || !entry.sequences.length) {
-            alignmentPositionData[name] = {};
-            return;
-          }
-
-        // Determine if this alignment has an acc1 to define coordinate system
-        const familyKey = fileBaseToFamily[name];
-        const acc1 = familyKey ? familyToAcc1[familyKey] : undefined;
-        const acc2 = familyKey ? familyToAcc2[familyKey] : undefined;
-
-        // Prefer precomputed mapping JSON to avoid runtime MSA parsing
-        try {
-          if (familyKey) {
-            const resp = await fetch(`/mappings/${familyKey}.json`);
-            if (resp.ok) {
-              const mapping = await resp.json();
-              const posData: Record<number, PositionLogoData> = {};
-              const positions = mapping.positions || [];
-              for (let supCol = 0; supCol < positions.length; supCol++) {
-                const p = positions[supCol] || null;
-                if (!p) continue;
-                posData[supCol] = {
-                  position: supCol + 1,
-                  msaColumn: supCol,
-                  residueCounts: p.residueCounts || {},
-                  totalSequences: p.totalSequences || 0,
-                  informationContent: p.informationContent || 0,
-                  letterHeights: p.letterHeights || {},
-                  gpcrdb: p.gpcrdb || undefined
-                };
-              }
-              alignmentPositionData[name] = posData;
-              if (positions.length > 0) {
-                globalMaxPosition = Math.max(globalMaxPosition, positions.length - 1);
-              }
-              return;
-            }
-          }
-        } catch (e) {
-          console.warn('Failed to load mapping JSON for', name, e);
-        }
-        
-        // Find acc1 in sup_reps to get the reference sequence
-        let supRepSeq: Sequence | undefined;
-        if (acc1 && supRepSequences.length > 0) {
-          supRepSeq = supRepSequences.find(seq => {
-            const parts1 = seq.header.split('|');
-            const seqAcc = parts1.length > 1 ? parts1[1].trim() : seq.header.split('_')[1]?.trim();
-            return seqAcc === acc1;
-          });
-        }
-
-        // Find acc1 and acc2 in family alignment
-        const findByAcc = (acc: string) => entry.sequences.find(s => {
-          if (s.header.includes(acc)) return true;
-          const p = s.header.split('|');
-          if (p.length > 1 && p[1].trim() === acc) return true;
-          const u = s.header.split('_');
-          if (u.length > 1 && u[1].trim() === acc) return true;
-          return false;
-        });
-        
-        const famAcc1Seq = acc1 ? findByAcc(acc1) : undefined;
-        const famAcc2Seq = acc2 ? findByAcc(acc2) : undefined;
-        
-        // Load conservation data for GPCRdb mapping (if acc2 exists)
-        const conservationData: Record<string, string> = {}; // residue_number -> gpcrdb_number
-        if (famAcc2Seq) {
-          try {
-            const parts = famAcc2Seq.header.split('|');
-            if (parts.length > 2) {
-              const geneName = parts[2].trim().split('_')[0];
-              const conservationResponse = await fetch(`/conservation_files/${geneName}_conservation.txt`);
-              if (conservationResponse.ok) {
-                const conservationText = await conservationResponse.text();
-                conservationText.split('\n').forEach(line => {
-                  const parts = line.split('\t');
-                  if (parts[0] && parts[0].trim().toLowerCase() !== 'residue_number' && parts.length >= 6) {
-                    const resNum = parts[0].trim();
-                    const gpcrdb = parts[5].trim();
-                    conservationData[resNum] = gpcrdb;
-                  }
-                });
-              }
-            }
-          } catch (error) {
-            console.warn(`Could not load conservation data for ${name}:`, error);
-          }
-        }
-        
-        // Build mapping: acc1_residue_position → family_alignment_column
-        // This maps which family column corresponds to each acc1 residue position
-        const acc1ResiduePosToFamCol: Record<number, number> = {};
-        
-        if (supRepSeq && famAcc1Seq) {
-          // Extract ranges for both acc1 sequences
-          const famRange = extractSeqRange(famAcc1Seq.header);
-          const famOffset = famRange ? famRange.start - 1 : 0;
-          
-          // For each column in family alignment, track which real residue it corresponds to
-          let famResCount = 0;
-          for (let famCol = 0; famCol < famAcc1Seq.sequence.length; famCol++) {
-            if (famAcc1Seq.sequence[famCol] !== '-') {
-              famResCount++;
-              const realRes = famOffset + famResCount;
-              // Store: real residue number → family column
-              acc1ResiduePosToFamCol[realRes] = famCol;
-            }
-          }
-        }
-
-        // Build acc2 residue map for GPCRdb labels
-        let acc2ResidueMap: Record<number, number> | null = null;
-        if (famAcc2Seq) {
-          const acc2Range = extractSeqRange(famAcc2Seq.header);
-          const acc2Offset = acc2Range ? acc2Range.start - 1 : 0;
-          
-          acc2ResidueMap = {};
-          let running = 0;
-          for (let i = 0; i < famAcc2Seq.sequence.length; i++) {
-            const aa = famAcc2Seq.sequence[i];
-            if (aa !== '-') {
-              running++;
-              acc2ResidueMap[i] = acc2Offset + running;
-            } else {
-              acc2ResidueMap[i] = 0;
-            }
-          }
-        }
-
-        // Process based on acc1 positions (from sup_reps) - include ALL columns even gaps
-        const sequences = entry.sequences.map(s => s.sequence);
-          const positionData: Record<number, PositionLogoData> = {};
-
-        if (supRepSeq) {
-          // Walk through ENTIRE sup_reps acc1 sequence (including gaps)
-          const supRange = extractSeqRange(supRepSeq.header);
-          const supOffset = supRange ? supRange.start - 1 : 0;
-          
-          let resCount = 0;
-          for (let supCol = 0; supCol < supRepSeq.sequence.length; supCol++) {
-            const aa = supRepSeq.sequence[supCol];
-            
-            if (aa === '-') {
-              // Gap in acc1 - store empty position data to maintain alignment
-              positionData[supCol] = {
-                position: supCol + 1,
-                msaColumn: supCol,
-                residueCounts: {},
-                totalSequences: 0,
-                informationContent: 0,
-                letterHeights: {},
-                matchPercentage: 0,
-                mostConservedAA: '-',
-                matchCounts: {}
-              };
-            } else {
-              // Residue in acc1
-              resCount++;
-              const realResNum = supOffset + resCount;
-              
-              // Find corresponding family column
-              const famCol = acc1ResiduePosToFamCol[realResNum];
-              
-              if (famCol !== undefined) {
-                // Calculate logo from family alignment at this column
-                const calculatedData = calculateEnhancedPositionLogoData(famCol, sequences);
-                
-                // Get GPCRdb label: acc2 residue number -> conservation data lookup
-                let gpcrFromAcc2: string | undefined = undefined;
-                if (acc2ResidueMap && acc2ResidueMap[famCol]) {
-                  const acc2ResNum = String(acc2ResidueMap[famCol]);
-                  gpcrFromAcc2 = conservationData[acc2ResNum] || undefined;
-                }
-                
-                // Store at sup_reps column position
-                positionData[supCol] = {
-                  position: supCol + 1,
-                  msaColumn: supCol,
-                residueCounts: calculatedData.residueCounts,
-                totalSequences: calculatedData.totalSequences,
-                informationContent: calculatedData.informationContent,
-                letterHeights: calculatedData.letterHeights,
-                matchPercentage: calculatedData.matchPercentage,
-                mostConservedAA: calculatedData.mostConservedAA,
-                  matchCounts: calculatedData.matchCounts,
-                  gpcrdb: gpcrFromAcc2 || undefined
-                };
-              } else {
-                // No family data for this acc1 position - store empty
-                positionData[supCol] = {
-                  position: supCol + 1,
-                  msaColumn: supCol,
-                  residueCounts: {},
-                  totalSequences: 0,
-                  informationContent: 0,
-                  letterHeights: {},
-                  matchPercentage: 0,
-                  mostConservedAA: '-',
-                  matchCounts: {}
-                };
-              }
-            }
-            
-            globalMaxPosition = Math.max(globalMaxPosition, supCol);
-            }
-          }
-
-          alignmentPositionData[name] = positionData;
+        positionData[supCol] = {
+          position: supCol + 1,
+          msaColumn: supCol,
+          residueCounts: position.residueCounts || {},
+          totalSequences: position.totalSequences || 0,
+          informationContent: position.informationContent || 0,
+          letterHeights: position.letterHeights || {},
+          gpcrdb: position.gpcrdb || undefined
         };
+      });
 
-      // Process all alignments
-      for (const name of selectedAlignments) {
-        await processAlignment(name);
-      }
-      
-      // Process class-wide alignments using pre-loaded data (same as custom alignments)
-      const processClassAlignment = async (className: string) => {
-        try {
-          // Use pre-loaded data instead of fetching
-          const classData = classWideData[className];
-          if (!classData) {
-            console.warn(`Pre-loaded data not found for ${className}`);
-            return;
-          }
+      alignmentPositionData[name] = positionData;
+      globalMaxPosition = Math.max(globalMaxPosition, positions.length);
+    });
 
-          // Find representative sequence from sup_reps using acc1
-          const familyKey = classToFamilyKey[className];
-          const acc1 = familyKey ? familyToAcc1[familyKey] : undefined;
-          
-          if (!acc1) {
-            console.warn(`No acc1 mapping found for ${className}`);
-            return;
-          }
-          
-          // Find sequence by acc1 accession
-          const representativeSeq = humanRefSequences.find(seq => {
-            const parts1 = seq.header.split('|');
-            const seqAcc = parts1.length > 1 ? parts1[1].trim() : seq.header.split('_')[1]?.trim();
-            return seqAcc === acc1;
-          });
-          
-          if (!representativeSeq) {
-            console.warn(`Representative sequence with acc1=${acc1} not found in sup_reps for ${className}`);
-            return;
-          }
+    const crossAlignmentConservation: Record<number, {
+      matchPercentage: number;
+      data: ReturnType<typeof calculateCrossAlignmentConservation>;
+    }> = {};
 
-          // Use pre-loaded family sequences
-          const familySequences = classData.familySequences;
-          
-          // Find representative sequence in family alignment by acc1
-          const familyRepSeq = familySequences.find(seq => {
-            if (seq.header.includes(acc1)) return true;
-            const p = seq.header.split('|');
-            if (p.length > 1 && p[1].trim() === acc1) return true;
-            const u = seq.header.split('_');
-            if (u.length > 1 && u[1].trim() === acc1) return true;
-            return false;
-          });
-          
-          if (!familyRepSeq) {
-            console.warn(`Representative sequence with acc1=${acc1} not found in family alignment`);
-            return;
-          }
-
-          // Use pre-loaded conservation data
-          const conservationData = classData.conservationData;
-
-          // Build acc1→acc2 residue mapping for GPCRdb lookups
-          const acc2 = familyKey ? familyToAcc2[familyKey] : undefined;
-          const acc1ToAcc2ResMap: Record<number, number> = {};
-          
-          if (acc2) {
-            const findByAcc = (acc: string) => familySequences.find(s => {
-              if (s.header.includes(acc)) return true;
-              const p = s.header.split('|');
-              if (p.length > 1 && p[1].trim() === acc) return true;
-              const u = s.header.split('_');
-              if (u.length > 1 && u[1].trim() === acc) return true;
-              return false;
-            });
-            
-            const famAcc2Seq = findByAcc(acc2);
-            
-            if (famAcc2Seq && familyRepSeq) {
-              const acc1Range = extractSeqRange(familyRepSeq.header);
-              const acc2Range = extractSeqRange(famAcc2Seq.header);
-              const acc1Offset = acc1Range ? acc1Range.start - 1 : 0;
-              const acc2Offset = acc2Range ? acc2Range.start - 1 : 0;
-              
-              let acc1Running = 0;
-              let acc2Running = 0;
-              const familyLen = Math.max(familyRepSeq.sequence.length, famAcc2Seq.sequence.length);
-              
-              for (let famCol = 0; famCol < familyLen; famCol++) {
-                const aa1 = familyRepSeq.sequence[famCol] || '-';
-                const aa2 = famAcc2Seq.sequence[famCol] || '-';
-                
-                if (aa1 !== '-') acc1Running++;
-                if (aa2 !== '-') acc2Running++;
-                
-                if (aa1 !== '-' && aa2 !== '-') {
-                  const realAcc1Res = acc1Offset + acc1Running;
-                  const realAcc2Res = acc2Offset + acc2Running;
-                  acc1ToAcc2ResMap[realAcc1Res] = realAcc2Res;
-                }
-              }
-            }
-          }
-
-          console.log(`\n=== Processing ${className} alignment ===`);
-          console.log(`Representative acc1: ${acc1}`);
-          console.log(`Sup_reps sequence length: ${representativeSeq.sequence.length}`);
-          console.log(`Family alignment sequence length: ${familyRepSeq.sequence.length}`);
-          
-          // For class-wide alignments, use sup_reps positions directly
-          const visualizedDisplayPositions: Record<number, number> = {}; // supRepCol -> residueNumber
-          
-          console.log('\n--- Generating positions from sup_reps for class-wide alignment ---');
-          
-          // Generate positions from sup_reps (our universal coordinate system)
-          // Extract sup_reps range offset
-          const supRange = extractSeqRange(representativeSeq.header);
-          const supOffset = supRange ? supRange.start - 1 : 0;
-          
-          let supResCount = 0;
-          for (let supCol = 0; supCol < representativeSeq.sequence.length; supCol++) {
-            if (representativeSeq.sequence[supCol] !== '-') {
-              supResCount++;
-              const realResidueNum = supOffset + supResCount;
-              visualizedDisplayPositions[supCol] = realResidueNum;
-              console.log(`  Sup_reps col ${supCol} → real residue #${realResidueNum} (AA: ${representativeSeq.sequence[supCol]})`);
-            }
-          }
-
-          console.log(`\nVisualized positions:`, Object.entries(visualizedDisplayPositions).map(([pos, res]) => `pos${pos}→res#${res}`).join(', '));
-
-          // Use family alignment sequences for logo generation
-          const sequences = familySequences.map(s => s.sequence);
-          const positionData: Record<number, PositionLogoData> = {};
-
-          console.log('\n--- Mapping to family alignment columns ---');
-          
-          // For each sup_reps position that will be visualized
-          Object.entries(visualizedDisplayPositions).forEach(([supColStr, realResidueNum]) => {
-            const supCol = parseInt(supColStr);
-            console.log(`\nMapping sup_reps col ${supCol} (real residue #${realResidueNum}):`);
-            
-            // Find the family alignment column for this REAL residue number
-            // Extract family acc1 range offset
-            const famRange = extractSeqRange(familyRepSeq.header);
-            const famOffset = famRange ? famRange.start - 1 : 0;
-            
-            let familyCol = -1;
-            let famResCount = 0;
-            
-            for (let i = 0; i < familyRepSeq.sequence.length; i++) {
-              if (familyRepSeq.sequence[i] !== '-') {
-                famResCount++;
-                const famRealRes = famOffset + famResCount;
-                if (famRealRes === realResidueNum) {
-                  familyCol = i;
-                  console.log(`  Found real residue #${realResidueNum} at family col ${familyCol} (AA: ${familyRepSeq.sequence[i]})`);
-                  break;
-                }
-              }
-            }
-
-            if (familyCol === -1) {
-              console.warn(`  ❌ Could not find family alignment column for real residue ${realResidueNum}`);
-              return;
-            }
-
-            // Extract column from family alignment
-            const familyColumnSequences = sequences.map(seq => seq[familyCol] || '-');
-            const uniqueAAs = [...new Set(familyColumnSequences.filter(aa => aa !== '-'))];
-            console.log(`  Family col ${familyCol} diversity: [${uniqueAAs.join(', ')}] (${familyColumnSequences.filter(aa => aa !== '-').length}/${familyColumnSequences.length} non-gaps)`);
-            
-            // Since familyColumnSequences is already extracted column data, use position 0
-            const calculatedData = calculateEnhancedPositionLogoData(0, familyColumnSequences);
-            
-            const hasMeaningfulData = calculatedData.informationContent > 0 || 
-                                     (calculatedData.matchPercentage && calculatedData.matchPercentage > 0) ||
-                                     Object.keys(calculatedData.letterHeights).length > 0;
-            
-            console.log(`  Logo data - IC: ${calculatedData.informationContent.toFixed(3)}, meaningful: ${hasMeaningfulData}`);
-            
-            if (calculatedData.totalSequences > 0 && hasMeaningfulData) {
-              // Get GPCRdb number from conservation data
-              // Map acc1 real residue to acc2 real residue, then look up conservation
-              const acc2ResNum = acc1ToAcc2ResMap[realResidueNum] || realResidueNum;
-              const consData = conservationData[acc2ResNum.toString()];
-              const gpcrdb = consData?.gpcrdb || acc2ResNum.toString();
-              
-              console.log(`  GPCRdb: acc1 real res #${realResidueNum} → acc2 real res #${acc2ResNum} → "${gpcrdb}"`);
-              
-              // Store at sup_reps column position for aligned visualization
-              positionData[supCol] = {
-                position: supCol + 1,
-                msaColumn: supCol,
-                residueCounts: calculatedData.residueCounts,
-                totalSequences: calculatedData.totalSequences,
-                informationContent: calculatedData.informationContent,
-                letterHeights: calculatedData.letterHeights,
-                matchPercentage: calculatedData.matchPercentage,
-                mostConservedAA: calculatedData.mostConservedAA,
-                matchCounts: calculatedData.matchCounts,
-                gpcrdb: gpcrdb
-              };
-              
-              console.log(`  ✅ Created logo for sup_reps col ${supCol} (was family col ${familyCol})`);
-            } else {
-              console.log(`  ⚠️ Skipping - no meaningful data`);
-            }
-          });
-
-          console.log(`\n${className} final position data keys: [${Object.keys(positionData).join(', ')}]`);
-          console.log(`=== End ${className} processing ===\n`);
-
-          alignmentPositionData[className] = positionData;
-          
-          // Update globalMaxPosition for class-wide alignments
-          if (Object.keys(positionData).length > 0) {
-            const maxPos = Math.max(...Object.keys(positionData).map(Number));
-            globalMaxPosition = Math.max(globalMaxPosition, maxPos + 1); // +1 because positions are 0-based
-            console.log(`Updated globalMaxPosition to ${globalMaxPosition} for ${className}`);
-          }
-        } catch (error) {
-          console.error(`Error processing class alignment ${className}:`, error);
-        }
+    for (let pos = 0; pos < globalMaxPosition; pos++) {
+      const crossConservation = calculateCrossAlignmentConservation(pos, alignmentPositionData);
+      crossAlignmentConservation[pos] = {
+        matchPercentage: crossConservation.matchPercentage,
+        data: crossConservation
       };
+    }
 
-      // Process all class-wide alignments
-      for (const className of selectedClassAlignments) {
-        await processClassAlignment(className);
-      }
-      
-      // Continue with existing cross-alignment conservation logic...
-      // Calculate cross-alignment conservation for all positions
-      const crossAlignmentConservation: Record<number, { 
-        matchPercentage: number; 
-        data: {
-          matchPercentage: number;
-          mostConservedAA: string;
-          alignmentAAs: Record<string, string>;
-          matchCount: number;
-          totalAlignments: number;
-        };
-      }> = {};
-      
-      for (let pos = 0; pos < globalMaxPosition; pos++) {
-        const crossConservation = calculateCrossAlignmentConservation(pos, alignmentPositionData);
-        crossAlignmentConservation[pos] = {
-          matchPercentage: crossConservation.matchPercentage,
-          data: crossConservation
-        };
-      }
+    let allowedPositions = new Set<number>();
+    for (let pos = 0; pos < globalMaxPosition; pos++) {
+      const allGaps = selectedAlignments.every((alignmentName) => {
+        const position = alignmentPositionData[alignmentName]?.[pos];
+        return !position || Object.keys(position.residueCounts || {}).length === 0;
+      });
 
-      // Build final data with all positions, marking those below threshold for blurring
-      const processedAlignmentData: Record<string, Record<number, PositionLogoData>> = {};
-      // Use selection order to maintain user's preferred ordering, but ensure all selected alignments are included
-      const allSelected = [...selectedAlignments, ...selectedClassAlignments];
-      const allSelectedAlignments = allSelected; // Order maintained by parent
-      
-      // Pre-filter positions based on conservation criteria
-      let allowedPositions = new Set<number>();
-      for (let pos = 0; pos < globalMaxPosition; pos++) {
-        // Check if all alignments have gaps at this position
-        const allGaps = allSelectedAlignments.every(alignmentName => {
-          const d = alignmentPositionData[alignmentName]?.[pos];
-          if (!d) return true;
-          const counts = d.residueCounts || {};
-          return Object.keys(counts).length === 0;
-        });
-        
-        if (allGaps) {
-          continue; // Skip gap-only columns
-        }
-        
-        // Conservation filtering: Check if enough families meet the conservation threshold
-        if (minConservationThreshold > 0 && minFamiliesCount > 0) {
-          let familiesAboveThreshold = 0;
-          
-          allSelectedAlignments.forEach(alignmentName => {
-            const posData = alignmentPositionData[alignmentName]?.[pos];
-            if (posData && posData.residueCounts) {
-              const totalSequences = posData.totalSequences || 0;
-              if (totalSequences > 0) {
-                const maxCount = Math.max(...Object.values(posData.residueCounts));
-                const conservationPercentage = (maxCount / totalSequences) * 100;
-                
-                if (conservationPercentage >= minConservationThreshold) {
-                  familiesAboveThreshold++;
-                }
-              }
-            }
-          });
-          
-          // Only allow this position if enough families meet the conservation threshold
-          if (familiesAboveThreshold >= minFamiliesCount) {
-            allowedPositions.add(pos);
+      if (allGaps) continue;
+
+      if (minConservationThreshold > 0 && minFamiliesCount > 0) {
+        let familiesAboveThreshold = 0;
+
+        selectedAlignments.forEach((alignmentName) => {
+          const position = alignmentPositionData[alignmentName]?.[pos];
+          const totalSequences = position?.totalSequences || 0;
+          const counts = Object.values(position?.residueCounts || {});
+          if (totalSequences === 0 || counts.length === 0) return;
+
+          const conservationPercentage = (Math.max(...counts) / totalSequences) * 100;
+          if (conservationPercentage >= minConservationThreshold) {
+            familiesAboveThreshold++;
           }
-        } else {
-          // No conservation filtering, allow all non-gap positions
+        });
+
+        if (familiesAboveThreshold >= minFamiliesCount) {
           allowedPositions.add(pos);
         }
+      } else {
+        allowedPositions.add(pos);
       }
-      // If external filteredPositions provided, intersect to only those positions
-      if (filteredPositions && filteredPositions.length > 0) {
-        const externalSet = new Set<number>(filteredPositions);
-        allowedPositions = new Set(Array.from(allowedPositions).filter(p => externalSet.has(p)));
-      }
+    }
 
-      allSelectedAlignments.forEach(name => {
-        const positionData = alignmentPositionData[name] || {};
-        const processedPositions: Record<number, PositionLogoData> = {};
-        
-        // Include only pre-filtered positions
-        for (const pos of allowedPositions) {
-          // Check if this position has data in any alignment
-          const hasDataInAnyAlignment = allSelectedAlignments.some(alignmentName => 
-            alignmentPositionData[alignmentName]?.[pos]
-          );
-          
-          if (hasDataInAnyAlignment) {
-            const currentPositionData = positionData[pos];
-            const crossConservation = crossAlignmentConservation[pos];
-            
-            if (currentPositionData) {
-              // Position has data in this alignment
-              const shouldBlur = useSimpleConservation ? 
-                crossConservation.matchPercentage < conservationThreshold :
-                false; // For entropy method, we could add similar logic if needed
-              
-              processedPositions[pos] = {
-                ...currentPositionData,
-                msaColumn: pos, // Ensure MSA column is preserved
-                crossAlignmentData: {
-                  alignmentAAs: crossConservation.data.alignmentAAs,
-                  matchCount: crossConservation.data.matchCount,
-                  totalAlignments: crossConservation.data.totalAlignments,
-                  conservationPercentage: crossConservation.matchPercentage,
-                  shouldBlur
-                }
-              };
-            } else {
-              // Position doesn't have data in this alignment, create empty placeholder
-              processedPositions[pos] = {
-                position: pos + 1,
-                msaColumn: pos, // Original MSA column position (0-based)
-                residueCounts: {},
-                totalSequences: 0,
-                informationContent: 0,
-                letterHeights: {},
-                crossAlignmentData: {
-                  alignmentAAs: crossConservation.data.alignmentAAs,
-                  matchCount: crossConservation.data.matchCount,
-                  totalAlignments: crossConservation.data.totalAlignments,
-                  conservationPercentage: crossConservation.matchPercentage,
-                  shouldBlur: useSimpleConservation ? 
-                    crossConservation.matchPercentage < conservationThreshold : false
-                }
-              };
-            }
-          }
-        }
-        
-        processedAlignmentData[name] = processedPositions;
-      });
+    if (filteredPositions && filteredPositions.length > 0) {
+      const externalSet = new Set<number>(filteredPositions);
+      allowedPositions = new Set(Array.from(allowedPositions).filter((position) => externalSet.has(position)));
+    }
 
-      // Build final logo data
-      const finalData = allSelectedAlignments.map(name => {
-        const positionData = processedAlignmentData[name] || {};
-        const logoData: PositionLogoData[] = [];
+    const finalData = selectedAlignments.map((name) => {
+      const positionData = alignmentPositionData[name] || {};
+      const logoData: PositionLogoData[] = [];
 
-        // Get all positions and sort them
-        const allPositions = Object.keys(positionData).map(Number).sort((a, b) => a - b);
+      Array.from(allowedPositions)
+        .sort((a, b) => a - b)
+        .forEach((pos, index) => {
+          const currentPositionData = positionData[pos] || {
+            position: pos + 1,
+            msaColumn: pos,
+            residueCounts: {},
+            totalSequences: 0,
+            informationContent: 0,
+            letterHeights: {}
+          };
+          const crossConservation = crossAlignmentConservation[pos];
+          const shouldBlur = useSimpleConservation
+            ? (crossConservation?.matchPercentage || 0) < conservationThreshold
+            : false;
 
-        const positionsToInclude = allPositions;
-        
-        positionsToInclude.forEach((pos, index) => {
-          const data = positionData[pos];
           logoData.push({
-            ...data,
-            position: index + 1 // Consecutive numbering for display
+            ...currentPositionData,
+            position: index + 1,
+            msaColumn: pos,
+            crossAlignmentData: {
+              alignmentAAs: crossConservation?.data.alignmentAAs || {},
+              matchCount: crossConservation?.data.matchCount || 0,
+              totalAlignments: crossConservation?.data.totalAlignments || selectedAlignments.length,
+              conservationPercentage: crossConservation?.matchPercentage || 0,
+              shouldBlur
+            }
           });
         });
 
-        return { receptorName: name, logoData };
-      });
+      return { receptorName: name, logoData };
+    });
 
-      setProcessedReceptorData(finalData);
-      console.log('✅ Data processing complete:', finalData.length, 'alignments processed');
-    };
-
-    processData();
+    setProcessedReceptorData(finalData);
   }, [
-    dataLoaded, 
-    allData, 
-    selectedAlignments, 
-    selectedClassAlignments, 
-    calculateEnhancedPositionLogoData, 
-    conservationThreshold, 
-    useSimpleConservation, 
-    calculateCrossAlignmentConservation, 
+    mappingsLoaded,
+    mappingData,
+    selectedAlignments,
+    conservationThreshold,
+    useSimpleConservation,
+    calculateCrossAlignmentConservation,
     minConservationThreshold,
     minFamiliesCount,
-    referenceMaps, 
-    humanRefSequences,
-    classWideData,
-    classDataLoaded,
-    familyToAcc1,
-    familyToAcc2,
-    supRepSequences,
-    folder
+    filteredPositions
   ]);
 
   // Display statistics function removed - no longer needed
@@ -1832,8 +796,8 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder, getDisplayNam
     URL.revokeObjectURL(url);
   };
 
-  // Track previous data to avoid unnecessary rebuilds
-  const [previousDataHash, setPreviousDataHash] = useState<string>('');
+  // Track previous data without triggering a render-effect cleanup cycle.
+  const previousDataHashRef = useRef('');
 
   // Render chart
   useEffect(() => {
@@ -1843,18 +807,25 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder, getDisplayNam
     if (!yAxisContainer || !chartContainer) return;
     let cancelled = false;
 
-    if (!dataLoaded || (selectedAlignments.length === 0 && selectedClassAlignments.length === 0)) {
+    if (!mappingsLoaded || selectedAlignments.length === 0) {
       // Clear chart when no selections
       const oldTooltips = document.querySelectorAll('.logo-tooltip');
       oldTooltips.forEach(tooltip => tooltip.remove());
       yAxisContainer.innerHTML = '';
       chartContainer.innerHTML = '';
-      setPreviousDataHash('');
+      previousDataHashRef.current = '';
       return;
     }
 
     const receptorData = processedReceptorData;
-    if (!receptorData.length || !receptorData.some(d => d.logoData.length > 0)) return;
+    if (!receptorData.length || !receptorData.some(d => d.logoData.length > 0)) {
+      const oldTooltips = document.querySelectorAll('.logo-tooltip');
+      oldTooltips.forEach(tooltip => tooltip.remove());
+      yAxisContainer.innerHTML = '';
+      chartContainer.innerHTML = '';
+      previousDataHashRef.current = '';
+      return;
+    }
 
     // Create a hash to detect if data actually changed
     const currentDataHash = JSON.stringify({
@@ -1868,7 +839,7 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder, getDisplayNam
     });
 
     // Only rebuild if data actually changed
-    if (currentDataHash !== previousDataHash) {
+    if (currentDataHash !== previousDataHashRef.current) {
       console.log('Data changed, rebuilding chart...');
       
       // Clean up
@@ -1879,7 +850,7 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder, getDisplayNam
       chartContainer.innerHTML = '';
 
       renderChartAfterGlyphPreload(receptorData);
-      setPreviousDataHash(currentDataHash);
+      previousDataHashRef.current = currentDataHash;
     } else {
       console.log('Data unchanged, skipping chart rebuild');
     }
@@ -1904,8 +875,12 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder, getDisplayNam
       if (!yAxisContainer || !chartContainer) return;
 
       const margin = { top: 20, right: 20, bottom: 20, left: 20 };
-      const groupLabelWidth = 50; // Space for group labels on the left
-      const yAxisWidth = 120 + groupLabelWidth; // Increased to accommodate group labels
+      const groupLabelWidth = 56;
+      const rowLabelWidth = 92;
+      const axisGutter = 24;
+      const yAxisWidth = groupLabelWidth + rowLabelWidth + axisGutter;
+      const rowLabelX = groupLabelWidth + rowLabelWidth - 8;
+      const axisX = groupLabelWidth + rowLabelWidth + 4;
       const barWidthEstimate = 18;
 
       // Map: position -> amino acid -> array of row indices (which receptor rows share that AA)
@@ -2133,7 +1108,7 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder, getDisplayNam
         const yLabel = yAxisSvg
           .append('text')
           .attr('text-anchor', 'end')
-          .attr('x', yAxisWidth - 10) // Position after group labels
+          .attr('x', rowLabelX)
           .attr('y', receptorY + logoAreaHeight / 2 + 5)
           .attr('class', 'text-foreground fill-current')
           .style('font-size', '12px')
@@ -2158,7 +1133,7 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder, getDisplayNam
           .tickSize(0);
         yAxisSvg
           .append('g')
-          .attr('transform', `translate(${yAxisWidth - 1}, ${receptorY})`)
+          .attr('transform', `translate(${axisX}, ${receptorY})`)
           .attr('class', 'axis')
           .call(yAxis)
           .call(g => g.select('.domain')
@@ -2187,7 +1162,7 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder, getDisplayNam
           const groupCenterY = (groupStartY + groupEndY) / 2;
           
           // Draw vertical line spanning the full height of the group rows
-          const lineX = yAxisWidth - 80; // Position line closer to row labels
+          const lineX = groupLabelWidth - 12;
           yAxisSvg.append('line')
             .attr('x1', lineX)
             .attr('y1', groupStartY)
@@ -2198,7 +1173,7 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder, getDisplayNam
             .attr('class', 'text-foreground stroke-current');
           
           // Draw vertical text label (larger than row labels, positioned near the line)
-          const textX = lineX - 20;
+          const textX = 18;
           yAxisSvg.append('text')
             .attr('x', textX)
             .attr('y', groupCenterY)
@@ -2639,20 +1614,15 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder, getDisplayNam
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    dataLoaded, 
+    mappingsLoaded, 
     selectedAlignments, 
-    selectedClassAlignments, 
     processedReceptorData, 
     rowHeight, 
-    gapBetweenReceptors,
     minConservationThreshold,
     minFamiliesCount,
     showReferenceRows,
     showProteinRegions,
-    referenceDataLoaded,
     referenceInfo,
-    referenceMaps,
-    previousDataHash,
     // Stable function references - these rarely change
     getResidueColor, 
     loadCustomSvgLetter, 
@@ -2662,7 +1632,6 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder, getDisplayNam
     getDisplayName,
     getPlotDisplayName,
     receptorGroups
-    // Note: manualClassifications is tracked via the hash (previousDataHash) to avoid reference issues
   ]);
 
   // Keep chart mounted during loading/processing; show non-blocking overlay instead
@@ -2691,13 +1660,16 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, folder, getDisplayNam
 
       {/* Chart container placeholder (SVGs rendered via d3) */}
       <div className="relative w-full overflow-hidden mb-4 rounded-md bg-transparent">
-        {selectedAlignments.length === 0 && selectedClassAlignments.length === 0 && (
+        {selectedAlignments.length === 0 && (
           <div className="w-full text-center py-12 text-muted-foreground">
             <p className="text-lg">Select families from the controls above to generate sequence logos</p>
           </div>
         )}
-        <div ref={yAxisContainerRef} className="absolute left-0 top-0 z-10 bg-transparent" />
-        <div className="overflow-x-auto overflow-y-hidden pl-[80px]">
+        <div
+          ref={yAxisContainerRef}
+          className="absolute left-0 top-0 z-20 h-full w-[172px] overflow-hidden bg-background"
+        />
+        <div className="overflow-x-auto overflow-y-hidden pl-[172px]">
           <div ref={chartContainerRef} className="h-full w-max min-w-full" />
         </div>
       </div>

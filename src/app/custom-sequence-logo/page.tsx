@@ -5,6 +5,49 @@ import CustomSequenceLogo from '@/components/CustomSequenceLogo';
 import { Card, CardContent } from '@/components/ui/card';
 import FamilyScatterPlot from '@/components/FamilyScatterPlot';
 
+// Family selection IDs. Runtime logo/scatter data comes from public/mappings/*.json.
+// STE2 has been removed as requested.
+const fastaNames = [
+  'classA_genes_filtered_db_FAMSA.ref_trimmed',
+  'classB1_genes_filtered_db_FAMSA.ref_trimmed',
+  'classB2_genes_filtered_db_FAMSA.ref_trimmed',
+  'classC_genes_filtered_db_FAMSA.ref_trimmed',
+  'classF_genes_filtered_db_FAMSA.ref_trimmed',
+  'FSLB_genes_filtered_db_FAMSA.ref_trimmed',
+  'classT_genes_filtered_db_FAMSA.ref_trimmed',
+  'Olfactory_genes_filtered_db_FAMSA.ref_trimmed',
+  'GPR1_genes_filtered_db_FAMSA.ref_trimmed',
+  'GP143_genes_filtered_db_FAMSA.ref_trimmed',
+  'GP157_genes_filtered_db_FAMSA.ref_trimmed',
+  'cAMP_genes_filtered_db_FAMSA.ref_trimmed',
+  'STE3_genes_filtered_db_FAMSA.ref_trimmed',
+  'Vomeronasal1_genes_filtered_db_FAMSA.ref_trimmed',
+  'Vomeronasal2_genes_filtered_db_FAMSA.ref_trimmed',
+  'Mth_genes_filtered_db_FAMSA.ref_trimmed',
+  'Nematode_genes_filtered_db_FAMSA.ref_trimmed'
+];
+
+// Custom order for "Select All".
+const selectAllOrder = [
+  'classA_genes_filtered_db_FAMSA.ref_trimmed',
+  'Olfactory_genes_filtered_db_FAMSA.ref_trimmed',
+  'classT_genes_filtered_db_FAMSA.ref_trimmed',
+  'Vomeronasal1_genes_filtered_db_FAMSA.ref_trimmed',
+  'Nematode_genes_filtered_db_FAMSA.ref_trimmed',
+  'GPR1_genes_filtered_db_FAMSA.ref_trimmed',
+  'cAMP_genes_filtered_db_FAMSA.ref_trimmed',
+  'classF_genes_filtered_db_FAMSA.ref_trimmed',
+  'FSLB_genes_filtered_db_FAMSA.ref_trimmed',
+  'GP143_genes_filtered_db_FAMSA.ref_trimmed',
+  'GP157_genes_filtered_db_FAMSA.ref_trimmed',
+  'Mth_genes_filtered_db_FAMSA.ref_trimmed',
+  'classB2_genes_filtered_db_FAMSA.ref_trimmed',
+  'classB1_genes_filtered_db_FAMSA.ref_trimmed',
+  'STE3_genes_filtered_db_FAMSA.ref_trimmed',
+  'classC_genes_filtered_db_FAMSA.ref_trimmed',
+  'Vomeronasal2_genes_filtered_db_FAMSA.ref_trimmed'
+];
+
 export default function CustomSequenceLogoPage() {
   const [filteredPositions, setFilteredPositions] = useState<number[]>([]);
   const [selectedFamilies, setSelectedFamilies] = useState<string[]>([]);
@@ -69,51 +112,6 @@ export default function CustomSequenceLogoPage() {
     
     return plotNameMap[baseName] || baseName;
   }, []);
-  // All FASTA files in the custom_msa folder (without .fasta extension)
-  // STE2 has been removed as requested
-  const fastaNames = [
-    'classA_genes_filtered_db_FAMSA.ref_trimmed',
-    'classB1_genes_filtered_db_FAMSA.ref_trimmed',
-    'classB2_genes_filtered_db_FAMSA.ref_trimmed',
-    'classC_genes_filtered_db_FAMSA.ref_trimmed',
-    'classF_genes_filtered_db_FAMSA.ref_trimmed',
-    'FSLB_genes_filtered_db_FAMSA.ref_trimmed',
-    'classT_genes_filtered_db_FAMSA.ref_trimmed',
-    'Olfactory_genes_filtered_db_FAMSA.ref_trimmed',
-    'GPR1_genes_filtered_db_FAMSA.ref_trimmed',
-    'GP143_genes_filtered_db_FAMSA.ref_trimmed',
-    'GP157_genes_filtered_db_FAMSA.ref_trimmed',
-    'cAMP_genes_filtered_db_FAMSA.ref_trimmed',
-    'STE3_genes_filtered_db_FAMSA.ref_trimmed',
-    'Vomeronasal1_genes_filtered_db_FAMSA.ref_trimmed',
-    'Vomeronasal2_genes_filtered_db_FAMSA.ref_trimmed',
-    'Mth_genes_filtered_db_FAMSA.ref_trimmed',
-    'Nematode_genes_filtered_db_FAMSA.ref_trimmed'
-  ];
-
-  // Custom order for "Select All": classA, Olfactory, classT, Vomeronasal1, Nematode, GPR1, cAMP, classF, GP143, Mth, ClassB2, ClassB1, STE3, ClassC, Vomeronasal2
-  const selectAllOrder = [
-    'classA_genes_filtered_db_FAMSA.ref_trimmed',
-    'Olfactory_genes_filtered_db_FAMSA.ref_trimmed',
-    'classT_genes_filtered_db_FAMSA.ref_trimmed',
-    'Vomeronasal1_genes_filtered_db_FAMSA.ref_trimmed',
-    'Nematode_genes_filtered_db_FAMSA.ref_trimmed',
-    'GPR1_genes_filtered_db_FAMSA.ref_trimmed',
-    'cAMP_genes_filtered_db_FAMSA.ref_trimmed',
-    'classF_genes_filtered_db_FAMSA.ref_trimmed',
-    'FSLB_genes_filtered_db_FAMSA.ref_trimmed',
-    'GP143_genes_filtered_db_FAMSA.ref_trimmed',
-    'GP157_genes_filtered_db_FAMSA.ref_trimmed',
-    'Mth_genes_filtered_db_FAMSA.ref_trimmed',
-    'classB2_genes_filtered_db_FAMSA.ref_trimmed',
-    'classB1_genes_filtered_db_FAMSA.ref_trimmed',
-    'STE3_genes_filtered_db_FAMSA.ref_trimmed',
-    'classC_genes_filtered_db_FAMSA.ref_trimmed',
-    'Vomeronasal2_genes_filtered_db_FAMSA.ref_trimmed'
-  ];
-
-  const folder = '/custom_msa';
-
   const handleAlignmentToggle = (name: string) => {
     const newSelection = selectedAlignments.includes(name) 
       ? selectedAlignments.filter(n => n !== name)
@@ -143,7 +141,6 @@ export default function CustomSequenceLogoPage() {
             <div className="flex-1 lg:w-1/2">
               <FamilyScatterPlot
                 fastaNames={fastaNames}
-                folder={folder}
                 getDisplayName={getDisplayName}
                 onSelectionChange={(positions) => setFilteredPositions(positions)}
                 selectedFamilies={selectedFamilies}
@@ -318,7 +315,6 @@ export default function CustomSequenceLogoPage() {
           <div className="overflow-auto">
             <CustomSequenceLogo
               fastaNames={fastaNames}
-              folder={folder}
               getDisplayName={getDisplayName}
               getPlotDisplayName={getPlotDisplayName}
               filteredPositions={filteredPositions}
