@@ -25,7 +25,7 @@ interface Props {
   minFamiliesCount?: number; // Minimum families count from parent
 }
 
-// Map file base to family key used by public/mappings/*.json
+// Map file base to family key used by public/superfamily_logo_mappings/*.json
 const fileBaseToFamily: Record<string, string> = {
   'classA_genes_filtered_db_FAMSA.ref_trimmed': 'classA',
   'classB1_genes_filtered_db_FAMSA.ref_trimmed': 'classB1',
@@ -98,7 +98,7 @@ const FamilyScatterPlot: React.FC<Props> = ({ fastaNames, onSelectionChange, hei
             const fam = fileBaseToFamily[fileBase];
             if (!fam) return null;
             try {
-              const res = await fetch(`/mappings/${fam}.json`);
+              const res = await fetch(`/superfamily_logo_mappings/${fam}.json`);
               if (!res.ok) return null;
               const data = (await res.json()) as FamilyMapping;
               return [fam, data] as const;

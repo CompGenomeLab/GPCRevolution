@@ -2,13 +2,13 @@ import fs from 'fs';
 import path from 'path';
 
 const ROOT = path.resolve('.');
-const CUSTOM_MSA_DIR = path.join(ROOT, 'public', 'custom_msa');
+const SUPERFAMILY_LOGO_SOURCE_DIR = path.join(ROOT, 'public', 'superfamily_logo_source_files');
 const CONSERVATION_DIR = path.join(ROOT, 'public', 'conservation_files');
-const OUTPUT_DIR = path.join(ROOT, 'public', 'mappings');
+const SUPERFAMILY_LOGO_MAPPINGS_DIR = path.join(ROOT, 'public', 'superfamily_logo_mappings');
 
 // Families to process are driven by trim_info.tsv
-const TRIM_INFO = path.join(CUSTOM_MSA_DIR, 'trim_info.tsv');
-const SUP_REPS = path.join(CUSTOM_MSA_DIR, 'sup_reps_noClassC_noSTE3_linsi_trimends_treein_einsi_ep0.123_missing_added_reps_only.fasta');
+const TRIM_INFO = path.join(SUPERFAMILY_LOGO_SOURCE_DIR, 'trim_info.tsv');
+const SUP_REPS = path.join(SUPERFAMILY_LOGO_SOURCE_DIR, 'sup_reps_noClassC_noSTE3_linsi_trimends_treein_einsi_ep0.123_missing_added_reps_only.fasta');
 
 function readText(filePath) {
   return fs.readFileSync(filePath, 'utf8');
@@ -107,7 +107,7 @@ function findSequenceByAcc(sequences, acc) {
 }
 
 function precomputeForFamily({ familyKey, acc1, acc2, supRepMap, supRepSeqs }) {
-  const familyFasta = path.join(CUSTOM_MSA_DIR, `${familyKey}_genes_filtered_db_FAMSA.ref_trimmed.fasta`);
+  const familyFasta = path.join(SUPERFAMILY_LOGO_SOURCE_DIR, `${familyKey}_genes_filtered_db_FAMSA.ref_trimmed.fasta`);
   if (!fs.existsSync(familyFasta)) {
     console.warn(`Skipping ${familyKey}: missing ${path.basename(familyFasta)}`);
     return null;
@@ -236,10 +236,10 @@ function precomputeForFamily({ familyKey, acc1, acc2, supRepMap, supRepSeqs }) {
 function main() {
   console.log('Starting mapping generation...');
   console.log('ROOT:', ROOT);
-  console.log('CUSTOM_MSA_DIR:', CUSTOM_MSA_DIR);
-  console.log('OUTPUT_DIR:', OUTPUT_DIR);
+  console.log('SUPERFAMILY_LOGO_SOURCE_DIR:', SUPERFAMILY_LOGO_SOURCE_DIR);
+  console.log('SUPERFAMILY_LOGO_MAPPINGS_DIR:', SUPERFAMILY_LOGO_MAPPINGS_DIR);
   
-  fs.mkdirSync(OUTPUT_DIR, { recursive: true });
+  fs.mkdirSync(SUPERFAMILY_LOGO_MAPPINGS_DIR, { recursive: true });
 
   const supSeqs = parseFasta(readText(SUP_REPS));
   const supRepMap = {};
@@ -263,14 +263,14 @@ function main() {
     const result = precomputeForFamily({ familyKey, acc1, acc2, supRepMap, supRepSeqs: supSeqs });
     if (!result) continue;
 
-    const outFile = path.join(OUTPUT_DIR, `${familyKey}.json`);
+    const outFile = path.join(SUPERFAMILY_LOGO_MAPPINGS_DIR, `${familyKey}.json`);
     fs.writeFileSync(outFile, JSON.stringify(result));
     outSummaries.push({ familyKey, length: result.length, acc1 });
     console.log(`Wrote ${path.relative(ROOT, outFile)} (len=${result.length})`);
   }
 
   // Write an index file
-  const indexFile = path.join(OUTPUT_DIR, 'index.json');
+  const indexFile = path.join(SUPERFAMILY_LOGO_MAPPINGS_DIR, 'index.json');
   fs.writeFileSync(indexFile, JSON.stringify(outSummaries));
   console.log(`Wrote ${path.relative(ROOT, indexFile)} with ${outSummaries.length} entries`);
   console.log('✅ All mappings generated successfully!');

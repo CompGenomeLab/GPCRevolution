@@ -46,7 +46,7 @@ next-env.d.ts
 /src/components/CurationCombinedTreeAlignment.tsx
 
 # large local alignment sources and intermediate MSA experiments
-/public/custom_msa/*_genes_filtered_db_FAMSA.ref_trimmed.fasta
-/public/custom_msa/All_reps_*.fasta
-/public/custom_msa/sup_reps_*ginsi*.fasta
-/public/custom_msa/trimmed_kpicgappy_and_fullSTE23-classCV2R_reps_combined_linsi.fasta
+/public/superfamily_logo_source_files/*_genes_filtered_db_FAMSA.ref_trimmed.fasta
+/public/superfamily_logo_source_files/All_reps_*.fasta
+/public/superfamily_logo_source_files/sup_reps_*ginsi*.fasta
+/public/superfamily_logo_source_files/trimmed_kpicgappy_and_fullSTE23-classCV2R_reps_combined_linsi.fasta

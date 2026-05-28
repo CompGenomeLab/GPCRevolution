@@ -2,12 +2,12 @@ import fs from 'fs';
 import path from 'path';
 
 const ROOT = path.resolve('.');
-const CUSTOM_MSA_DIR = path.join(ROOT, 'public', 'custom_msa');
+const SUPERFAMILY_LOGO_SOURCE_DIR = path.join(ROOT, 'public', 'superfamily_logo_source_files');
 const CONSERVATION_DIR = path.join(ROOT, 'public', 'conservation_files');
-const OUTPUT_DIR = path.join(ROOT, 'public', 'mappings');
+const SUPERFAMILY_LOGO_MAPPINGS_DIR = path.join(ROOT, 'public', 'superfamily_logo_mappings');
 
 // Families to process are driven by trim_info.tsv
-const TRIM_INFO = path.join(CUSTOM_MSA_DIR, 'trim_info.tsv');
+const TRIM_INFO = path.join(SUPERFAMILY_LOGO_SOURCE_DIR, 'trim_info.tsv');
 const SUP_REPS = resolveFastaPath({
   label: 'representative combined alignment',
   preferredNames: [
@@ -23,30 +23,30 @@ function readText(filePath) {
 
 function listCustomMsaFastas() {
   return fs
-    .readdirSync(CUSTOM_MSA_DIR)
+    .readdirSync(SUPERFAMILY_LOGO_SOURCE_DIR)
     .filter((fileName) => fileName.toLowerCase().endsWith('.fasta'))
     .sort();
 }
 
 function resolveFastaPath({ label, preferredNames = [], predicate }) {
   for (const fileName of preferredNames) {
-    const filePath = path.join(CUSTOM_MSA_DIR, fileName);
+    const filePath = path.join(SUPERFAMILY_LOGO_SOURCE_DIR, fileName);
     if (fs.existsSync(filePath)) return filePath;
   }
 
   const candidates = listCustomMsaFastas().filter(predicate);
   if (candidates.length === 0) {
-    throw new Error(`Could not find ${label} in ${CUSTOM_MSA_DIR}`);
+    throw new Error(`Could not find ${label} in ${SUPERFAMILY_LOGO_SOURCE_DIR}`);
   }
   if (candidates.length > 1) {
     console.warn(`Multiple candidates for ${label}; using ${candidates[0]}`);
   }
-  return path.join(CUSTOM_MSA_DIR, candidates[0]);
+  return path.join(SUPERFAMILY_LOGO_SOURCE_DIR, candidates[0]);
 }
 
 function resolveFamilyFasta(familyKey) {
   const preferredName = `${familyKey}_genes_filtered_db_FAMSA.ref_trimmed.fasta`;
-  const preferredPath = path.join(CUSTOM_MSA_DIR, preferredName);
+  const preferredPath = path.join(SUPERFAMILY_LOGO_SOURCE_DIR, preferredName);
   if (fs.existsSync(preferredPath)) return preferredPath;
 
   const familyPrefix = familyKey.toLowerCase();
@@ -62,7 +62,7 @@ function resolveFamilyFasta(familyKey) {
   if (candidates.length > 1) {
     console.warn(`Multiple candidates for ${familyKey}; using ${candidates[0]}`);
   }
-  return path.join(CUSTOM_MSA_DIR, candidates[0]);
+  return path.join(SUPERFAMILY_LOGO_SOURCE_DIR, candidates[0]);
 }
 
 function parseFasta(text) {
@@ -286,7 +286,7 @@ function precomputeForFamily({ familyKey, acc1, acc2, supRepMap, supRepSeqs }) {
 }
 
 function main() {
-  fs.mkdirSync(OUTPUT_DIR, { recursive: true });
+  fs.mkdirSync(SUPERFAMILY_LOGO_MAPPINGS_DIR, { recursive: true });
 
   console.log(`Using representative alignment: ${path.relative(ROOT, SUP_REPS)}`);
   const supSeqs = parseFasta(readText(SUP_REPS));
@@ -310,14 +310,14 @@ function main() {
     const result = precomputeForFamily({ familyKey, acc1, acc2, supRepMap, supRepSeqs: supSeqs });
     if (!result) continue;
 
-    const outFile = path.join(OUTPUT_DIR, `${familyKey}.json`);
+    const outFile = path.join(SUPERFAMILY_LOGO_MAPPINGS_DIR, `${familyKey}.json`);
     fs.writeFileSync(outFile, JSON.stringify(result));
     outSummaries.push({ familyKey, length: result.length, acc1 });
     console.log(`Wrote ${path.relative(ROOT, outFile)} (len=${result.length})`);
   }
 
   // Write an index file
-  const indexFile = path.join(OUTPUT_DIR, 'index.json');
+  const indexFile = path.join(SUPERFAMILY_LOGO_MAPPINGS_DIR, 'index.json');
   fs.writeFileSync(indexFile, JSON.stringify(outSummaries));
   console.log(`Wrote ${path.relative(ROOT, indexFile)} with ${outSummaries.length} entries`);
 }

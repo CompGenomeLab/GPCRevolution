@@ -60,6 +60,8 @@ interface Props {
   showReferenceRowsExternal?: boolean;
   /** Optional external control of showProteinRegions */
   showProteinRegionsExternal?: boolean;
+  /** Optional external control of which family's GPCRdb row drives protein region blocks */
+  regionSourceAlignmentExternal?: string | null;
   /** Optional external control of row height */
   rowHeightExternal?: number;
   /** Optional external control of min conservation threshold */
@@ -114,7 +116,7 @@ const fileBaseToFamily: Record<string, string> = {
   'Nematode_genes_filtered_db_FAMSA.ref_trimmed': 'Nematode'
 };
 
-const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotDisplayName, filteredPositions, onSelectedAlignmentsChange, selectedAlignmentsExternal, showReferenceRowsExternal, showProteinRegionsExternal, rowHeightExternal, minConservationThresholdExternal, minFamiliesCountExternal }) => {
+const SuperfamilyLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotDisplayName, filteredPositions, onSelectedAlignmentsChange, selectedAlignmentsExternal, showReferenceRowsExternal, showProteinRegionsExternal, regionSourceAlignmentExternal, rowHeightExternal, minConservationThresholdExternal, minFamiliesCountExternal }) => {
   const yAxisContainerRef = useRef<HTMLDivElement>(null);
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -208,6 +210,7 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPl
   /* ─── Reference GPCRdb info rows ─────────────────────────────── */
   const [showReferenceRows, setShowReferenceRows] = useState(false);
   const [showProteinRegions, setShowProteinRegions] = useState(false);
+  const [regionSourceAlignment, setRegionSourceAlignment] = useState<string | null>(null);
   
   // Sync with external showReferenceRows when provided
   useEffect(() => {
@@ -222,6 +225,24 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPl
       setShowProteinRegions(showProteinRegionsExternal);
     }
   }, [showProteinRegionsExternal]);
+
+  // Sync selected region source alignment when externally controlled
+  useEffect(() => {
+    if (regionSourceAlignmentExternal !== undefined) {
+      setRegionSourceAlignment(regionSourceAlignmentExternal);
+    }
+  }, [regionSourceAlignmentExternal]);
+
+  // Ensure region source is always a currently selected alignment
+  useEffect(() => {
+    if (selectedAlignments.length === 0) {
+      setRegionSourceAlignment(null);
+      return;
+    }
+    if (!regionSourceAlignment || !selectedAlignments.includes(regionSourceAlignment)) {
+      setRegionSourceAlignment(selectedAlignments[0]);
+    }
+  }, [selectedAlignments, regionSourceAlignment]);
   
   const referenceInfo = useMemo(() => {
     return selectedAlignments
@@ -230,11 +251,12 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPl
         const gpcrdbMap = positions.map((position) => position?.gpcrdb || '');
         if (!gpcrdbMap.some(Boolean)) return null;
         return {
+          alignmentName: name,
           label: fileBaseToFamily[name] || name,
           gpcrdbMap
         };
       })
-      .filter((item): item is { label: string; gpcrdbMap: string[] } => Boolean(item));
+      .filter((item): item is { alignmentName: string; label: string; gpcrdbMap: string[] } => Boolean(item));
   }, [mappingData, selectedAlignments]);
 
   // (Column width slider removed – fixed width used)
@@ -407,7 +429,7 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPl
           const familyKey = fileBaseToFamily[name];
           if (!familyKey) return null;
 
-          const response = await fetch(`/mappings/${familyKey}.json`);
+          const response = await fetch(`/superfamily_logo_mappings/${familyKey}.json`);
           if (!response.ok) {
             console.warn(`Failed to load mapping JSON for ${familyKey}: ${response.status}`);
             return null;
@@ -742,7 +764,7 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPl
     const blob = new Blob([svgWithDeclaration], { type: 'image/svg+xml' });
     const url = URL.createObjectURL(blob);
 
-    const fileName = `custom_sequence_logo.svg`;
+    const fileName = `superfamily_logo.svg`;
     const link = document.createElement('a');
     link.href = url;
     link.download = fileName;
@@ -789,7 +811,7 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPl
     const url = URL.createObjectURL(epsBlob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'custom_sequence_logo.eps';
+    a.download = 'superfamily_logo.eps';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -879,8 +901,10 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPl
       const rowLabelWidth = 92;
       const axisGutter = 24;
       const yAxisWidth = groupLabelWidth + rowLabelWidth + axisGutter;
-      const rowLabelX = groupLabelWidth + rowLabelWidth - 8;
-      const axisX = groupLabelWidth + rowLabelWidth + 4;
+      // Keep logo row labels and reference row labels aligned to the same right edge.
+      const rowLabelX = yAxisWidth - 10;
+      // Per-row axis line should sit exactly at the start of the logo chart.
+      const axisX = yAxisWidth - 1;
       const barWidthEstimate = 18;
 
       // Map: position -> amino acid -> array of row indices (which receptor rows share that AA)
@@ -956,7 +980,7 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPl
       const proteinRegions: Array<{start: number; end: number; label: string}> = [];
       
       if (showProteinRegions && referenceInfo.length > 0) {
-        // Detect protein regions based on GPCRdb numbering
+        // Detect protein regions from a single selected family's GPCRdb numbering.
         const regionMap: Record<string, string> = {
           '1': 'TM1',
           '2': 'TM2', 
@@ -969,83 +993,145 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPl
           '45': 'ECL2'
         };
         
-        let currentRegion: string | null = null;
-        let regionStart = -1;
-        
+        const sourceReference =
+          referenceInfo.find((ref) => ref.alignmentName === regionSourceAlignment) ||
+          referenceInfo[0];
+        const sourceGpcrdbMap = sourceReference?.gpcrdbMap || [];
+
+        // Step 1: explicit labels derived directly from GPCRdb prefixes.
+        const explicitLabels: Array<string | null> = new Array(positionsWithData.length).fill(null);
         positionsWithData.forEach((pos, index) => {
           // Get the MSA column for this display position
           const msaCol = allPositionsWithMsa.get(pos);
-          if (msaCol === undefined) return;
-          
-          // Get GPCRdb numbers for this MSA column across all reference rows
-          const gpcrdbNumbers = referenceInfo.map(ref => ref.gpcrdbMap[msaCol] || '').filter(n => n && n.includes('x'));
-          
-          if (gpcrdbNumbers.length === 0) {
-            // No GPCRdb numbers, end current region
-            if (currentRegion && regionStart >= 0) {
-              proteinRegions.push({start: regionStart, end: index - 1, label: currentRegion});
-            }
-            currentRegion = null;
-            regionStart = -1;
+          if (msaCol === undefined) {
+            explicitLabels[index] = null;
             return;
           }
-          
-          // Extract the region prefix (before 'x') from all GPCRdb numbers
-          const regionPrefixes = gpcrdbNumbers.map(n => n.split('x')[0]).filter(p => p);
-          
-          if (regionPrefixes.length === 0) {
-            // No valid prefixes, end current region
-            if (currentRegion && regionStart >= 0) {
-              proteinRegions.push({start: regionStart, end: index - 1, label: currentRegion});
-            }
-            currentRegion = null;
-            regionStart = -1;
+
+          const gpcrdbNumber = sourceGpcrdbMap[msaCol] || '';
+          if (!gpcrdbNumber || !gpcrdbNumber.includes('x')) {
+            explicitLabels[index] = null;
             return;
           }
-          
-          // Check if all prefixes are the same
-          const allSame = regionPrefixes.every(p => p === regionPrefixes[0]);
-          
-          if (!allSame) {
-            // Conflicting regions, end current region
-            if (currentRegion && regionStart >= 0) {
-              proteinRegions.push({start: regionStart, end: index - 1, label: currentRegion});
-            }
-            currentRegion = null;
-            regionStart = -1;
+
+          const prefix = gpcrdbNumber.split('x')[0];
+          if (!prefix) {
+            explicitLabels[index] = null;
             return;
           }
-          
-          // All agree on the same region prefix
-          const prefix = regionPrefixes[0];
+
           const regionLabel = regionMap[prefix];
-          
           if (!regionLabel) {
-            // Unknown region, end current region
+            explicitLabels[index] = null;
+            return;
+          }
+          explicitLabels[index] = regionLabel;
+        });
+
+        // Step 2: infer loop/termini labels in unlabeled stretches based on neighboring anchors.
+        const inferredLabels = [...explicitLabels];
+        const loopBetween: Record<string, string> = {
+          'TM1|TM2': 'ICL1',
+          'TM2|TM3': 'ECL1',
+          'TM3|TM4': 'ICL2',
+          'TM4|TM5': 'ECL2',
+          'TM5|TM6': 'ICL3',
+          'TM6|TM7': 'ECL3',
+          'TM7|H8': 'ICL4'
+        };
+
+        let firstTM1Index = -1;
+        let lastTM7Index = -1;
+        let lastH8Index = -1;
+        inferredLabels.forEach((label, idx) => {
+          if (label === 'TM1' && firstTM1Index === -1) firstTM1Index = idx;
+          if (label === 'TM7') lastTM7Index = idx;
+          if (label === 'H8') lastH8Index = idx;
+        });
+
+        // N-terminus: before TM1.
+        if (firstTM1Index > 0) {
+          for (let i = 0; i < firstTM1Index; i++) {
+            if (!inferredLabels[i]) inferredLabels[i] = 'N-terminus';
+          }
+        }
+
+        // C-terminus: after H8 (or after TM7 if H8 is absent).
+        const cTermStart = lastH8Index >= 0 ? lastH8Index + 1 : (lastTM7Index >= 0 ? lastTM7Index + 1 : -1);
+        if (cTermStart >= 0) {
+          for (let i = cTermStart; i < inferredLabels.length; i++) {
+            if (!inferredLabels[i]) inferredLabels[i] = 'C-terminus';
+          }
+        }
+
+        // Fill interior unlabeled stretches with loop labels inferred from surrounding anchors.
+        let i = 0;
+        while (i < inferredLabels.length) {
+          if (inferredLabels[i]) {
+            i++;
+            continue;
+          }
+          const start = i;
+          while (i < inferredLabels.length && !inferredLabels[i]) i++;
+          const end = i - 1;
+
+          const leftLabel = start > 0 ? inferredLabels[start - 1] : null;
+          const rightLabel = i < inferredLabels.length ? inferredLabels[i] : null;
+          const inferredLoop = leftLabel && rightLabel ? loopBetween[`${leftLabel}|${rightLabel}`] : null;
+          const bridgeSameLabel = leftLabel && rightLabel && leftLabel === rightLabel ? leftLabel : null;
+          const bridgeECL2 =
+            leftLabel && rightLabel &&
+            ((leftLabel === 'TM4' && rightLabel === 'ECL2') ||
+             (leftLabel === 'ECL2' && rightLabel === 'TM5') ||
+             (leftLabel === 'TM4' && rightLabel === 'TM5'))
+              ? 'ECL2'
+              : null;
+          const fillLabel = inferredLoop || bridgeSameLabel || bridgeECL2;
+          if (fillLabel) {
+            for (let j = start; j <= end; j++) {
+              inferredLabels[j] = fillLabel;
+            }
+          }
+        }
+
+        // Step 3: convert labels to contiguous region blocks.
+        let currentRegion: string | null = null;
+        let regionStart = -1;
+        inferredLabels.forEach((label, idx) => {
+          if (!label) {
             if (currentRegion && regionStart >= 0) {
-              proteinRegions.push({start: regionStart, end: index - 1, label: currentRegion});
+              proteinRegions.push({ start: regionStart, end: idx - 1, label: currentRegion });
             }
             currentRegion = null;
             regionStart = -1;
             return;
           }
-          
-          if (currentRegion === regionLabel) {
-            // Continue current region
+          if (currentRegion === label) {
             return;
-          } else {
-            // New region starts
-            if (currentRegion && regionStart >= 0) {
-              proteinRegions.push({start: regionStart, end: index - 1, label: currentRegion});
-            }
-            currentRegion = regionLabel;
-            regionStart = index;
           }
+          if (currentRegion && regionStart >= 0) {
+            proteinRegions.push({ start: regionStart, end: idx - 1, label: currentRegion });
+          }
+          currentRegion = label;
+          regionStart = idx;
         });
-        
-        // Close any remaining region
         if (currentRegion && regionStart >= 0) {
-          proteinRegions.push({start: regionStart, end: positionsWithData.length - 1, label: currentRegion});
+          proteinRegions.push({ start: regionStart, end: inferredLabels.length - 1, label: currentRegion });
+        }
+
+        // Merge same-label regions even when they were split by unassigned/bridged gaps.
+        if (proteinRegions.length > 1) {
+          const mergedRegions: Array<{ start: number; end: number; label: string }> = [];
+          proteinRegions.forEach((region) => {
+            const previous = mergedRegions[mergedRegions.length - 1];
+            if (previous && previous.label === region.label) {
+              previous.end = Math.max(previous.end, region.end);
+            } else {
+              mergedRegions.push({ ...region });
+            }
+          });
+          proteinRegions.length = 0;
+          proteinRegions.push(...mergedRegions);
         }
         
         proteinRegionAreaHeight = proteinRegions.length > 0 ? proteinRegionHeight + 8 : 0;
@@ -1153,6 +1239,13 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPl
 
         // Only draw if group has members in current selection
         if (groupReceptorIndices.length > 0) {
+          const sortedIndices = [...groupReceptorIndices].sort((a, b) => a - b);
+          const isContiguous = sortedIndices.every((idx, i) => idx === sortedIndices[0] + i);
+          // Skip annotation when members are split into interrupted segments.
+          if (!isContiguous) {
+            return;
+          }
+
           const firstIndex = Math.min(...groupReceptorIndices);
           const lastIndex = Math.max(...groupReceptorIndices);
           
@@ -1162,7 +1255,8 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPl
           const groupCenterY = (groupStartY + groupEndY) / 2;
           
           // Draw vertical line spanning the full height of the group rows
-          const lineX = groupLabelWidth - 12;
+          // Position group annotation closer to row labels/axis to reduce left whitespace.
+          const lineX = groupLabelWidth + 6;
           yAxisSvg.append('line')
             .attr('x1', lineX)
             .attr('y1', groupStartY)
@@ -1173,7 +1267,7 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPl
             .attr('class', 'text-foreground stroke-current');
           
           // Draw vertical text label (larger than row labels, positioned near the line)
-          const textX = 18;
+          const textX = lineX - 14;
           yAxisSvg.append('text')
             .attr('x', textX)
             .attr('y', groupCenterY)
@@ -1638,28 +1732,31 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPl
 
   return (
     <div className="max-w-7xl mx-auto">
-      {/* Controls - simplified, main controls moved to parent */}
-      <div className="flex items-center gap-2 mb-6">
-        <button
-          type="button"
-          onClick={downloadSVG}
-          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border text-sm hover:bg-accent"
-        >
-          <Download className="h-4 w-4" />
-          Download SVG
-        </button>
-        <button
-          type="button"
-          onClick={downloadEPS}
-          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border text-sm hover:bg-accent"
-        >
-          <Download className="h-4 w-4" />
-          Download EPS
-        </button>
+      {/* Section header + top-right download actions */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
+        <h3 className="text-xl font-semibold">Superfamily Logo</h3>
+        <div className="flex items-center gap-2 sm:justify-end">
+          <button
+            type="button"
+            onClick={downloadSVG}
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border text-sm hover:bg-accent"
+          >
+            <Download className="h-4 w-4" />
+            Download SVG
+          </button>
+          <button
+            type="button"
+            onClick={downloadEPS}
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border text-sm hover:bg-accent"
+          >
+            <Download className="h-4 w-4" />
+            Download EPS
+          </button>
+        </div>
       </div>
 
       {/* Chart container placeholder (SVGs rendered via d3) */}
-      <div className="relative w-full overflow-hidden mb-4 rounded-md bg-transparent">
+      <div className="relative w-full overflow-hidden mb-4 rounded-md bg-background">
         {selectedAlignments.length === 0 && (
           <div className="w-full text-center py-12 text-muted-foreground">
             <p className="text-lg">Select families from the controls above to generate sequence logos</p>
@@ -1669,7 +1766,7 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPl
           ref={yAxisContainerRef}
           className="absolute left-0 top-0 z-20 h-full w-[172px] overflow-hidden bg-background"
         />
-        <div className="overflow-x-auto overflow-y-hidden pl-[172px]">
+        <div className="overflow-x-auto overflow-y-hidden pl-[172px] bg-background">
           <div ref={chartContainerRef} className="h-full w-max min-w-full" />
         </div>
       </div>
@@ -1724,4 +1821,4 @@ const CustomSequenceLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPl
   );
 };
 
-export default CustomSequenceLogo; 
+export default SuperfamilyLogo;

@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useCallback, useState } from 'react';
-import CustomSequenceLogo from '@/components/CustomSequenceLogo';
+import SuperfamilyLogo from '@/components/SuperfamilyLogo';
 import { Card, CardContent } from '@/components/ui/card';
 import FamilyScatterPlot from '@/components/FamilyScatterPlot';
+import { Button } from '@/components/ui/button';
 
-// Family selection IDs. Runtime logo/scatter data comes from public/mappings/*.json.
+// Family selection IDs. Runtime logo/scatter data comes from public/superfamily_logo_mappings/*.json.
 // STE2 has been removed as requested.
 const fastaNames = [
   'classA_genes_filtered_db_FAMSA.ref_trimmed',
@@ -48,12 +49,13 @@ const selectAllOrder = [
   'Vomeronasal2_genes_filtered_db_FAMSA.ref_trimmed'
 ];
 
-export default function CustomSequenceLogoPage() {
+export default function SuperfamilyLogoPage() {
   const [filteredPositions, setFilteredPositions] = useState<number[]>([]);
   const [selectedFamilies, setSelectedFamilies] = useState<string[]>([]);
   const [selectedAlignments, setSelectedAlignments] = useState<string[]>([]);
   const [showReferenceRows, setShowReferenceRows] = useState(false);
   const [showProteinRegions, setShowProteinRegions] = useState(false);
+  const [regionSourceAlignment, setRegionSourceAlignment] = useState<string | null>(null);
   const [rowHeight, setRowHeight] = useState(30);
   const [minConservationThreshold, setMinConservationThreshold] = useState(0);
   const [minFamiliesCount, setMinFamiliesCount] = useState(0);
@@ -131,8 +133,27 @@ export default function CustomSequenceLogoPage() {
     setSelectedFamilies([]);
   };
 
+  React.useEffect(() => {
+    if (selectedAlignments.length === 0) {
+      setRegionSourceAlignment(null);
+      return;
+    }
+    if (!regionSourceAlignment || !selectedAlignments.includes(regionSourceAlignment)) {
+      setRegionSourceAlignment(selectedAlignments[0]);
+    }
+  }, [selectedAlignments, regionSourceAlignment]);
+
   return (
     <div className="container mx-auto p-6 max-w-7xl">
+      <div className="max-w-6xl space-y-4 mb-6">
+        <h1 className="text-3xl font-bold text-left">Superfamily Logo Comparison</h1>
+        <p className="text-base text-muted-foreground text-left">
+          Compare sequence conservation logos across selected GPCR families at the superfamily level.
+          Use the scatter plot and filters to focus informative positions, then inspect GPCRdb numbering
+          and inferred region blocks for the selected family context.
+        </p>
+      </div>
+
       {/* Combined Controls and Scatter Plot Section */}
       <Card className="mb-6">
         <CardContent className="p-6">
@@ -162,18 +183,24 @@ export default function CustomSequenceLogoPage() {
                 <div className="flex items-center justify-between mb-2">
                   <label className="text-sm font-medium">Select Families:</label>
                   <div className="flex gap-2">
-                    <button
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
                       onClick={handleSelectAll}
-                      className="text-xs px-2 py-1 bg-primary hover:bg-primary/90 text-primary-foreground rounded"
+                      className="h-7 px-2 text-xs"
                     >
                       All
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
                       onClick={handleSelectNone}
-                      className="text-xs px-2 py-1 bg-muted hover:bg-muted/80 text-muted-foreground rounded"
+                      className="h-7 px-2 text-xs"
                     >
                       None
-                    </button>
+                    </Button>
                   </div>
                 </div>
                 <div className="flex-grow overflow-y-auto border rounded p-2">
@@ -303,6 +330,26 @@ export default function CustomSequenceLogoPage() {
                     Show Protein Regions
                   </label>
                 </div>
+                {showProteinRegions && (
+                  <div className="flex items-center gap-2">
+                    <label htmlFor="protein-region-source" className="text-sm">
+                      Region Family:
+                    </label>
+                    <select
+                      id="protein-region-source"
+                      value={regionSourceAlignment || ''}
+                      onChange={(e) => setRegionSourceAlignment(e.target.value || null)}
+                      className="h-8 rounded border bg-background px-2 text-sm text-foreground"
+                      disabled={selectedAlignments.length === 0}
+                    >
+                      {selectedAlignments.map((name) => (
+                        <option key={name} value={name}>
+                          {getDisplayName(name)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -313,7 +360,7 @@ export default function CustomSequenceLogoPage() {
       <Card>
         <CardContent className="p-6">
           <div className="overflow-auto">
-            <CustomSequenceLogo
+            <SuperfamilyLogo
               fastaNames={fastaNames}
               getDisplayName={getDisplayName}
               getPlotDisplayName={getPlotDisplayName}
@@ -321,6 +368,7 @@ export default function CustomSequenceLogoPage() {
               selectedAlignmentsExternal={selectedAlignments}
               showReferenceRowsExternal={showReferenceRows}
               showProteinRegionsExternal={showProteinRegions}
+              regionSourceAlignmentExternal={regionSourceAlignment}
               rowHeightExternal={rowHeight}
               minConservationThresholdExternal={minConservationThreshold}
               minFamiliesCountExternal={minFamiliesCount}
