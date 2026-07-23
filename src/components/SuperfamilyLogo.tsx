@@ -170,7 +170,7 @@ const SuperfamilyLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotD
   // Define receptor groupings
   const receptorGroups = useMemo(() => [
     {
-      name: 'Class A-like',
+      name: 'Rhodopsin-related',
       members: [
         'classA_genes_filtered_db_FAMSA.ref_trimmed',
         'Olfactory_genes_filtered_db_FAMSA.ref_trimmed',
@@ -180,7 +180,7 @@ const SuperfamilyLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotD
       ]
     },
     {
-      name: 'cAMP-like',
+      name: 'cAMP-related',
       members: [
         'GPR1_genes_filtered_db_FAMSA.ref_trimmed',
         'cAMP_genes_filtered_db_FAMSA.ref_trimmed',
@@ -195,7 +195,7 @@ const SuperfamilyLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotD
       ]
     },
     {
-      name: 'Class C-like',
+      name: 'Glutamate-related',
       members: [
         'classC_genes_filtered_db_FAMSA.ref_trimmed',
         'Vomeronasal2_genes_filtered_db_FAMSA.ref_trimmed'

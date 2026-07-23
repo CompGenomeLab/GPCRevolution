@@ -54,3 +54,36 @@ You can use `.env.local` during development. See `.env.local.example`.
 Notes:
 - GA4 reports: Acquisition (source/medium/referrals) and Demographics (country/city).
 - GA4 does not identify individual users; data is aggregate. Ensure cookie/consent compliance as required.
+
+## Phyletic-distribution taxonomy tree
+
+Generate the NCBI Taxonomy hierarchy used by the hidden phyletic-distribution
+tool:
+
+```bash
+npm run generate:phyletic-tree
+```
+
+The generator reads
+`public/phyletic-distribution/taxonomy_eukaryotes_filtered.json` and writes
+`public/phyletic-distribution/taxonomy_eukaryotes_filtered.nwk` plus
+`public/phyletic-distribution/taxonomy_eukaryotes_filtered.tree-order.json`.
+
+- Newick tips are NCBI taxIDs so they map directly to visualization records.
+- Every populated taxonomy field is retained, including `Cellular Root`, all
+  named ranks, `Clade` through `Clade 21`, and `No Rank` through `No Rank 3`.
+  Empty and `NA` values never create nodes.
+- Because the JSON stores ranked and unranked fields in separate flattened
+  columns, groups are nested by containment of their sampled descendant taxa.
+  Repeated names in different lineages are separated by broader context.
+- Multifurcations are preserved as nodes with any number of children; the tree
+  is never forced into a binary topology.
+- The companion order file is the authoritative leaf order used by the
+  visualization, preventing the taxonomy bars and tree tips from diverging.
+- Branch lengths are layout distances, not evolutionary distances. The whole
+  hierarchy is stretched to the available height; lineages may contain
+  different numbers of populated taxonomy layers while all tips stay aligned.
+
+For future visualization, prune the tree by visible taxID tips and retain child
+arrays of arbitrary length. The NCBI tree should be described as a taxonomy
+hierarchy and displayed as a cladogram by default.
