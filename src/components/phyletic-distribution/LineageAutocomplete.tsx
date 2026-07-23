@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
 interface LineageAutocompleteProps {
@@ -16,6 +16,7 @@ export default function LineageAutocomplete({
 }: LineageAutocompleteProps) {
   const [value, setValue] = useState('')
   const [open, setOpen] = useState(false)
+  const menuId = useId()
   const inputRef = useRef<HTMLInputElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0, width: 0 })
@@ -79,6 +80,7 @@ export default function LineageAutocomplete({
         value={value}
         role="combobox"
         aria-autocomplete="list"
+        aria-controls={menuId}
         aria-expanded={open}
         onChange={event => {
           setValue(event.target.value)
@@ -94,6 +96,7 @@ export default function LineageAutocomplete({
       {open && typeof document !== 'undefined' && createPortal(
         <div
           ref={menuRef}
+          id={menuId}
           role="listbox"
           className="fixed z-[100100] rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-lg"
           style={{

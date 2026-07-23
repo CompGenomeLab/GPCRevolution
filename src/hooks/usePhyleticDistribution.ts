@@ -108,10 +108,6 @@ const ALL_LEVELS: TaxonomicLevel[] = [
   'genus',
   'species',
 ];
-const GOLDEN = 0.618033988749895;
-
-// using internal fallback colors for legends only; rectangle colors are inlined in VisualizationCanvas
-
 export function usePhyleticDistribution() {
   const [state, setState] = useState<VisualizationState>({
     originalRaw: [],
@@ -156,25 +152,6 @@ export function usePhyleticDistribution() {
 
   // Visualization modes for rug rendering
   const [rugMode, setRugMode] = useState<'normalized' | 'binary' | 'heatmap'>('binary');
-
-  // Global color mapping to ensure consistent colors across all data changes
-  const globalColorMapRef = useRef<{ [key: string]: string }>({});
-  
-  // Soft but visible color generator using HSL color space
-  const generatePastelColor = useCallback((index: number): string => {
-    // Keep lineage cache stable but unused now for rectangle drawing
-    const FALLBACK_COLORS = ['#231F20','#FCB315','#7CAEC4','#DD6030','#7D2985','#B4B4B4'];
-    return FALLBACK_COLORS[index % FALLBACK_COLORS.length];
-  }, []);
-  
-  // Get or assign color for a specific lineage
-  const getLineageColor = useCallback((lineageName: string): string => {
-    if (!globalColorMapRef.current[lineageName]) {
-      const existingColors = Object.keys(globalColorMapRef.current).length;
-      globalColorMapRef.current[lineageName] = generatePastelColor(existingColors);
-    }
-    return globalColorMapRef.current[lineageName];
-  }, [generatePastelColor]);
 
   // Load taxonomy data on component mount
   useEffect(() => {
@@ -236,11 +213,12 @@ export function usePhyleticDistribution() {
       const normalizedRecords: TaxonomyRecord[] = jsonData.map((rec) => {
         const out: TaxonomyRecord = { ...rec };
         // ensure canonical taxID
-        out.taxID = String((rec as any)[taxIdActualKey] ?? '');
+        out.taxID = String(rec[taxIdActualKey] ?? '');
         for (const level of ALL_LEVELS) {
           const actual = lowerToActualKey.get(level.toLowerCase());
-          if (actual && (rec as any)[actual] !== undefined && (rec as any)[actual] !== null && String((rec as any)[actual]).trim() !== '') {
-            (out as any)[level] = (rec as any)[actual];
+          const value = actual ? rec[actual] : undefined;
+          if (value !== undefined && value !== null && String(value).trim() !== '') {
+            out[level] = value;
           }
         }
         return out;
@@ -281,7 +259,7 @@ export function usePhyleticDistribution() {
       for (const record of normalizedData) {
         for (const key of Object.keys(record)) {
           if (key.toLowerCase() === 'taxid') continue;
-          const val = (record as any)[key];
+          const val = record[key];
           if (val !== undefined && val !== null && String(val).trim() !== '') {
             levelHasValue.set(key, true);
           } else if (!levelHasValue.has(key)) {
@@ -299,8 +277,9 @@ export function usePhyleticDistribution() {
       const options = Array.from(
         new Set(
           normalizedData
-            .flatMap(d => dynamicLevels.map(l => (d as any)[l] as string).filter(Boolean))
-            .map(String)
+            .flatMap(record => dynamicLevels.map(level => record[level]))
+            .filter(value => value !== undefined && value !== null && String(value).trim() !== '')
+            .map(value => String(value))
         )
       ).sort();
       setLineageOptions(options);
@@ -404,7 +383,7 @@ export function usePhyleticDistribution() {
       matrix,
       countMap,
     };
-  }, [parseTSVCounts]);
+  }, []);
 
   const loadTSVData = useCallback((tsvText: string, label = 'source data') => {
     defaultTSVTextRef.current = tsvText;
