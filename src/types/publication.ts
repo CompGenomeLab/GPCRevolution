@@ -36,7 +36,7 @@ export interface Publication {
   url?: string;
   /** Optional one-line context shown under the reference. */
   note?: string;
-  /** Which parts of GPCRevolution this reference should be cited for. */
+  /** Which parts of the GPCR Evolution Database this reference should be cited for. */
   citeFor?: {
     data?: CiteForItem[];
     tools?: CiteForItem[];

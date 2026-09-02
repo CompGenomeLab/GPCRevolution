@@ -30,10 +30,11 @@ export default function CiteUsPage() {
       <div className="max-w-3xl mx-auto space-y-4">
         <h1 className="text-3xl font-bold text-left">Cite Us</h1>
         <p className="text-base text-muted-foreground text-left">
-          If GPCRevolution contributed to your work, please cite the publications listed below. Each
-          entry states which data and tools it covers, so cite the ones you actually used — a study
-          that relies on both the resource and the underlying evolutionary data should cite both.
-          Every reference can be copied or downloaded in plain text, BibTeX and RIS format.
+          If the GPCR Evolution Database contributed to your work, please cite the publications
+          listed below. Each entry states which data and tools it covers, so cite the ones you
+          actually used — a study that relies on both the resource and the underlying evolutionary
+          data should cite both. Every reference can be copied or downloaded in plain text, BibTeX
+          and RIS format.
         </p>
       </div>
 

@@ -1,7 +1,8 @@
 import type { Publication } from '@/types/publication';
 
 /**
- * References for GPCRevolution, grouped by year on the page. Within a year,
+ * References for the GPCR Evolution Database, grouped by year on the page.
+ * Within a year,
  * unpublished manuscripts (those with a `status`) come first.
  */
 export const publications: Publication[] = [
