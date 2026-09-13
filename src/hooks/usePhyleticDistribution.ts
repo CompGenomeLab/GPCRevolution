@@ -1,7 +1,11 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import * as d3 from 'd3';
 import LineageAutocomplete from '@/components/phyletic-distribution/LineageAutocomplete';
-import { sortPhyleticGenes } from '@/lib/phyletic-distribution-families';
+import {
+  makePhyleticUserGeneKey,
+  sortPhyleticGenes,
+  stripPhyleticCountSuffix,
+} from '@/lib/phyletic-distribution-families';
 import type { 
   TaxonomyRecord, 
   GeneCountData, 
@@ -300,9 +304,16 @@ export function usePhyleticDistribution() {
       throw new Error('taxID column not found in TSV file');
     }
 
+    const seenColumnNames = new Set<string>();
     const countColumns = header
       .map((name, index) => ({ name: name.trim(), index }))
-      .filter(({ name }) => name.endsWith('_count'));
+      .filter(({ name }) => name.endsWith('_count'))
+      // A file that repeats a column name would otherwise lose one of the two.
+      .map(({ name, index }) => {
+        const uniqueName = makePhyleticUserGeneKey(name, seenColumnNames);
+        seenColumnNames.add(uniqueName);
+        return { name: uniqueName, index };
+      });
     const geneNames = countColumns.map(column => column.name);
     const countMap = new Map<string, GeneCountData>();
     let totalInputWithAnyCount = 0;
@@ -347,7 +358,17 @@ export function usePhyleticDistribution() {
     defaultData: ReturnType<typeof parseTSVCounts>,
     customData?: ReturnType<typeof parseTSVCounts>,
   ) => {
-    const customGeneNames = customData?.geneNames || [];
+    // Keep user columns separate from source columns: a user column whose name
+    // already exists in the source data gets an asterisk appended to its key so
+    // both series survive the merge instead of one overwriting the other.
+    const takenNames = new Set(defaultData.geneNames);
+    const customKeyByColumn = new Map<string, string>();
+    const customGeneNames = (customData?.geneNames || []).map(column => {
+      const key = makePhyleticUserGeneKey(column, takenNames);
+      takenNames.add(key);
+      customKeyByColumn.set(column, key);
+      return key;
+    });
     const geneNames = [...defaultData.geneNames, ...customGeneNames];
     const geneIndex = new Map(geneNames.map((gene, index) => [gene, index]));
     const matrix = new Uint8Array(geneNames.length * prev.taxonCount);
@@ -360,7 +381,10 @@ export function usePhyleticDistribution() {
 
       const defaultCounts = defaultData.countMap.get(taxID) || {};
       const customCounts = customData?.countMap.get(taxID) || {};
-      const combinedCounts: GeneCountData = { ...defaultCounts, ...customCounts };
+      const combinedCounts: GeneCountData = { ...defaultCounts };
+      Object.entries(customCounts).forEach(([column, count]) => {
+        combinedCounts[customKeyByColumn.get(column) || column] = count;
+      });
       countMap.set(taxID, combinedCounts);
 
       geneNames.forEach((gene, genePosition) => {
@@ -644,7 +668,7 @@ export function usePhyleticDistribution() {
     setState(prev => ({
       ...prev,
       isLoading: true,
-      loadingMessage: `Filtering taxa by ${family === 'ANY' ? 'any family' : family.replace(/_count$/, '')} count ≥ ${minimum}...`,
+      loadingMessage: `Filtering taxa by ${family === 'ANY' ? 'any family' : stripPhyleticCountSuffix(family)} count ≥ ${minimum}...`,
     }));
 
     setTimeout(() => {
@@ -816,7 +840,7 @@ export function usePhyleticDistribution() {
         
         const oldN = prev.geneNames.length;
         const label = (a: string, b: string) => 
-          `${a.replace(/_count$/, '')}${useCounts ? '>' : '-'}${b.replace(/_count$/, '')}`;
+          `${stripPhyleticCountSuffix(a)}${useCounts ? '>' : '-'}${stripPhyleticCountSuffix(b)}`;
         
         const name1 = label(gene1, gene2);
         const name2 = label(gene2, gene1);

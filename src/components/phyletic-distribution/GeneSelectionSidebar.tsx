@@ -20,6 +20,7 @@ import {
   formatPhyleticGeneMenuTooltip,
   isGProteinSignalingControl,
   isHousekeepingControl,
+  isPhyleticUserRenamedGene,
   sortPhyleticGenes,
 } from '@/lib/phyletic-distribution-families'
 
@@ -197,6 +198,12 @@ export function GeneSelectionSidebar({
                 icon={<Upload className="h-4 w-4 text-muted-foreground" />}
                 onToggleGene={onToggleGene}
               />
+              {customGeneNames.some(isPhyleticUserRenamedGene) && (
+                <p className="pl-6 text-xs text-muted-foreground">
+                  Columns marked with * share a name with a source column and are kept as
+                  separate tracks.
+                </p>
+              )}
             </>
           )}
 

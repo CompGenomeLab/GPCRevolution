@@ -235,7 +235,9 @@ export function ControlPanel({
         <ControlHeading title="User Data" hintId="phyletic-hint-user" hintLabel="About User Data">
           Add a tab-separated table with one row per taxon, a <span className="font-mono">taxID</span>{' '}
           column, and numeric family columns ending in <span className="font-mono">_count</span>.
-          User tracks are added alongside the selected GPCR table rather than replacing it.
+          User tracks are added alongside the selected GPCR table rather than replacing it. A
+          column whose name matches one in the source table is kept as its own track and marked
+          with an asterisk (*).
         </ControlHeading>
         <Button onClick={onLoadTSV} size="sm" className="h-7 px-2 text-xs">
           Add TSV

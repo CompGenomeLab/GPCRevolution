@@ -61,19 +61,51 @@ const G_PROTEIN_SIGNALING_CONTROLS = new Set<string>([
   'Ggamma_count',
 ])
 
+/**
+ * Columns uploaded by the user whose name collides with a source column are kept
+ * separate by appending one or more asterisks to the internal key. Splitting the
+ * key lets labels and tooltips be built from the original column name while the
+ * asterisks stay visible to the reader.
+ */
+export function splitPhyleticUserSuffix(gene: string): [string, string] {
+  const match = /\*+$/.exec(gene)
+  if (!match) return [gene, '']
+  return [gene.slice(0, gene.length - match[0].length), match[0]]
+}
+
+export function isPhyleticUserRenamedGene(gene: string) {
+  return /\*+$/.test(gene)
+}
+
+/** Build a key for a user column that does not clash with any name already taken. */
+export function makePhyleticUserGeneKey(gene: string, taken: Set<string>) {
+  let key = gene
+  while (taken.has(key)) key += '*'
+  return key
+}
+
+export function stripPhyleticCountSuffix(gene: string) {
+  const [base, suffix] = splitPhyleticUserSuffix(gene)
+  return base.replace(/_count$/, '') + suffix
+}
+
 export function formatPhyleticGeneLabel(gene: string) {
-  return GENE_LABELS[gene] || gene.replace(/_count$/, '')
+  const [base, suffix] = splitPhyleticUserSuffix(gene)
+  return (GENE_LABELS[base] || base.replace(/_count$/, '')) + suffix
 }
 
 export function formatPhyleticGeneMenuLabel(gene: string) {
-  if (gene === 'Vomeronasal1_count') return 'V1R'
-  if (gene === 'Vomeronasal2_count') return 'V2R'
+  const [base, suffix] = splitPhyleticUserSuffix(gene)
+  if (base === 'Vomeronasal1_count') return `V1R${suffix}`
+  if (base === 'Vomeronasal2_count') return `V2R${suffix}`
   return formatPhyleticGeneLabel(gene)
 }
 
 export function formatPhyleticGeneMenuTooltip(gene: string) {
-  if (gene === 'RBP1_count') return 'DNA-directed RNA polymerase II subunit RPB1'
-  if (gene === 'TBP_count') return 'TATA-box-binding protein'
+  const [base, suffix] = splitPhyleticUserSuffix(gene)
+  if (suffix) return `${formatPhyleticGeneLabel(gene)} (from your uploaded file)`
+  if (base === 'RBP1_count') return 'DNA-directed RNA polymerase II subunit RPB1'
+  if (base === 'TBP_count') return 'TATA-box-binding protein'
   return formatPhyleticGeneLabel(gene)
 }
 
