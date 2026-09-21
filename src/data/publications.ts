@@ -7,15 +7,15 @@ import type { Publication } from '@/types/publication';
  */
 export const publications: Publication[] = [
   {
-    // TODO: on publication, replace the title with the final one and add
-    // `authors`, `journal`, `year`, `doi` and `pmid`. Delete `status` once
-    // `year` is set — the card then shows the full citation formats
-    // automatically.
+    // TODO: on journal publication, replace `journal` with the final venue and
+    // add `volume`, `issue`, `pages`, the journal `doi` and `pmid`.
     id: 'gpcrevolution-database',
-    title: 'GPCR Evolution Database Manuscript',
+    title: 'GPCR Evolution Database',
+    authors: ['Berkay Selçuk', 'Ogün Adebali'],
+    journal: 'bioRxiv',
     year: 2026,
-    status: 'In preparation',
-    note: 'Primary publication for this database. Cite it whenever you use the database as a resource.',
+    doi: '10.64898/2026.09.08.750181',
+    note: 'Primary publication for this database, currently a preprint. Cite it whenever you use the database as a resource.',
   },
   {
     id: 'selcuk-2026-residue-profiling',
