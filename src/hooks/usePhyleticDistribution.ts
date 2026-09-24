@@ -14,10 +14,29 @@ import type {
   DifferenceOptions
 } from '@/types/phyletic-distribution';
 
-// Hardcoded taxonomy file to use
-const TAXONOMY_FILE = '/phyletic-distribution/taxonomy_eukaryotes_filtered.json';
-const TAXONOMY_TREE_ORDER_FILE =
-  '/phyletic-distribution/taxonomy_eukaryotes_filtered.tree-order.json';
+// Two taxonomies over the same searched organisms. Each has its lineage table, its
+// hierarchy and the hierarchy's leaf order; OTT has no position for organisms it lacks
+// an NCBI mapping for, so its set is smaller.
+const TAXONOMIES = [
+  {
+    value: 'ncbi',
+    label: 'NCBI',
+    name: 'NCBI Taxonomy',
+    file: '/phyletic-distribution/taxonomy_eukaryotes_filtered.json',
+    orderFile: '/phyletic-distribution/taxonomy_eukaryotes_filtered.tree-order.json',
+    newickFile: '/phyletic-distribution/taxonomy_eukaryotes_filtered.nwk',
+  },
+  {
+    value: 'ott',
+    label: 'OTT',
+    name: 'Open Tree Taxonomy',
+    file: '/phyletic-distribution/taxonomy_ott.json',
+    orderFile: '/phyletic-distribution/taxonomy_ott.tree-order.json',
+    newickFile: '/phyletic-distribution/taxonomy_ott.nwk',
+  },
+] as const;
+type TaxonomyValue = (typeof TAXONOMIES)[number]['value'];
+const DEFAULT_TAXONOMY: TaxonomyValue = 'ncbi';
 const SOURCE_DATASETS = [
   {
     value: 'unfiltered',
@@ -145,6 +164,7 @@ export function usePhyleticDistribution() {
 
   const [containerWidth, setContainerWidth] = useState(1200);
   const [sourceData, setSourceData] = useState<SourceDataValue>(DEFAULT_SOURCE_DATA);
+  const [taxonomy, setTaxonomy] = useState<TaxonomyValue>(DEFAULT_TAXONOMY);
   // for our new autocomplete component
   const [lineageOptions, setLineageOptions] = useState<string[]>([]);
   // dynamic set of taxonomy levels available for searching (does not affect visual ranks)
@@ -162,7 +182,8 @@ export function usePhyleticDistribution() {
     let cancelled = false;
 
     const run = async () => {
-      await loadTaxonomyData(TAXONOMY_FILE);
+      const initial = TAXONOMIES.find(option => option.value === DEFAULT_TAXONOMY)!;
+      await loadTaxonomyData(initial.file, initial.orderFile);
 
       if (cancelled) return;
 
@@ -179,11 +200,11 @@ export function usePhyleticDistribution() {
     setContainerWidth(width);
   }, []);
 
-  const loadTaxonomyData = useCallback(async (fileName: string) => {
+  const loadTaxonomyData = useCallback(async (fileName: string, orderFileName: string) => {
     try {
       const [response, orderResponse] = await Promise.all([
         fetch(fileName),
-        fetch(TAXONOMY_TREE_ORDER_FILE),
+        fetch(orderFileName),
       ]);
       if (!response.ok) {
         throw new Error(`Could not load taxonomy data (HTTP ${response.status})`);
@@ -475,6 +496,25 @@ export function usePhyleticDistribution() {
       }));
     }
   }, [loadTSVData]);
+
+  const selectTaxonomy = useCallback(async (value: string) => {
+    const option = TAXONOMIES.find(candidate => candidate.value === value);
+    if (!option) return;
+
+    setTaxonomy(option.value);
+    setState(prev => ({
+      ...prev,
+      isLoading: true,
+      loadingMessage: `Loading ${option.name}...`,
+    }));
+    await loadTaxonomyData(option.file, option.orderFile);
+    // The counts are matched to taxa by position, so they are re-read against the new
+    // taxon set; any user tracks are carried over the same way.
+    if (defaultTSVTextRef.current) {
+      const source = SOURCE_DATASETS.find(candidate => candidate.value === sourceData);
+      loadTSVData(defaultTSVTextRef.current, source?.label);
+    }
+  }, [loadTaxonomyData, loadTSVData, sourceData]);
 
   const loadCustomTSVData = useCallback((tsvText: string, label = 'User Input') => {
     customTSVTextRef.current = tsvText;
@@ -938,6 +978,11 @@ export function usePhyleticDistribution() {
     sourceData,
     sourceDataOptions: SOURCE_DATASETS.map(({ value, label }) => ({ value, label })),
     selectSourceData,
+    taxonomy,
+    taxonomyName: TAXONOMIES.find(option => option.value === taxonomy)!.name,
+    taxonomyNewickFile: TAXONOMIES.find(option => option.value === taxonomy)!.newickFile,
+    taxonomyOptions: TAXONOMIES.map(({ value, label }) => ({ value, label })),
+    selectTaxonomy,
     loadCustomTSVData,
     setSelectedLevels,
     setNormalizeLevel,

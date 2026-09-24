@@ -35,6 +35,9 @@ interface ControlPanelProps {
   showTaxonomyTree: boolean
   onShowTaxonomyTreeChange: (show: boolean) => void
   taxonomyTreeAvailable: boolean
+  taxonomyOptions: Array<{ value: string; label: string }>
+  selectedTaxonomy: string
+  onTaxonomyChange: (value: string) => void
 }
 
 const allLevels: TaxonomicLevel[] = [
@@ -175,6 +178,9 @@ export function ControlPanel({
   showTaxonomyTree,
   onShowTaxonomyTreeChange,
   taxonomyTreeAvailable,
+  taxonomyOptions,
+  selectedTaxonomy,
+  onTaxonomyChange,
 }: ControlPanelProps) {
   const [diffGene1, setDiffGene1] = useState('')
   const [diffGene2, setDiffGene2] = useState('')
@@ -246,7 +252,9 @@ export function ControlPanel({
 
       <div className={controlClass}>
         <ControlHeading title="Ranks to Show" hintId="phyletic-hint-ranks" hintLabel="About Ranks to Show">
-          Choose which NCBI taxonomic ranks appear as colored rows beneath the hierarchy.
+          Choose which taxonomic ranks appear as colored rows beneath the hierarchy. Ranks are
+          taken from the selected taxonomy, so the same organism can sit in a differently named
+          group under NCBI and OTT.
         </ControlHeading>
         <Select>
           <SelectTrigger className="h-7 w-36 text-xs">
@@ -350,27 +358,53 @@ export function ControlPanel({
         </Popover>
       </div>
 
-      <div
-        className={`${controlClass} ${
-          taxonomyTreeAvailable ? 'cursor-pointer' : 'cursor-not-allowed text-muted-foreground'
-        }`}
-      >
-        <ControlHeading title="NCBI Taxonomy" hintId="phyletic-hint-taxonomy" hintLabel="About NCBI Taxonomy">
-          Show the complete sampled NCBI Taxonomy hierarchy above the bars. It includes populated
-          named ranks, clades, and no-rank groups, skips NA values, and represents taxonomy rather
-          than evolutionary branch lengths.
+      <div className={controlClass}>
+        <ControlHeading title="Taxonomy" hintId="phyletic-hint-taxonomy" hintLabel="About Taxonomy">
+          <span className="block">
+            Choose the hierarchy that orders the taxa, supplies the rank rows, and is drawn by{' '}
+            <span className="font-semibold">Show tree</span>. Both cover the organisms of the
+            searched database, the UniProt 2025_02 eukaryotic reference proteomes (2,760 taxIDs),
+            including those in which no family was found.
+          </span>
+          <span className="mt-2 block">
+            <span className="font-semibold">NCBI</span> is the NCBI Taxonomy (September 2025) and
+            places all 2,760. <span className="font-semibold">OTT</span> is the Open Tree of Life
+            reference taxonomy (OTT 3.7.3), matched by NCBI taxID; it places 2,662, and the 98
+            organisms OTT has no NCBI mapping for are not shown in this view.
+          </span>
+          <span className="mt-2 block">
+            Both are drawn as taxonomies rather than phylogenies: they include populated named
+            ranks, clades, and no-rank groups, skip NA values, and have no evolutionary branch
+            lengths. Unikonta is added to both, and Archaeplastida to NCBI.
+          </span>
         </ControlHeading>
-        <label
-          className="flex h-7 items-center gap-2 px-1 text-xs"
-          title={taxonomyTreeAvailable ? 'Show hierarchy' : 'Taxonomy hierarchy is loading'}
-        >
-          <Checkbox
-            checked={showTaxonomyTree}
-            disabled={!taxonomyTreeAvailable}
-            onCheckedChange={checked => onShowTaxonomyTreeChange(Boolean(checked))}
-          />
-          Show tree
-        </label>
+        <div className="flex items-center gap-1">
+          <Select value={selectedTaxonomy} onValueChange={onTaxonomyChange}>
+            <SelectTrigger className="h-7 w-20 text-xs">
+              <SelectValue placeholder="Taxonomy" />
+            </SelectTrigger>
+            <SelectContent>
+              {taxonomyOptions.map(option => (
+                <SelectItem key={option.value} value={option.value} className="text-xs">
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <label
+            className={`flex h-7 items-center gap-2 px-1 text-xs ${
+              taxonomyTreeAvailable ? 'cursor-pointer' : 'cursor-not-allowed text-muted-foreground'
+            }`}
+            title={taxonomyTreeAvailable ? 'Show hierarchy' : 'Taxonomy hierarchy is loading'}
+          >
+            <Checkbox
+              checked={showTaxonomyTree}
+              disabled={!taxonomyTreeAvailable}
+              onCheckedChange={checked => onShowTaxonomyTreeChange(Boolean(checked))}
+            />
+            Show tree
+          </label>
+        </div>
       </div>
 
       <div className={controlClass}>

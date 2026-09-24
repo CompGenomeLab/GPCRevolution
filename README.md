@@ -64,6 +64,25 @@ tool:
 npm run generate:phyletic-tree
 ```
 
+The taxonomy covers every organism in the searched database, the 2,760 NCBI
+taxIDs of the UniProt 2025_02 eukaryotic reference proteome set, including
+organisms in which no family was found (a taxon with no counts row has no hits
+in any family). `taxonomy_eukaryotes_filtered.json` is built from that taxID
+list with `scripts/ncbi_taxonomy_create.py` and the NCBI taxonomy dump of
+September 2025. TaxID 1450536, since merged by NCBI into 856835
+(*Guyanagaster necrorhizus*), is placed at 856835 and keeps its searched ID.
+
+The page can switch to the Open Tree of Life reference taxonomy (OTT 3.7.3),
+served as `taxonomy_ott.json`, `taxonomy_ott.nwk` and
+`taxonomy_ott.tree-order.json` in the same formats. It is matched to the same
+taxIDs through OTT's `ncbi:` source identifiers and places 2,662 of the 2,760;
+the 98 OTT has no NCBI mapping for are absent from that view. The OTT files are
+not made by `generate:phyletic-tree`: OTT's rank labels do not nest (an unranked
+group can sit above a larger "order"), so rebuilding the nesting from flat rank
+columns fails, and the newick is written from the OTT hierarchy itself with
+internal nodes labelled `rank__name` like the NCBI tree. Both sets of files are
+built by `build_taxonomy_trees.py` in the GPCR superfamily analysis (step 7).
+
 The generator reads
 `public/phyletic-distribution/taxonomy_eukaryotes_filtered.json` and writes
 `public/phyletic-distribution/taxonomy_eukaryotes_filtered.nwk` plus

@@ -31,6 +31,11 @@ export function GeneVisualization() {
     sourceData,
     sourceDataOptions,
     selectSourceData,
+    taxonomy,
+    taxonomyName,
+    taxonomyNewickFile,
+    taxonomyOptions,
+    selectTaxonomy,
     loadCustomTSVData,
     setSelectedLevels,
     setNormalizeLevel,
@@ -50,8 +55,9 @@ export function GeneVisualization() {
 
   useEffect(() => {
     let cancelled = false
+    setTaxonomyTreeNewick(null)
 
-    fetch('/phyletic-distribution/taxonomy_eukaryotes_filtered.nwk')
+    fetch(taxonomyNewickFile)
       .then(response => {
         if (!response.ok) throw new Error(`Could not load taxonomy hierarchy (HTTP ${response.status})`)
         return response.text()
@@ -69,7 +75,7 @@ export function GeneVisualization() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [taxonomyNewickFile])
 
   const handleFileUpload = () => {
     const input = document.createElement('input')
@@ -95,7 +101,7 @@ export function GeneVisualization() {
   const inputPresenceCoverage = state.totalInput > 0 ? ((
     (state.totalInputWithAnyCount || 0) / state.totalInput
   ) * 100).toFixed(1) : '0.0'
-  // NCBI Taxonomy coverage: unique matched taxIDs with >=1 count / total reference taxa
+  // Taxonomy coverage: unique matched taxIDs with >=1 count / total taxa of the selected taxonomy
   const uniprotCoverage = state.taxonCount > 0 ? ((
     (state.uniqueMatchedTaxaWithAnyCount || 0) / state.taxonCount
   ) * 100).toFixed(1) : '0.0'
@@ -126,6 +132,9 @@ export function GeneVisualization() {
           showTaxonomyTree={showTaxonomyTree}
           onShowTaxonomyTreeChange={setShowTaxonomyTree}
           taxonomyTreeAvailable={Boolean(taxonomyTreeNewick)}
+          taxonomyOptions={taxonomyOptions}
+          selectedTaxonomy={taxonomy}
+          onTaxonomyChange={selectTaxonomy}
         />
       </div>
 
@@ -178,7 +187,7 @@ export function GeneVisualization() {
                 {state.totalInput > 0 && (
                   <div className="mb-3 p-2 bg-primary/10 border border-primary/20 rounded-lg">
                     <div className="text-sm font-medium text-foreground">
-                      Selected source — NCBI Taxonomy coverage: {uniprotCoverage}% • input taxon coverage: {inputPresenceCoverage}%
+                      Selected source — {taxonomyName} coverage: {uniprotCoverage}% • input taxon coverage: {inputPresenceCoverage}%
                     </div>
                   </div>
                 )}
