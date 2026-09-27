@@ -4,6 +4,7 @@ import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom';
 import * as d3 from 'd3';
 import { Download } from 'lucide-react';
+import { isBackgroundFamily } from '@/lib/superfamilyBackground';
 
 interface PositionLogoData {
   position: number;
@@ -16,6 +17,7 @@ interface PositionLogoData {
   mostConservedAA?: string;
   matchCounts?: Record<string, number>;
   gpcrdb?: string; // GPCRdb numbering for class-wide alignments
+  reference?: string; // e.g. 'HRH2_HUMAN (P25021) R116', for the hover text
   crossAlignmentData?: {
     alignmentAAs: Record<string, string>;
     matchCount: number;
@@ -36,10 +38,15 @@ interface MappingPositionData {
   informationContent?: number;
   letterHeights?: Record<string, number>;
   gpcrdb?: string;
+  refResidue?: number;
+  refAA?: string;
 }
 
 interface FamilyMappingData {
   familyKey?: string;
+  // The family's reference sequence: its human GPCRdb reference where it has one,
+  // T184C_HUMAN for SLT_TRNS, and its logo anchor otherwise.
+  reference?: { accession?: string; entry?: string | null };
   positions?: Array<MappingPositionData | null>;
 }
 
@@ -110,10 +117,12 @@ const fileBaseToFamily: Record<string, string> = {
   'cAMP_genes_filtered_db_FAMSA.ref_trimmed': 'cAMP',
   'STE2_genes_filtered_db_FAMSA.ref_trimmed': 'STE2',
   'STE3_genes_filtered_db_FAMSA.ref_trimmed': 'STE3',
+  'TM116_genes_filtered_db_FAMSA.ref_trimmed': 'TM116',
   'Vomeronasal1_genes_filtered_db_FAMSA.ref_trimmed': 'Vomeronasal1',
   'Vomeronasal2_genes_filtered_db_FAMSA.ref_trimmed': 'Vomeronasal2',
   'Mth_genes_filtered_db_FAMSA.ref_trimmed': 'Mth',
-  'Nematode_genes_filtered_db_FAMSA.ref_trimmed': 'Nematode'
+  'Nematode_genes_filtered_db_FAMSA.ref_trimmed': 'Nematode',
+  'SLT_TRNS_genes_filtered_db_FAMSA.ref_trimmed': 'SLT_TRNS'
 };
 
 const SuperfamilyLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotDisplayName, filteredPositions, onSelectedAlignmentsChange, selectedAlignmentsExternal, showReferenceRowsExternal, showProteinRegionsExternal, regionSourceAlignmentExternal, rowHeightExternal, minConservationThresholdExternal, minFamiliesCountExternal }) => {
@@ -168,7 +177,7 @@ const SuperfamilyLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotD
   // Hide masked columns functionality removed (was related to dot plots)
 
   // Define receptor groupings
-  const receptorGroups = useMemo(() => [
+  const receptorGroups = useMemo<{ name: string; lines?: string[]; members: string[] }[]>(() => [
     {
       name: 'Rhodopsin-related',
       members: [
@@ -187,6 +196,7 @@ const SuperfamilyLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotD
         'classF_genes_filtered_db_FAMSA.ref_trimmed',
         'FSLB_genes_filtered_db_FAMSA.ref_trimmed',
         'GP143_genes_filtered_db_FAMSA.ref_trimmed',
+        'TM116_genes_filtered_db_FAMSA.ref_trimmed',
         'GP157_genes_filtered_db_FAMSA.ref_trimmed',
         'Mth_genes_filtered_db_FAMSA.ref_trimmed',
         'classB2_genes_filtered_db_FAMSA.ref_trimmed',
@@ -196,6 +206,8 @@ const SuperfamilyLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotD
     },
     {
       name: 'Glutamate-related',
+      // Two rows are too short for the label on one line.
+      lines: ['Glutamate-', 'related'],
       members: [
         'classC_genes_filtered_db_FAMSA.ref_trimmed',
         'Vomeronasal2_genes_filtered_db_FAMSA.ref_trimmed'
@@ -462,6 +474,13 @@ const SuperfamilyLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotD
     };
   }, [fastaNames]);
 
+  // Background families (STE2, SLT_TRNS) keep their logo rows but are left out of every
+  // cross-family calculation below.
+  const coreAlignments = useMemo(
+    () => selectedAlignments.filter((name) => !isBackgroundFamily(name)),
+    [selectedAlignments]
+  );
+
   // Calculate cross-alignment conservation for a specific position
   const calculateCrossAlignmentConservation = useCallback((position: number, allAlignmentData: Record<string, Record<number, PositionLogoData>>): {
     matchPercentage: number;
@@ -485,7 +504,7 @@ const SuperfamilyLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotD
     const aaFrequency: Record<string, number> = {};
     let totalAlignments = 0;
 
-    selectedAlignments.forEach(alignmentName => {
+    coreAlignments.forEach(alignmentName => {
       const positionData = allAlignmentData[alignmentName]?.[position];
       if (positionData && positionData.residueCounts) {
         // Get the most frequent amino acid in this alignment at this position
@@ -548,8 +567,8 @@ const SuperfamilyLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotD
       }
     });
 
-    // Calculate percentage based on TOTAL selected alignments (including gaps)
-    const totalSelectedAlignments = selectedAlignments.length;
+    // Calculate percentage based on TOTAL selected non-background alignments (including gaps)
+    const totalSelectedAlignments = coreAlignments.length;
     const matchPercentage = totalSelectedAlignments > 0 ? (matchCount / totalSelectedAlignments) * 100 : 0;
 
     return {
@@ -559,7 +578,7 @@ const SuperfamilyLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotD
       matchCount,
       totalAlignments: totalSelectedAlignments
     };
-  }, [selectedAlignments]);
+  }, [coreAlignments]);
 
 
 
@@ -576,11 +595,22 @@ const SuperfamilyLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotD
     selectedAlignments.forEach((name) => {
       const positions = mappingData[name]?.positions || [];
       const positionData: Record<number, PositionLogoData> = {};
+      const ref = mappingData[name]?.reference;
+      const refName = ref?.accession
+        ? (ref.entry ? `${ref.entry} (${ref.accession})` : ref.accession)
+        : '';
 
       positions.forEach((position, supCol) => {
         if (!position) return;
+        const hasData = Object.keys(position.residueCounts || {}).length > 0;
+        const reference = refName && hasData
+          ? (position.refResidue !== undefined
+              ? `${refName} ${position.refAA ?? ''}${position.refResidue}`
+              : `${refName}: gap`)
+          : undefined;
 
         positionData[supCol] = {
+          reference,
           position: supCol + 1,
           msaColumn: supCol,
           residueCounts: position.residueCounts || {},
@@ -608,9 +638,12 @@ const SuperfamilyLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotD
       };
     }
 
+    // Positions are chosen from the GPCR families; background rows are shown at those
+    // positions. Only when nothing but background is selected do they decide themselves.
+    const positionBasis = coreAlignments.length > 0 ? coreAlignments : selectedAlignments;
     let allowedPositions = new Set<number>();
     for (let pos = 0; pos < globalMaxPosition; pos++) {
-      const allGaps = selectedAlignments.every((alignmentName) => {
+      const allGaps = positionBasis.every((alignmentName) => {
         const position = alignmentPositionData[alignmentName]?.[pos];
         return !position || Object.keys(position.residueCounts || {}).length === 0;
       });
@@ -620,7 +653,7 @@ const SuperfamilyLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotD
       if (minConservationThreshold > 0 && minFamiliesCount > 0) {
         let familiesAboveThreshold = 0;
 
-        selectedAlignments.forEach((alignmentName) => {
+        positionBasis.forEach((alignmentName) => {
           const position = alignmentPositionData[alignmentName]?.[pos];
           const totalSequences = position?.totalSequences || 0;
           const counts = Object.values(position?.residueCounts || {});
@@ -672,7 +705,7 @@ const SuperfamilyLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotD
             crossAlignmentData: {
               alignmentAAs: crossConservation?.data.alignmentAAs || {},
               matchCount: crossConservation?.data.matchCount || 0,
-              totalAlignments: crossConservation?.data.totalAlignments || selectedAlignments.length,
+              totalAlignments: crossConservation?.data.totalAlignments || coreAlignments.length,
               conservationPercentage: crossConservation?.matchPercentage || 0,
               shouldBlur
             }
@@ -687,6 +720,7 @@ const SuperfamilyLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotD
     mappingsLoaded,
     mappingData,
     selectedAlignments,
+    coreAlignments,
     conservationThreshold,
     useSimpleConservation,
     calculateCrossAlignmentConservation,
@@ -1268,15 +1302,27 @@ const SuperfamilyLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotD
           
           // Draw vertical text label (larger than row labels, positioned near the line)
           const textX = lineX - 14;
-          yAxisSvg.append('text')
+          const label = yAxisSvg.append('text')
             .attr('x', textX)
             .attr('y', groupCenterY)
             .attr('text-anchor', 'middle')
             .attr('transform', `rotate(-90, ${textX}, ${groupCenterY})`)
             .attr('class', 'text-foreground fill-current')
             .style('font-size', '14px')
-            .style('font-family', 'Helvetica')
-            .text(group.name);
+            .style('font-family', 'Helvetica');
+          const lines = group.lines;
+          if (lines) {
+            // Rotated text stacks its lines horizontally; the last line keeps the
+            // single-line position beside the bracket and earlier ones sit to its left.
+            lines.forEach((line, i) => {
+              label.append('tspan')
+                .attr('x', textX)
+                .attr('dy', i === 0 ? `${-(lines.length - 1) * 1.15}em` : '1.15em')
+                .text(line);
+            });
+          } else {
+            label.text(group.name);
+          }
         }
       });
 
@@ -1382,12 +1428,13 @@ const SuperfamilyLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotD
                         ? getDisplayName(receptorData.receptorName) 
                         : receptorData.receptorName;
                       let tooltipContent = `<strong>Alignment:</strong> ${alignmentDisplayName}<br/>` +
-                        `<strong>Position:</strong> ${d.position}<br/>` +
+                        `<strong>Position:</strong> ${d.position} (superfamily column ${d.msaColumn + 1})<br/>` +
+                        (d.reference ? `<strong>Reference:</strong> ${d.reference}<br/>` : '') +
                         `<strong>Residue:</strong> ${residue}<br/>` +
                         `<strong>Count:</strong> ${d.residueCounts[residue]} / ${d.totalSequences}<br/>` +
                         `<strong>Frequency:</strong> ${((d.residueCounts[residue] / d.totalSequences) * 100).toFixed(1)}%<br/>`;
-                      
-                      
+
+
                       tooltipContent += `<strong>Information:</strong> ${height.toFixed(2)} bits`;
                       
                       showTooltip(event, tooltipContent);
@@ -1427,12 +1474,13 @@ const SuperfamilyLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotD
                         ? getDisplayName(receptorData.receptorName) 
                         : receptorData.receptorName;
                       let tooltipContent = `<strong>Alignment:</strong> ${alignmentDisplayName}<br/>` +
-                        `<strong>Position:</strong> ${d.position}<br/>` +
+                        `<strong>Position:</strong> ${d.position} (superfamily column ${d.msaColumn + 1})<br/>` +
+                        (d.reference ? `<strong>Reference:</strong> ${d.reference}<br/>` : '') +
                         `<strong>Residue:</strong> ${residue}<br/>` +
                         `<strong>Count:</strong> ${d.residueCounts[residue]} / ${d.totalSequences}<br/>` +
                         `<strong>Frequency:</strong> ${((d.residueCounts[residue] / d.totalSequences) * 100).toFixed(1)}%<br/>`;
-                      
-                      
+
+
                       tooltipContent += `<strong>Information:</strong> ${height.toFixed(2)} bits`;
                       
                       showTooltip(event, tooltipContent);
@@ -1629,7 +1677,7 @@ const SuperfamilyLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotD
               .attr('opacity', 0.8)
               .on('mouseover', (event) => {
                 showTooltip(event,
-                  `<strong>Position:</strong> ${d.position}<br/>` +
+                  `<strong>Position:</strong> ${d.position} (superfamily column ${d.msaColumn + 1})<br/>` +
                   `<strong>Conservation:</strong> ${d.crossAlignmentData!.conservationPercentage.toFixed(1)}%<br/>` +
                   `<strong>Threshold:</strong> ${conservationThreshold}%`
                 );

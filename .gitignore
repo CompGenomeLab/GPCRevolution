@@ -47,6 +47,13 @@ next-env.d.ts
 
 # large local alignment sources and intermediate MSA experiments
 /public/superfamily_logo_source_files/*.fasta
+# the representative alignment the logo mappings are built on is small and kept
+!/public/superfamily_logo_source_files/representatives_all_*_ginsi_ep0.123*.fasta
 /public/superfamily_logo_source_files/All_reps_*.fasta
 /public/superfamily_logo_source_files/sup_reps_*ginsi*.fasta
 /public/superfamily_logo_source_files/trimmed_kpicgappy_and_fullSTE23-classCV2R_reps_combined_linsi.fasta
+
+# local-only structure viewer module (not pushed yet)
+/src/modules/structure-viewer/
+/src/app/structure-viewer-test/
+/public/structure-viewer-test/

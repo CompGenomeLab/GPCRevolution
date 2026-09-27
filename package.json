@@ -26,6 +26,7 @@
     "@tanstack/react-table": "^8.21.3",
     "@tanstack/react-virtual": "^3.13.10",
     "@types/react-window": "^1.8.8",
+    "@types/three": "^0.186.0",
     "chart.js": "^4.4.9",
     "chartjs-plugin-annotation": "^3.1.0",
     "chartjs-plugin-datalabels": "^2.2.0",
@@ -46,6 +47,7 @@
     "sonner": "^2.0.4",
     "tailwind-merge": "^3.3.0",
     "tailwindcss-animate": "^1.0.7",
+    "three": "^0.186.1",
     "zod": "^3.24.3"
   },
   "devDependencies": {

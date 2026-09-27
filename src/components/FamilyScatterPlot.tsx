@@ -5,6 +5,7 @@ import * as d3 from 'd3';
 import type { Axis, BrushBehavior, D3BrushEvent, NumberValue, Selection } from 'd3';
 import { Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { BACKGROUND_FAMILIES } from '@/lib/superfamilyBackground';
 
 type MappingPosition = {
   residueCounts?: Record<string, number>;
@@ -39,11 +40,14 @@ const fileBaseToFamily: Record<string, string> = {
   'GP143_genes_filtered_db_FAMSA.ref_trimmed': 'GP143',
   'GP157_genes_filtered_db_FAMSA.ref_trimmed': 'GP157',
   'cAMP_genes_filtered_db_FAMSA.ref_trimmed': 'cAMP',
+  'STE2_genes_filtered_db_FAMSA.ref_trimmed': 'STE2',
   'STE3_genes_filtered_db_FAMSA.ref_trimmed': 'STE3',
+  'TM116_genes_filtered_db_FAMSA.ref_trimmed': 'TM116',
   'Vomeronasal1_genes_filtered_db_FAMSA.ref_trimmed': 'Vomeronasal1',
   'Vomeronasal2_genes_filtered_db_FAMSA.ref_trimmed': 'Vomeronasal2',
   'Mth_genes_filtered_db_FAMSA.ref_trimmed': 'Mth',
-  'Nematode_genes_filtered_db_FAMSA.ref_trimmed': 'Nematode'
+  'Nematode_genes_filtered_db_FAMSA.ref_trimmed': 'Nematode',
+  'SLT_TRNS_genes_filtered_db_FAMSA.ref_trimmed': 'SLT_TRNS'
 };
 
 // Similarity groups (match logic consistent with PairwiseOverlap)
@@ -133,6 +137,8 @@ const FamilyScatterPlot: React.FC<Props> = ({ fastaNames, onSelectionChange, hei
       );
       families = families.filter((fam) => selectedFamilyKeys.has(fam));
     }
+    // Background families (STE2, SLT_TRNS) never enter the cross-family statistics.
+    families = families.filter((fam) => !BACKGROUND_FAMILIES.has(fam));
     if (families.length === 0) return [];
 
     // Determine max positions across mappings
@@ -260,11 +266,11 @@ const FamilyScatterPlot: React.FC<Props> = ({ fastaNames, onSelectionChange, hei
     const x = d3.scaleLinear().domain([0, maxEntropy]).range([0, innerWidth]).nice();
     
     // Calculate max families from selected families or all families in mappings
-    let maxFamilies = Object.keys(mappings).length;
+    let maxFamilies = Object.keys(mappings).filter((fam) => !BACKGROUND_FAMILIES.has(fam)).length;
     if (selectedFamilies && selectedFamilies.length > 0) {
       const selectedFamilyKeys = selectedFamilies
         .map((f) => fileBaseToFamily[f])
-        .filter((v): v is string => Boolean(v));
+        .filter((v): v is string => Boolean(v) && !BACKGROUND_FAMILIES.has(v));
       maxFamilies = selectedFamilyKeys.length;
     }
     

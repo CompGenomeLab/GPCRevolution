@@ -5,9 +5,9 @@ import SuperfamilyLogo from '@/components/SuperfamilyLogo';
 import { Card, CardContent } from '@/components/ui/card';
 import FamilyScatterPlot from '@/components/FamilyScatterPlot';
 import { Button } from '@/components/ui/button';
+import { isBackgroundFamily } from '@/lib/superfamilyBackground';
 
 // Family selection IDs. Runtime logo/scatter data comes from public/superfamily_logo_mappings/*.json.
-// STE2 has been removed as requested.
 const fastaNames = [
   'classA_genes_filtered_db_FAMSA.ref_trimmed',
   'classB1_genes_filtered_db_FAMSA.ref_trimmed',
@@ -21,11 +21,15 @@ const fastaNames = [
   'GP143_genes_filtered_db_FAMSA.ref_trimmed',
   'GP157_genes_filtered_db_FAMSA.ref_trimmed',
   'cAMP_genes_filtered_db_FAMSA.ref_trimmed',
+  'STE2_genes_filtered_db_FAMSA.ref_trimmed',
   'STE3_genes_filtered_db_FAMSA.ref_trimmed',
+  'TM116_genes_filtered_db_FAMSA.ref_trimmed',
   'Vomeronasal1_genes_filtered_db_FAMSA.ref_trimmed',
   'Vomeronasal2_genes_filtered_db_FAMSA.ref_trimmed',
   'Mth_genes_filtered_db_FAMSA.ref_trimmed',
-  'Nematode_genes_filtered_db_FAMSA.ref_trimmed'
+  'Nematode_genes_filtered_db_FAMSA.ref_trimmed',
+  // Non-GPCR 7TM background, placed on the superfamily alignment by its helices alone.
+  'SLT_TRNS_genes_filtered_db_FAMSA.ref_trimmed'
 ];
 
 // Custom order for "Select All".
@@ -40,13 +44,17 @@ const selectAllOrder = [
   'classF_genes_filtered_db_FAMSA.ref_trimmed',
   'FSLB_genes_filtered_db_FAMSA.ref_trimmed',
   'GP143_genes_filtered_db_FAMSA.ref_trimmed',
+  'TM116_genes_filtered_db_FAMSA.ref_trimmed',
   'GP157_genes_filtered_db_FAMSA.ref_trimmed',
   'Mth_genes_filtered_db_FAMSA.ref_trimmed',
   'classB2_genes_filtered_db_FAMSA.ref_trimmed',
   'classB1_genes_filtered_db_FAMSA.ref_trimmed',
   'STE3_genes_filtered_db_FAMSA.ref_trimmed',
   'classC_genes_filtered_db_FAMSA.ref_trimmed',
-  'Vomeronasal2_genes_filtered_db_FAMSA.ref_trimmed'
+  'Vomeronasal2_genes_filtered_db_FAMSA.ref_trimmed',
+  // In no receptorGroups bracket, so kept last where they split no group.
+  'STE2_genes_filtered_db_FAMSA.ref_trimmed',
+  'SLT_TRNS_genes_filtered_db_FAMSA.ref_trimmed'
 ];
 
 export default function SuperfamilyLogoPage() {
@@ -59,7 +67,9 @@ export default function SuperfamilyLogoPage() {
   const [rowHeight, setRowHeight] = useState(30);
   const [minConservationThreshold, setMinConservationThreshold] = useState(0);
   const [minFamiliesCount, setMinFamiliesCount] = useState(0);
-  
+  // Background families are shown but not counted towards the families-above-threshold filter.
+  const coreSelectedCount = selectedAlignments.filter((name) => !isBackgroundFamily(name)).length;
+
   // Note: filteredPositions will be empty array initially, which means "show all positions"
   // Function to get display name for a FASTA file (for UI elements like checkboxes)
   const getDisplayName = useCallback((fileName: string): string => {
@@ -72,7 +82,7 @@ export default function SuperfamilyLogoPage() {
       'classC': 'Class C',
       'classF': 'Class F',
       'FSLB': 'FSL',
-      'classT': 'Class T',
+      'classT': 'Taste-2',
       'Vomeronasal1': 'Vomeronasal 1',
       'Vomeronasal2': 'Vomeronasal 2',
       'Olfactory': 'Olfactory',
@@ -80,11 +90,14 @@ export default function SuperfamilyLogoPage() {
       'GP143': 'GP143',
       'GP157': 'GP157',
       'cAMP': 'cAMP',
+      'STE2': 'STE2',
       'STE3': 'STE3',
+      'TM116': 'TMEM116',
       'Mth': 'Mth',
-      'Nematode': 'Nematode'
+      'Nematode': 'Nematode',
+      'SLT': 'SLT_TRNS'
     };
-    
+
     return displayNameMap[baseName] || baseName;
   }, []);
 
@@ -99,7 +112,7 @@ export default function SuperfamilyLogoPage() {
       'classC': 'Class C',
       'classF': 'Class F',
       'FSLB': 'FSL',
-      'classT': 'Class T',
+      'classT': 'Taste-2',
       'Vomeronasal1': 'V1R',
       'Vomeronasal2': 'V2R',
       'Olfactory': 'Olfactory',
@@ -107,11 +120,14 @@ export default function SuperfamilyLogoPage() {
       'GP143': 'GP143',
       'GP157': 'GP157',
       'cAMP': 'cAMP',
+      'STE2': 'STE2',
       'STE3': 'STE3',
+      'TM116': 'TMEM116',
       'Mth': 'Mth',
-      'Nematode': 'Nematode'
+      'Nematode': 'Nematode',
+      'SLT': 'SLT_TRNS'
     };
-    
+
     return plotNameMap[baseName] || baseName;
   }, []);
   const handleAlignmentToggle = (name: string) => {
@@ -283,8 +299,8 @@ export default function SuperfamilyLogoPage() {
                   <input
                     type="range"
                     min="0"
-                    max={Math.max(1, selectedAlignments.length)}
-                    value={Math.min(minFamiliesCount, Math.max(1, selectedAlignments.length))}
+                    max={Math.max(1, coreSelectedCount)}
+                    value={Math.min(minFamiliesCount, Math.max(1, coreSelectedCount))}
                     onChange={(e) => setMinFamiliesCount(Number(e.target.value))}
                     className="flex-1"
                   />

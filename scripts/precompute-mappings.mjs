@@ -8,9 +8,16 @@ const SUPERFAMILY_LOGO_MAPPINGS_DIR = path.join(ROOT, 'public', 'superfamily_log
 
 // Families to process are driven by trim_info.tsv
 const TRIM_INFO = path.join(SUPERFAMILY_LOGO_SOURCE_DIR, 'trim_info.tsv');
+// Optional: anchors placed on the superfamily alignment by their helices alone
+// (step10 place_by_topology.py). Only their helix columns carry a correspondence;
+// their loop residues sit in loop columns just to keep residue numbering continuous,
+// so every other column is left empty for those families.
+const TOPOLOGY_PLACED = path.join(SUPERFAMILY_LOGO_SOURCE_DIR, 'topology_placed_helix_columns.tsv');
 const SUP_REPS = resolveFastaPath({
   label: 'representative combined alignment',
   preferredNames: [
+    'representatives_all_Sep22_topo0.8_ginsi_ep0.123_plus_SLT_TRNS_topology.fasta',
+    'representatives_all_Sep22_topo0.8_ginsi_ep0.123.fasta',
     'All_clust0.7_cov1_Oct25_minsize2_linsi_ep0.123_trimends_treein_ginsi_ep0.123_selected_reps.fasta',
     'sup_reps_noClassC_noSTE3_linsi_trimends_treein_einsi_ep0.123_missing_added_reps_only.fasta'
   ],
@@ -158,7 +165,19 @@ function findSequenceByAcc(sequences, acc) {
   });
 }
 
-function precomputeForFamily({ familyKey, acc1, acc2, supRepMap, supRepSeqs }) {
+function loadTopologyPlacedColumns() {
+  const byAcc = {};
+  if (!fs.existsSync(TOPOLOGY_PLACED)) return byAcc;
+  const lines = readText(TOPOLOGY_PLACED).replace(/\r/g, '').split('\n').filter(l => l.trim());
+  lines.shift();
+  for (const line of lines) {
+    const [acc, cols] = line.split('\t');
+    if (acc && cols) byAcc[acc.trim()] = new Set(cols.split(',').map(Number));
+  }
+  return byAcc;
+}
+
+function precomputeForFamily({ familyKey, acc1, acc2, supRepMap, supRepSeqs, helixColumns }) {
   const familyFasta = resolveFamilyFasta(familyKey);
   if (!familyFasta) {
     console.warn(`Skipping ${familyKey}: missing family alignment FASTA`);
@@ -189,8 +208,10 @@ function precomputeForFamily({ familyKey, acc1, acc2, supRepMap, supRepSeqs }) {
     }
   }
 
-  // Build acc1 real residue -> acc2 real residue map (if acc2 exists)
+  // Build acc1 real residue -> acc2 real residue map (if acc2 exists), and acc2's residue
+  // letters by number, so each position can name the reference residue it corresponds to.
   const acc1ToAcc2ResMap = {};
+  const acc2ResidueAA = {};
   if (famAcc2) {
     const acc2Range = extractSeqRange(famAcc2.header);
     const acc2Offset = acc2Range ? acc2Range.start - 1 : 0;
@@ -201,7 +222,10 @@ function precomputeForFamily({ familyKey, acc1, acc2, supRepMap, supRepSeqs }) {
       const a1 = famAcc1.sequence[i] || '-';
       const a2 = famAcc2.sequence[i] || '-';
       if (a1 !== '-') acc1Run++;
-      if (a2 !== '-') acc2Run++;
+      if (a2 !== '-') {
+        acc2Run++;
+        acc2ResidueAA[acc2Offset + acc2Run] = a2.toUpperCase();
+      }
       if (a1 !== '-' && a2 !== '-') {
         const r1 = famOffset + acc1Run;
         const r2 = acc2Offset + acc2Run;
@@ -242,7 +266,7 @@ function precomputeForFamily({ familyKey, acc1, acc2, supRepMap, supRepSeqs }) {
     supResCount++;
     const realResAcc1 = supOffset + supResCount;
     const famCol = acc1ResiduePosToFamCol[realResAcc1];
-    if (famCol === undefined) {
+    if (famCol === undefined || (helixColumns && !helixColumns.has(supCol))) {
       // According to user: this should not happen; still guard
       positions[supCol] = {
         residueCounts: {},
@@ -257,13 +281,22 @@ function precomputeForFamily({ familyKey, acc1, acc2, supRepMap, supRepSeqs }) {
     const columnResidues = allFamilySeqStrings.map(seq => seq[famCol] || '-');
     const ic = computeInformationContent(columnResidues);
 
-    // GPCRdb lookup via acc1->acc2 map (preferred) or direct acc2 real residue at column
+    // GPCRdb lookup via acc1->acc2 map (preferred) or direct acc2 real residue at column.
+    // The reference residue is acc2's where the family has a reference sequence, and the
+    // anchor's own otherwise; where acc2 has no residue here it is left unset.
     let gpcrdb;
+    let refResidue;
+    let refAA;
     if (famAcc2) {
       const acc2Real = acc1ToAcc2ResMap[realResAcc1];
       if (acc2Real !== undefined) {
         gpcrdb = conservationMap[String(acc2Real)];
+        refResidue = acc2Real;
+        refAA = acc2ResidueAA[acc2Real];
       }
+    } else {
+      refResidue = realResAcc1;
+      refAA = aa.toUpperCase();
     }
 
     positions[supCol] = {
@@ -271,14 +304,22 @@ function precomputeForFamily({ familyKey, acc1, acc2, supRepMap, supRepSeqs }) {
       totalSequences: ic.totalSequences,
       informationContent: ic.informationContent,
       letterHeights: ic.letterHeights,
-      gpcrdb: gpcrdb
+      gpcrdb: gpcrdb,
+      refResidue,
+      refAA
     };
   }
 
+  const refSeq = famAcc2 || famAcc1;
+  const refFields = refSeq.header.split('|');
   return {
     familyKey,
     acc1,
     acc2: acc2 || null,
+    reference: {
+      accession: famAcc2 ? acc2 : acc1,
+      entry: refFields.length > 2 ? refFields[2].split(/[/\s]/)[0] : null
+    },
     supHeader: supSeq.header,
     length: supSeq.sequence.length,
     positions
@@ -296,6 +337,7 @@ function main() {
     if (acc) supRepMap[acc] = s;
   }
 
+  const topologyPlaced = loadTopologyPlacedColumns();
   const lines = readText(TRIM_INFO).replace(/\r/g, '').split('\n').filter(l => l.trim());
   const header = lines.shift();
   const outSummaries = [];
@@ -307,8 +349,10 @@ function main() {
     const acc2 = (cols[2] || '').trim() || null;
     if (!acc1 || !familyKey) continue;
 
-    const result = precomputeForFamily({ familyKey, acc1, acc2, supRepMap, supRepSeqs: supSeqs });
+    const helixColumns = topologyPlaced[acc1];
+    const result = precomputeForFamily({ familyKey, acc1, acc2, supRepMap, supRepSeqs: supSeqs, helixColumns });
     if (!result) continue;
+    if (helixColumns) result.placement = 'topology';
 
     const outFile = path.join(SUPERFAMILY_LOGO_MAPPINGS_DIR, `${familyKey}.json`);
     fs.writeFileSync(outFile, JSON.stringify(result));
