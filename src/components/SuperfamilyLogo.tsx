@@ -75,6 +75,8 @@ interface Props {
   minConservationThresholdExternal?: number;
   /** Optional external control of min families count */
   minFamiliesCountExternal?: number;
+  /** public folder holding the mapping JSONs of the chosen superfamily alignment */
+  mappingsDir?: string;
 }
 
 // Define amino acid groups and their default colors (same as MultiReceptorLogoChart)
@@ -125,7 +127,7 @@ const fileBaseToFamily: Record<string, string> = {
   'SLT_TRNS_genes_filtered_db_FAMSA.ref_trimmed': 'SLT_TRNS'
 };
 
-const SuperfamilyLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotDisplayName, filteredPositions, onSelectedAlignmentsChange, selectedAlignmentsExternal, showReferenceRowsExternal, showProteinRegionsExternal, regionSourceAlignmentExternal, rowHeightExternal, minConservationThresholdExternal, minFamiliesCountExternal }) => {
+const SuperfamilyLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotDisplayName, filteredPositions, onSelectedAlignmentsChange, selectedAlignmentsExternal, showReferenceRowsExternal, showProteinRegionsExternal, regionSourceAlignmentExternal, rowHeightExternal, minConservationThresholdExternal, minFamiliesCountExternal, mappingsDir = 'superfamily_logo_mappings' }) => {
   const yAxisContainerRef = useRef<HTMLDivElement>(null);
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -441,7 +443,7 @@ const SuperfamilyLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotD
           const familyKey = fileBaseToFamily[name];
           if (!familyKey) return null;
 
-          const response = await fetch(`/superfamily_logo_mappings/${familyKey}.json`);
+          const response = await fetch(`/${mappingsDir}/${familyKey}.json`);
           if (!response.ok) {
             console.warn(`Failed to load mapping JSON for ${familyKey}: ${response.status}`);
             return null;
@@ -472,7 +474,7 @@ const SuperfamilyLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotD
     return () => {
       cancelled = true;
     };
-  }, [fastaNames]);
+  }, [fastaNames, mappingsDir]);
 
   // Background families (STE2, SLT_TRNS) keep their logo rows but are left out of every
   // cross-family calculation below.

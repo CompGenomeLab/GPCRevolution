@@ -6,6 +6,14 @@ import { Card, CardContent } from '@/components/ui/card';
 import FamilyScatterPlot from '@/components/FamilyScatterPlot';
 import { Button } from '@/components/ui/button';
 import { isBackgroundFamily } from '@/lib/superfamilyBackground';
+import { ControlHint } from '@/components/phyletic-distribution/ControlPanel';
+
+// Superfamily alignments, each with its own precomputed mapping folder under public/.
+const gapPenaltyOptions = {
+  higher: { label: 'Higher', mappingsDir: 'superfamily_logo_mappings' },
+  lower: { label: 'Lower', mappingsDir: 'superfamily_logo_mappings_lower_gap' }
+} as const;
+type GapPenalty = keyof typeof gapPenaltyOptions;
 
 // Family selection IDs. Runtime logo/scatter data comes from public/superfamily_logo_mappings/*.json.
 const fastaNames = [
@@ -67,6 +75,8 @@ export default function SuperfamilyLogoPage() {
   const [rowHeight, setRowHeight] = useState(30);
   const [minConservationThreshold, setMinConservationThreshold] = useState(0);
   const [minFamiliesCount, setMinFamiliesCount] = useState(0);
+  const [gapPenalty, setGapPenalty] = useState<GapPenalty>('higher');
+  const mappingsDir = gapPenaltyOptions[gapPenalty].mappingsDir;
   // Background families are shown but not counted towards the families-above-threshold filter.
   const coreSelectedCount = selectedAlignments.filter((name) => !isBackgroundFamily(name)).length;
 
@@ -177,6 +187,7 @@ export default function SuperfamilyLogoPage() {
             {/* Left: Scatter Plot */}
             <div className="flex-1 lg:w-1/2">
               <FamilyScatterPlot
+                key={mappingsDir}
                 fastaNames={fastaNames}
                 getDisplayName={getDisplayName}
                 onSelectionChange={(positions) => setFilteredPositions(positions)}
@@ -184,6 +195,7 @@ export default function SuperfamilyLogoPage() {
                 height={500}
                 minConservationThreshold={minConservationThreshold}
                 minFamiliesCount={minFamiliesCount}
+                mappingsDir={mappingsDir}
               />
             </div>
 
@@ -193,6 +205,34 @@ export default function SuperfamilyLogoPage() {
             {/* Right: Controls */}
             <div className="flex-1 lg:w-1/2 flex flex-col">
               <h3 className="text-lg font-semibold mb-3">Logo Controls</h3>
+
+              {/* Superfamily alignment */}
+              <div className="mb-4 flex items-center gap-2">
+                <label htmlFor="gap-penalty" className="text-sm font-medium">Alignment Gap Penalty:</label>
+                <select
+                  id="gap-penalty"
+                  value={gapPenalty}
+                  onChange={(e) => {
+                    // column numbers differ between the alignments, so a position selection does not carry over
+                    setGapPenalty(e.target.value as GapPenalty);
+                    setFilteredPositions([]);
+                  }}
+                  className="h-8 rounded border bg-background px-2 text-sm text-foreground"
+                >
+                  {(Object.keys(gapPenaltyOptions) as GapPenalty[]).map((key) => (
+                    <option key={key} value={key}>{gapPenaltyOptions[key].label}</option>
+                  ))}
+                </select>
+                <ControlHint id="gap-penalty-hint" label="About the alignment gap penalty">
+                  The superfamily alignment of family representatives was built with MAFFT G-INS-i in two
+                  ways. <strong>Higher</strong> adds an offset (--ep 0.123) that acts like a gap-extension
+                  penalty, so sequences are held in shared columns rather than opening gaps.{' '}
+                  <strong>Lower</strong> drops that offset and allows longer gaps. Columns conserved across
+                  several families are nearly identical in both; the differences fall mostly in loops, helix
+                  ends and the cytoplasmic half of TM5. Column numbers differ between the two, so switching
+                  clears the scatter-plot selection.
+                </ControlHint>
+              </div>
               
               {/* Family Selection */}
               <div className="mb-4 flex-grow flex flex-col min-h-0">
@@ -388,6 +428,7 @@ export default function SuperfamilyLogoPage() {
               rowHeightExternal={rowHeight}
               minConservationThresholdExternal={minConservationThreshold}
               minFamiliesCountExternal={minFamiliesCount}
+              mappingsDir={mappingsDir}
             />
           </div>
         </CardContent>

@@ -24,6 +24,7 @@ interface Props {
   selectedFamilies?: string[]; // file base names matching fastaNames; if provided, limit data to these
   minConservationThreshold?: number; // Filter threshold from parent
   minFamiliesCount?: number; // Minimum families count from parent
+  mappingsDir?: string; // public folder holding the mapping JSONs of the chosen superfamily alignment
 }
 
 // Map file base to family key used by public/superfamily_logo_mappings/*.json
@@ -69,7 +70,7 @@ type ScatterPoint = {
 
 type AxisGroupSelection = Selection<SVGGElement, unknown, null, undefined>;
 
-const FamilyScatterPlot: React.FC<Props> = ({ fastaNames, onSelectionChange, height = 260, selectedFamilies, minConservationThreshold = 0, minFamiliesCount = 0 }) => {
+const FamilyScatterPlot: React.FC<Props> = ({ fastaNames, onSelectionChange, height = 260, selectedFamilies, minConservationThreshold = 0, minFamiliesCount = 0, mappingsDir = 'superfamily_logo_mappings' }) => {
   const [mappings, setMappings] = useState<Record<string, FamilyMapping>>({});
   const [selectedPositions, setSelectedPositions] = useState<Set<number>>(new Set());
   const [useThresholdMode, setUseThresholdMode] = useState(false);
@@ -102,7 +103,7 @@ const FamilyScatterPlot: React.FC<Props> = ({ fastaNames, onSelectionChange, hei
             const fam = fileBaseToFamily[fileBase];
             if (!fam) return null;
             try {
-              const res = await fetch(`/superfamily_logo_mappings/${fam}.json`);
+              const res = await fetch(`/${mappingsDir}/${fam}.json`);
               if (!res.ok) return null;
               const data = (await res.json()) as FamilyMapping;
               return [fam, data] as const;
@@ -123,7 +124,7 @@ const FamilyScatterPlot: React.FC<Props> = ({ fastaNames, onSelectionChange, hei
     };
     load();
     return () => { cancelled = true; };
-  }, [fastaNames]);
+  }, [fastaNames, mappingsDir]);
 
   // Compute scatter data
   const points: ScatterPoint[] = useMemo(() => {

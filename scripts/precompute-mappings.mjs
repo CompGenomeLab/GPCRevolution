@@ -1,10 +1,19 @@
 import fs from 'fs';
 import path from 'path';
 
+// Optional arguments build an alternative superfamily alignment into its own folder:
+//   node scripts/precompute-mappings.mjs --alignment <fasta> --helix-columns <tsv> --out <dir>
+// (file names relative to public/superfamily_logo_source_files, --out relative to public).
+// Without them the default alignment is built into public/superfamily_logo_mappings.
+function argValue(name) {
+  const i = process.argv.indexOf(name);
+  return i > -1 ? process.argv[i + 1] : undefined;
+}
+
 const ROOT = path.resolve('.');
 const SUPERFAMILY_LOGO_SOURCE_DIR = path.join(ROOT, 'public', 'superfamily_logo_source_files');
 const CONSERVATION_DIR = path.join(ROOT, 'public', 'conservation_files');
-const SUPERFAMILY_LOGO_MAPPINGS_DIR = path.join(ROOT, 'public', 'superfamily_logo_mappings');
+const SUPERFAMILY_LOGO_MAPPINGS_DIR = path.join(ROOT, 'public', argValue('--out') || 'superfamily_logo_mappings');
 
 // Families to process are driven by trim_info.tsv
 const TRIM_INFO = path.join(SUPERFAMILY_LOGO_SOURCE_DIR, 'trim_info.tsv');
@@ -12,8 +21,9 @@ const TRIM_INFO = path.join(SUPERFAMILY_LOGO_SOURCE_DIR, 'trim_info.tsv');
 // (step10 place_by_topology.py). Only their helix columns carry a correspondence;
 // their loop residues sit in loop columns just to keep residue numbering continuous,
 // so every other column is left empty for those families.
-const TOPOLOGY_PLACED = path.join(SUPERFAMILY_LOGO_SOURCE_DIR, 'topology_placed_helix_columns.tsv');
-const SUP_REPS = resolveFastaPath({
+const TOPOLOGY_PLACED = path.join(SUPERFAMILY_LOGO_SOURCE_DIR,
+  argValue('--helix-columns') || 'topology_placed_helix_columns.tsv');
+const SUP_REPS = argValue('--alignment') ? path.join(SUPERFAMILY_LOGO_SOURCE_DIR, argValue('--alignment')) : resolveFastaPath({
   label: 'representative combined alignment',
   preferredNames: [
     'representatives_all_Sep22_topo0.8_ginsi_ep0.123_plus_SLT_TRNS_topology.fasta',

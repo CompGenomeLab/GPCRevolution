@@ -66,7 +66,7 @@ const labelClass =
 const formatRankLabel = (level: string) =>
   level.charAt(0).toUpperCase() + level.slice(1)
 
-function ControlHint({
+export function ControlHint({
   id,
   label,
   children,
