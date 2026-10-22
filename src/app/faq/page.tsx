@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { ChevronDown } from 'lucide-react';
 import RootContainer from '@/components/RootContainer';
+import { TRANSPARENCY_PAGES } from '@/lib/transparency';
 
 const faqs: { question: string; answer: React.ReactNode }[] = [
   {
@@ -36,6 +37,19 @@ const faqs: { question: string; answer: React.ReactNode }[] = [
     question: 'What is the header format for protein sequences?',
     answer: 'sp: Swiss-Prot / tr: TrEMBL|Uniprot Protein ID|Gene Name _ Species Name|Tax ID',
   },
+  // One question per transparency page (src/lib/transparency.ts), linking to it.
+  ...TRANSPARENCY_PAGES.map(page => ({
+    question: page.question,
+    answer: (
+      <>
+        {page.answer} The{' '}
+        <Link href={page.href} className="underline hover:text-foreground">
+          {page.linkText}
+        </Link>{' '}
+        page {page.linkNote}.
+      </>
+    ),
+  })),
 ];
 
 export default function FAQPage() {

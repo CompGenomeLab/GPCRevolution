@@ -1,0 +1,522 @@
+[
+ {
+  "gene": "cAMP",
+  "n_leaves": 9999,
+  "n_clade_leaves": 2210,
+  "n_ranges": 2,
+  "aln_len": 295,
+  "has_score": true,
+  "pending": false,
+  "variant_of": null,
+  "lineplot_expected": "cAMP_hmm_E1000_db_hmmregions_FAMSA_gt0.1_hmmordered_score_lineplot.html",
+  "bin_size": 10,
+  "n_bins": 1000,
+  "leaf_ranges": [
+   [
+    0,
+    2187
+   ],
+   [
+    2909,
+    2930
+   ]
+  ],
+  "display": "cAMP",
+  "control": false
+ },
+ {
+  "gene": "classA",
+  "n_leaves": 136240,
+  "n_clade_leaves": 97326,
+  "n_ranges": 2,
+  "aln_len": 285,
+  "has_score": true,
+  "pending": false,
+  "variant_of": null,
+  "lineplot_expected": "classA_hmm_E1000_db_hmmregions_FAMSA_gt0.1_hmmordered_score_lineplot.html",
+  "bin_size": 137,
+  "n_bins": 995,
+  "leaf_ranges": [
+   [
+    0,
+    59349
+   ],
+   [
+    83356,
+    121331
+   ]
+  ],
+  "display": "Class A",
+  "control": false
+ },
+ {
+  "gene": "classB1",
+  "n_leaves": 62527,
+  "n_clade_leaves": 13537,
+  "n_ranges": 1,
+  "aln_len": 278,
+  "has_score": true,
+  "pending": false,
+  "variant_of": null,
+  "lineplot_expected": "classB_hmm_E1000_db_hmmregions_FAMSA_gt0.1_hmmordered_score_lineplot.html",
+  "bin_size": 63,
+  "n_bins": 993,
+  "leaf_ranges": [
+   [
+    0,
+    13536
+   ]
+  ],
+  "display": "Class B1",
+  "control": false
+ },
+ {
+  "gene": "classB2",
+  "n_leaves": 62527,
+  "n_clade_leaves": 20354,
+  "n_ranges": 1,
+  "aln_len": 278,
+  "has_score": true,
+  "pending": false,
+  "variant_of": null,
+  "lineplot_expected": "classB_hmm_E1000_db_hmmregions_FAMSA_gt0.1_hmmordered_score_lineplot.html",
+  "bin_size": 63,
+  "n_bins": 993,
+  "leaf_ranges": [
+   [
+    13634,
+    33987
+   ]
+  ],
+  "display": "Class B2",
+  "control": false
+ },
+ {
+  "gene": "classC",
+  "n_leaves": 49679,
+  "n_clade_leaves": 29025,
+  "n_ranges": 2,
+  "aln_len": 287,
+  "has_score": true,
+  "pending": false,
+  "variant_of": null,
+  "lineplot_expected": "classC_hmm_E1000_db_hmmregions_FAMSA_gt0.1_hmmordered_score_lineplot.html",
+  "bin_size": 50,
+  "n_bins": 994,
+  "leaf_ranges": [
+   [
+    0,
+    28406
+   ],
+   [
+    36781,
+    37398
+   ]
+  ],
+  "display": "Class C",
+  "control": false
+ },
+ {
+  "gene": "classF",
+  "n_leaves": 28165,
+  "n_clade_leaves": 8804,
+  "n_ranges": 1,
+  "aln_len": 1166,
+  "has_score": true,
+  "pending": false,
+  "variant_of": null,
+  "lineplot_expected": "classF_hmm_E1000_db_FAMSA_gt0.1_hmmordered_score_lineplot.html",
+  "bin_size": 29,
+  "n_bins": 972,
+  "leaf_ranges": [
+   [
+    0,
+    8803
+   ]
+  ],
+  "display": "Class F",
+  "control": false
+ },
+ {
+  "gene": "classT",
+  "n_leaves": 20000,
+  "n_clade_leaves": 4143,
+  "n_ranges": 1,
+  "aln_len": 504,
+  "has_score": true,
+  "pending": false,
+  "variant_of": null,
+  "lineplot_expected": "classT_hmm_E1000_db_FAMSA_gt0.1_hmmordered_score_lineplot.html",
+  "bin_size": 20,
+  "n_bins": 1000,
+  "leaf_ranges": [
+   [
+    0,
+    4142
+   ]
+  ],
+  "display": "Taste-2",
+  "control": false
+ },
+ {
+  "gene": "FSLB_DICDI",
+  "n_leaves": 10000,
+  "n_clade_leaves": 1097,
+  "n_ranges": 1,
+  "aln_len": 809,
+  "has_score": true,
+  "pending": false,
+  "variant_of": null,
+  "lineplot_expected": "FSLB_DICDI_db_FAMSA_gt0.1_m8ordered_score_lineplot.html",
+  "bin_size": 10,
+  "n_bins": 1000,
+  "leaf_ranges": [
+   [
+    7295,
+    8391
+   ]
+  ],
+  "display": "FSL",
+  "control": false
+ },
+ {
+  "gene": "Galpha",
+  "n_leaves": 176803,
+  "n_clade_leaves": 24107,
+  "n_ranges": 1,
+  "aln_len": 1066,
+  "has_score": true,
+  "pending": false,
+  "variant_of": null,
+  "lineplot_expected": "Galpha_hmm_E1000_db_FAMSA_gt0.1_hmmordered_score_lineplot.html",
+  "bin_size": 177,
+  "n_bins": 999,
+  "leaf_ranges": [
+   [
+    0,
+    24106
+   ]
+  ],
+  "display": "G\u03b1",
+  "control": true
+ },
+ {
+  "gene": "Gbeta",
+  "n_leaves": 30000,
+  "n_clade_leaves": 6243,
+  "n_ranges": 1,
+  "aln_len": 1430,
+  "has_score": true,
+  "pending": false,
+  "variant_of": null,
+  "lineplot_expected": "Gbeta_hmm_E1000_db_FAMSA_gt0.1_hmmordered_score_lineplot.html",
+  "bin_size": 30,
+  "n_bins": 1000,
+  "leaf_ranges": [
+   [
+    2,
+    6244
+   ]
+  ],
+  "display": "G\u03b2",
+  "control": true
+ },
+ {
+  "gene": "Ggamma",
+  "n_leaves": 19621,
+  "n_clade_leaves": 9579,
+  "n_ranges": 1,
+  "aln_len": 660,
+  "has_score": true,
+  "pending": false,
+  "variant_of": null,
+  "lineplot_expected": "Ggamma_hmm_E1000_db_FAMSA_gt0.1_hmmordered_score_lineplot.html",
+  "bin_size": 20,
+  "n_bins": 982,
+  "leaf_ranges": [
+   [
+    0,
+    9578
+   ]
+  ],
+  "display": "G\u03b3",
+  "control": true
+ },
+ {
+  "gene": "GP143",
+  "n_leaves": 10000,
+  "n_clade_leaves": 846,
+  "n_ranges": 1,
+  "aln_len": 1873,
+  "has_score": true,
+  "pending": false,
+  "variant_of": null,
+  "lineplot_expected": "GP143_hmm_E1000_db_FAMSA_gt0.1_hmmordered_score_lineplot.html",
+  "bin_size": 10,
+  "n_bins": 1000,
+  "leaf_ranges": [
+   [
+    0,
+    845
+   ]
+  ],
+  "display": "GP143",
+  "control": false
+ },
+ {
+  "gene": "GP157",
+  "n_leaves": 10000,
+  "n_clade_leaves": 917,
+  "n_ranges": 1,
+  "aln_len": 562,
+  "has_score": true,
+  "pending": false,
+  "variant_of": null,
+  "lineplot_expected": "GP157_hmm_E1000_db_hmmregions_FAMSA_gt0.1_hmmordered_score_lineplot.html",
+  "bin_size": 10,
+  "n_bins": 1000,
+  "leaf_ranges": [
+   [
+    0,
+    916
+   ]
+  ],
+  "display": "GP157",
+  "control": false
+ },
+ {
+  "gene": "GPR1_YEAST",
+  "n_leaves": 10000,
+  "n_clade_leaves": 3138,
+  "n_ranges": 1,
+  "aln_len": 670,
+  "has_score": true,
+  "pending": false,
+  "variant_of": null,
+  "lineplot_expected": "GPR1_YEAST_db_FAMSA_gt0.1_m8ordered_score_lineplot.html",
+  "bin_size": 10,
+  "n_bins": 1000,
+  "leaf_ranges": [
+   [
+    1517,
+    4654
+   ]
+  ],
+  "display": "GPR1",
+  "control": false
+ },
+ {
+  "gene": "Mth",
+  "n_leaves": 9999,
+  "n_clade_leaves": 3070,
+  "n_ranges": 1,
+  "aln_len": 2559,
+  "has_score": true,
+  "pending": false,
+  "variant_of": null,
+  "lineplot_expected": "Mth_hmm_E1000_db_FAMSA_gt0.1_hmmordered_score_lineplot.html",
+  "bin_size": 10,
+  "n_bins": 1000,
+  "leaf_ranges": [
+   [
+    0,
+    3069
+   ]
+  ],
+  "display": "Mth",
+  "control": false
+ },
+ {
+  "gene": "Nematode",
+  "n_leaves": 10000,
+  "n_clade_leaves": 6609,
+  "n_ranges": 1,
+  "aln_len": 544,
+  "has_score": true,
+  "pending": false,
+  "variant_of": null,
+  "lineplot_expected": "Nematode_hmm_E1000_db_FAMSA_gt0.1_hmmordered_score_lineplot.html",
+  "bin_size": 10,
+  "n_bins": 1000,
+  "leaf_ranges": [
+   [
+    0,
+    6608
+   ]
+  ],
+  "display": "Nematode",
+  "control": false
+ },
+ {
+  "gene": "Olfactory",
+  "n_leaves": 200000,
+  "n_clade_leaves": 116749,
+  "n_ranges": 1,
+  "aln_len": 429,
+  "has_score": true,
+  "pending": false,
+  "variant_of": null,
+  "lineplot_expected": "Olfactory_hmm_E1000_db_FAMSA_gt0.1_hmmordered_score_lineplot.html",
+  "bin_size": 200,
+  "n_bins": 1000,
+  "leaf_ranges": [
+   [
+    0,
+    116748
+   ]
+  ],
+  "display": "Olfactory",
+  "control": false
+ },
+ {
+  "gene": "RBP1",
+  "n_leaves": 50000,
+  "n_clade_leaves": 10116,
+  "n_ranges": 1,
+  "aln_len": 1797,
+  "has_score": true,
+  "pending": false,
+  "variant_of": null,
+  "lineplot_expected": "RBP1_hmm_E1000_db_FAMSA_gt0.1_hmmordered_score_lineplot.html",
+  "bin_size": 50,
+  "n_bins": 1000,
+  "leaf_ranges": [
+   [
+    0,
+    10115
+   ]
+  ],
+  "display": "RBP1",
+  "control": true
+ },
+ {
+  "gene": "STE2",
+  "n_leaves": 8944,
+  "n_clade_leaves": 777,
+  "n_ranges": 1,
+  "aln_len": 287,
+  "has_score": true,
+  "pending": false,
+  "variant_of": null,
+  "lineplot_expected": "STE2_hmm_E1000_db_hmmregions_FAMSA_gt0.1_hmmordered_score_lineplot.html",
+  "bin_size": 9,
+  "n_bins": 994,
+  "leaf_ranges": [
+   [
+    0,
+    776
+   ]
+  ],
+  "display": "STE2",
+  "control": false
+ },
+ {
+  "gene": "STE3",
+  "n_leaves": 9963,
+  "n_clade_leaves": 2824,
+  "n_ranges": 1,
+  "aln_len": 515,
+  "has_score": true,
+  "pending": false,
+  "variant_of": null,
+  "lineplot_expected": "STE3_hmm_E1000_db_hmmregions_FAMSA_gt0.1_hmmordered_score_lineplot.html",
+  "bin_size": 10,
+  "n_bins": 997,
+  "leaf_ranges": [
+   [
+    0,
+    2823
+   ]
+  ],
+  "display": "STE3",
+  "control": false
+ },
+ {
+  "gene": "TBP",
+  "n_leaves": 9466,
+  "n_clade_leaves": 6013,
+  "n_ranges": 2,
+  "aln_len": 372,
+  "has_score": true,
+  "pending": false,
+  "variant_of": null,
+  "lineplot_expected": "TBP_hmm_E1000_db_hmmregions_FAMSA_gt0.1_hmmordered_score_lineplot.html",
+  "bin_size": 10,
+  "n_bins": 947,
+  "leaf_ranges": [
+   [
+    0,
+    4398
+   ],
+   [
+    4403,
+    6016
+   ]
+  ],
+  "display": "TBP",
+  "control": true
+ },
+ {
+  "gene": "TM116",
+  "n_leaves": 9996,
+  "n_clade_leaves": 831,
+  "n_ranges": 1,
+  "aln_len": 322,
+  "has_score": true,
+  "pending": false,
+  "variant_of": null,
+  "lineplot_expected": "TM116_hmm_E1000_db_hmmregions_FAMSA_gt0.1_hmmordered_score_lineplot.html",
+  "bin_size": 10,
+  "n_bins": 1000,
+  "leaf_ranges": [
+   [
+    0,
+    830
+   ]
+  ],
+  "display": "TM116",
+  "control": false
+ },
+ {
+  "gene": "Vomeronasal1",
+  "n_leaves": 20000,
+  "n_clade_leaves": 3323,
+  "n_ranges": 1,
+  "aln_len": 504,
+  "has_score": true,
+  "pending": false,
+  "variant_of": null,
+  "lineplot_expected": "classT_hmm_E1000_db_FAMSA_gt0.1_hmmordered_score_lineplot.html",
+  "bin_size": 20,
+  "n_bins": 1000,
+  "leaf_ranges": [
+   [
+    4143,
+    7465
+   ]
+  ],
+  "display": "Vomeronasal 1",
+  "control": false
+ },
+ {
+  "gene": "Vomeronasal2",
+  "n_leaves": 10000,
+  "n_clade_leaves": 7412,
+  "n_ranges": 1,
+  "aln_len": 1000,
+  "has_score": true,
+  "pending": false,
+  "variant_of": null,
+  "lineplot_expected": "Vomeronasal2_hmm_E1000_db_hmmregions_FAMSA_gt0.1_hmmordered_score_lineplot.html",
+  "bin_size": 10,
+  "n_bins": 1000,
+  "leaf_ranges": [
+   [
+    609,
+    8020
+   ]
+  ],
+  "display": "Vomeronasal 2",
+  "control": false
+ }
+]

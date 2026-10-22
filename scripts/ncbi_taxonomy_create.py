@@ -56,6 +56,31 @@ CUSTOM_GROUPS = (
             ("Viridiplantae",),
         ),
     },
+    # NCBI places the unicellular holozoans and the nucleariids directly under Opisthokonta,
+    # beside Metazoa and Fungi, so the animal and fungal halves of the opisthokonts are split
+    # here. Aphelida and the unplaced opisthokont bins are left where NCBI has them.
+    {
+        "taxid": -3,
+        "name": "Holozoa",
+        "rank": "clade",
+        "parent": "Opisthokonta",
+        "children": (
+            ("Metazoa",),
+            ("Choanoflagellata",),
+            ("Filasterea",),
+            ("Ichthyosporea",),
+        ),
+    },
+    {
+        "taxid": -4,
+        "name": "Holomycota",
+        "rank": "clade",
+        "parent": "Opisthokonta",
+        "children": (
+            ("Fungi",),
+            ("Rotosphaerida",),
+        ),
+    },
 )
 
 # ---------------- Helpers ----------------
@@ -504,7 +529,7 @@ DEFAULT_TAXID_TSV_PATH = (
     PROJECT_ROOT
     / "public"
     / "phyletic-distribution"
-    / "tax_counts_per_family_unfiltered.tsv"
+    / "tax_counts_per_family_topology0.8_Sep24.tsv"
 )
 DEFAULT_OUTPUT_JSON = (
     PROJECT_ROOT
@@ -539,7 +564,8 @@ def parse_args():
         default=DEFAULT_TAXID_TSV_PATH,
         help=(
             "TSV/CSV containing the taxIDs to retain. Defaults to the "
-            "project's unfiltered GPCR-family table."
+            "current GPCR-family count table; the published taxonomy was built "
+            "from the full list of searched taxIDs, passed with --taxids."
         ),
     )
     parser.add_argument(

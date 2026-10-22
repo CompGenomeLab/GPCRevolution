@@ -72,7 +72,9 @@ type AxisGroupSelection = Selection<SVGGElement, unknown, null, undefined>;
 
 const FamilyScatterPlot: React.FC<Props> = ({ fastaNames, onSelectionChange, height = 260, selectedFamilies, minConservationThreshold = 0, minFamiliesCount = 0, mappingsDir = 'superfamily_logo_mappings' }) => {
   const [mappings, setMappings] = useState<Record<string, FamilyMapping>>({});
-  const [selectedPositions, setSelectedPositions] = useState<Set<number>>(new Set());
+  // Brushed area kept as value ranges (entropy and conservation), not as columns, so it acts as a
+  // pair of thresholds and selects the matching positions of whichever alignment is shown.
+  const [brushBox, setBrushBox] = useState<{ e0: number; e1: number; c0: number; c1: number } | null>(null);
   const [useThresholdMode, setUseThresholdMode] = useState(false);
   const [threshold, setThreshold] = useState<number>(70);
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -92,6 +94,12 @@ const FamilyScatterPlot: React.FC<Props> = ({ fastaNames, onSelectionChange, hei
     
     return () => observer.disconnect();
   }, []);
+
+  // The y axis changes units (% vs number of families) with the mode, so the brushed ranges do not
+  // carry over a mode switch; they do carry over a change of alignment or families.
+  useEffect(() => {
+    setBrushBox(null);
+  }, [useThresholdMode]);
 
   // Load mapping JSONs for included families
   useEffect(() => {
@@ -244,6 +252,24 @@ const FamilyScatterPlot: React.FC<Props> = ({ fastaNames, onSelectionChange, hei
     return filtered;
   }, [points, minConservationThreshold, minFamiliesCount, useThresholdMode]);
 
+  // Positions inside the brushed ranges, recomputed for the current points
+  const selectedPositions = useMemo(() => {
+    if (!brushBox) return new Set<number>();
+    return new Set(points
+      .filter((d) => d.entropy >= brushBox.e0 && d.entropy <= brushBox.e1
+        && d.avgConservation >= brushBox.c0 && d.avgConservation <= brushBox.c1)
+      .map((d) => d.pos));
+  }, [points, brushBox]);
+
+  // Report the selection (positions that also pass the filters) whenever it or the data change
+  useEffect(() => {
+    if (!brushBox) {
+      onSelectionChange?.([]);
+      return;
+    }
+    onSelectionChange?.([...selectedPositions].filter((pos) => filteredPointsSet.has(pos)));
+  }, [brushBox, selectedPositions, filteredPointsSet, onSelectionChange]);
+
   // Render scatter with brush
   useEffect(() => {
     const svg = d3.select(svgRef.current);
@@ -375,32 +401,20 @@ const FamilyScatterPlot: React.FC<Props> = ({ fastaNames, onSelectionChange, hei
       .on('end', (event: D3BrushEvent<unknown>) => {
         const sel = event.selection as [[number, number], [number, number]] | null;
         if (!sel) {
-          setSelectedPositions(new Set());
-          onSelectionChange?.([]);
+          setBrushBox(null);
           return;
         }
         const [[x0, y0], [x1, y1]] = sel;
-        const chosen = points
-          .filter((d) => {
-            const px = x(d.entropy);
-            const py = y(d.avgConservation);
-            return px >= x0 && px <= x1 && py >= y0 && py <= y1;
-          })
-          .map((d) => d.pos);
-        const set = new Set<number>(chosen);
-        setSelectedPositions(set);
-        
-        // Only pass positions that also meet filter criteria
-        const filteredChosen = chosen.filter(pos => filteredPointsSet.has(pos));
-        onSelectionChange?.(filteredChosen);
+        // pixels -> value ranges (y runs downwards)
+        setBrushBox({ e0: x.invert(x0), e1: x.invert(x1), c0: y.invert(y1), c1: y.invert(y0) });
       });
 
+    // the rectangle is not redrawn: the selected points stay coloured, and the ranges stay applied
     g.append('g').attr('class', 'brush').call(brush);
-  }, [points, height, onSelectionChange, isDarkMode, selectedPositions, useThresholdMode, filteredPointsSet, mappings, selectedFamilies]);
+  }, [points, height, isDarkMode, selectedPositions, useThresholdMode, filteredPointsSet, mappings, selectedFamilies]);
 
   const clearSelection = () => {
-    setSelectedPositions(new Set());
-    onSelectionChange?.([]);
+    setBrushBox(null);
   };
 
   const downloadSVG = () => {
@@ -464,7 +478,7 @@ const FamilyScatterPlot: React.FC<Props> = ({ fastaNames, onSelectionChange, hei
           />
           <span>%</span>
         </div>
-        <Button variant="outline" size="sm" onClick={clearSelection} disabled={selectedPositions.size === 0}>
+        <Button variant="outline" size="sm" onClick={clearSelection} disabled={!brushBox}>
           Clear Selection
         </Button>
       </div>

@@ -39,23 +39,13 @@ type TaxonomyValue = (typeof TAXONOMIES)[number]['value'];
 const DEFAULT_TAXONOMY: TaxonomyValue = 'ncbi';
 const SOURCE_DATASETS = [
   {
-    value: 'unfiltered',
-    label: 'Unfiltered',
-    file: '/phyletic-distribution/tax_counts_per_family_unfiltered.tsv',
-  },
-  {
-    value: 'best-eval',
-    label: 'E≤0.1 BestEval',
-    file: '/phyletic-distribution/tax_counts_per_family_e0.1_BestEval.tsv',
-  },
-  {
-    value: 'best-eval-all-controls',
-    label: 'E≤0.1 BestEval + all controls',
-    file: '/phyletic-distribution/tax_counts_per_family_e0.1_BestEval_allControls.tsv',
+    value: 'final',
+    label: 'Final (after the GPR1 reassignment)',
+    file: '/phyletic-distribution/tax_counts_per_family_final.tsv',
   },
 ] as const;
 type SourceDataValue = (typeof SOURCE_DATASETS)[number]['value'];
-const DEFAULT_SOURCE_DATA: SourceDataValue = 'best-eval-all-controls';
+const DEFAULT_SOURCE_DATA: SourceDataValue = 'final';
 type TaxonFilterSettings = {
   removeAllZero: boolean;
   family: string | 'ANY';

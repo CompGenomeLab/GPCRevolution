@@ -26,6 +26,7 @@ const TOPOLOGY_PLACED = path.join(SUPERFAMILY_LOGO_SOURCE_DIR,
 const SUP_REPS = argValue('--alignment') ? path.join(SUPERFAMILY_LOGO_SOURCE_DIR, argValue('--alignment')) : resolveFastaPath({
   label: 'representative combined alignment',
   preferredNames: [
+    'representatives_all_Oct08_ginsi_ep0.123_plus_SLT_TRNS_topology.fasta',
     'representatives_all_Sep22_topo0.8_ginsi_ep0.123_plus_SLT_TRNS_topology.fasta',
     'representatives_all_Sep22_topo0.8_ginsi_ep0.123.fasta',
     'All_clust0.7_cov1_Oct25_minsize2_linsi_ep0.123_trimends_treein_ginsi_ep0.123_selected_reps.fasta',
@@ -257,8 +258,12 @@ function precomputeForFamily({ familyKey, acc1, acc2, supRepMap, supRepSeqs, hel
 
   // Build per sup_reps column logo and gpcrdb
   const positions = [];
-  // Prepare family column cache per column to speed repeated reads
-  const allFamilySeqStrings = familySeqs.map(s => s.sequence);
+  // Prepare family column cache per column to speed repeated reads. Rows tagged
+  // 'anchor_only' (the family's anchors carried into a kingdom chunk they do not belong
+  // to, by step11 split_trimmed_alignments_by_kingdom.py) map columns but are not counted.
+  const allFamilySeqStrings = familySeqs
+    .filter(s => !/\banchor_only\b/.test(s.header))
+    .map(s => s.sequence);
 
   let supResCount = 0;
   for (let supCol = 0; supCol < supSeq.sequence.length; supCol++) {
@@ -367,6 +372,10 @@ function main() {
     const outFile = path.join(SUPERFAMILY_LOGO_MAPPINGS_DIR, `${familyKey}.json`);
     fs.writeFileSync(outFile, JSON.stringify(result));
     outSummaries.push({ familyKey, length: result.length, acc1 });
+    // Kingdom chunks (<family>_Animals, _Fungi, _Plants) are listed under their family so
+    // the logo page can offer them as expandable rows.
+    const chunk = familyKey.match(/^(.+)_(Animals|Fungi|Plants)$/);
+    if (chunk) outSummaries[outSummaries.length - 1].kingdomOf = chunk[1];
     console.log(`Wrote ${path.relative(ROOT, outFile)} (len=${result.length})`);
   }
 

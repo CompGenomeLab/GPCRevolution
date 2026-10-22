@@ -18,6 +18,11 @@ interface PositionLogoData {
   matchCounts?: Record<string, number>;
   gpcrdb?: string; // GPCRdb numbering for class-wide alignments
   reference?: string; // e.g. 'HRH2_HUMAN (P25021) R116', for the hover text
+  // Consensus mapping: share of the family's representatives agreeing on this column
+  confidence?: number;
+  votes?: number;
+  nReps?: number;
+  masked?: boolean; // below the minimum mapping confidence: drawn under a grey box
   crossAlignmentData?: {
     alignmentAAs: Record<string, string>;
     matchCount: number;
@@ -40,6 +45,11 @@ interface MappingPositionData {
   gpcrdb?: string;
   refResidue?: number;
   refAA?: string;
+  // Consensus mapping (step11 consensus_logo_mappings.py): votes for this family column among
+  // the representatives with a residue here or there (confidence), and nReps with a residue here
+  confidence?: number;
+  votes?: number;
+  nReps?: number;
 }
 
 interface FamilyMappingData {
@@ -77,6 +87,10 @@ interface Props {
   minFamiliesCountExternal?: number;
   /** public folder holding the mapping JSONs of the chosen superfamily alignment */
   mappingsDir?: string;
+  /** Family positions with a lower mapping confidence are covered by a grey box */
+  minMappingConfidence?: number;
+  /** Bar row above the logos: mean mapping confidence of the shown families per column */
+  showConfidenceBars?: boolean;
 }
 
 // Define amino acid groups and their default colors (same as MultiReceptorLogoChart)
@@ -127,7 +141,19 @@ const fileBaseToFamily: Record<string, string> = {
   'SLT_TRNS_genes_filtered_db_FAMSA.ref_trimmed': 'SLT_TRNS'
 };
 
-const SuperfamilyLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotDisplayName, filteredPositions, onSelectedAlignmentsChange, selectedAlignmentsExternal, showReferenceRowsExternal, showProteinRegionsExternal, regionSourceAlignmentExternal, rowHeightExternal, minConservationThresholdExternal, minFamiliesCountExternal, mappingsDir = 'superfamily_logo_mappings' }) => {
+// Kingdom rows: a family row can be expanded into its Animals, Fungi and Plants members,
+// each from the family's own alignment and anchor (mapping JSON '<family>_<Kingdom>').
+// They are display rows only and never enter a cross-family calculation.
+const KINGDOM_ROW_SEPARATOR = '::';
+const kingdomRowName = (alignmentName: string, kingdom: string) => `${alignmentName}${KINGDOM_ROW_SEPARATOR}${kingdom}`;
+const splitKingdomRow = (rowName: string): { parent: string; kingdom: string | null } => {
+  const i = rowName.indexOf(KINGDOM_ROW_SEPARATOR);
+  return i < 0
+    ? { parent: rowName, kingdom: null }
+    : { parent: rowName.slice(0, i), kingdom: rowName.slice(i + KINGDOM_ROW_SEPARATOR.length) };
+};
+
+const SuperfamilyLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotDisplayName, filteredPositions, onSelectedAlignmentsChange, selectedAlignmentsExternal, showReferenceRowsExternal, showProteinRegionsExternal, regionSourceAlignmentExternal, rowHeightExternal, minConservationThresholdExternal, minFamiliesCountExternal, mappingsDir = 'superfamily_logo_mappings', minMappingConfidence = 0, showConfidenceBars = false }) => {
   const yAxisContainerRef = useRef<HTMLDivElement>(null);
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -476,6 +502,74 @@ const SuperfamilyLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotD
     };
   }, [fastaNames, mappingsDir]);
 
+  // Kingdom rows available per family key (from index.json), which families are expanded,
+  // and the kingdom mapping JSONs, loaded the first time a family is expanded.
+  const [kingdomsByFamily, setKingdomsByFamily] = useState<Record<string, string[]>>({});
+  const [expandedAlignments, setExpandedAlignments] = useState<string[]>([]);
+  const [kingdomMappingData, setKingdomMappingData] = useState<Record<string, FamilyMappingData>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    setKingdomMappingData({});
+    fetch(`/${mappingsDir}/index.json`)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((index: Array<{ familyKey: string; kingdomOf?: string }>) => {
+        if (cancelled) return;
+        const byFamily: Record<string, string[]> = {};
+        index.forEach((entry) => {
+          if (!entry.kingdomOf) return;
+          const kingdom = entry.familyKey.slice(entry.kingdomOf.length + 1);
+          (byFamily[entry.kingdomOf] ||= []).push(kingdom);
+        });
+        setKingdomsByFamily(byFamily);
+      })
+      .catch(() => { if (!cancelled) setKingdomsByFamily({}); });
+    return () => { cancelled = true; };
+  }, [mappingsDir]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const missing = expandedAlignments.flatMap((name) => {
+      const familyKey = fileBaseToFamily[name];
+      return (kingdomsByFamily[familyKey] || [])
+        .map((kingdom) => `${familyKey}_${kingdom}`)
+        .filter((key) => !kingdomMappingData[key]);
+    });
+    if (missing.length === 0) return;
+    Promise.all(missing.map(async (key) => {
+      const res = await fetch(`/${mappingsDir}/${key}.json`);
+      return res.ok ? ([key, (await res.json()) as FamilyMappingData] as const) : null;
+    })).then((entries) => {
+      if (cancelled) return;
+      // keep the same object when nothing loaded (a missing kingdom file), or this effect,
+      // which depends on kingdomMappingData, would fetch again forever
+      if (!entries.some(Boolean)) return;
+      setKingdomMappingData((prev) => {
+        const next = { ...prev };
+        entries.forEach((entry) => { if (entry) next[entry[0]] = entry[1]; });
+        return next;
+      });
+    });
+    return () => { cancelled = true; };
+  }, [expandedAlignments, kingdomsByFamily, kingdomMappingData, mappingsDir]);
+
+  const toggleExpanded = useCallback((alignmentName: string) => {
+    setExpandedAlignments((prev) =>
+      prev.includes(alignmentName) ? prev.filter((n) => n !== alignmentName) : [...prev, alignmentName]
+    );
+  }, []);
+
+  // Rows in display order: each selected family, or its kingdom rows in its place when expanded.
+  const displayRows = useMemo(() => selectedAlignments.flatMap((name) => {
+    const familyKey = fileBaseToFamily[name];
+    const kingdoms = kingdomsByFamily[familyKey] || [];
+    if (!expandedAlignments.includes(name)) return [name];
+    const loaded = kingdoms.filter((kingdom) => kingdomMappingData[`${familyKey}_${kingdom}`]);
+    return loaded.length === kingdoms.length && loaded.length > 0
+      ? loaded.map((kingdom) => kingdomRowName(name, kingdom))
+      : [name];
+  }), [selectedAlignments, kingdomsByFamily, expandedAlignments, kingdomMappingData]);
+
   // Background families (STE2, SLT_TRNS) keep their logo rows but are left out of every
   // cross-family calculation below.
   const coreAlignments = useMemo(
@@ -594,10 +688,14 @@ const SuperfamilyLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotD
     const alignmentPositionData: Record<string, Record<number, PositionLogoData>> = {};
     let globalMaxPosition = 0;
 
-    selectedAlignments.forEach((name) => {
-      const positions = mappingData[name]?.positions || [];
+    displayRows.forEach((name) => {
+      const { parent, kingdom } = splitKingdomRow(name);
+      const mapping = kingdom
+        ? kingdomMappingData[`${fileBaseToFamily[parent]}_${kingdom}`]
+        : mappingData[name];
+      const positions = mapping?.positions || [];
       const positionData: Record<number, PositionLogoData> = {};
-      const ref = mappingData[name]?.reference;
+      const ref = mapping?.reference;
       const refName = ref?.accession
         ? (ref.entry ? `${ref.entry} (${ref.accession})` : ref.accession)
         : '';
@@ -619,7 +717,10 @@ const SuperfamilyLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotD
           totalSequences: position.totalSequences || 0,
           informationContent: position.informationContent || 0,
           letterHeights: position.letterHeights || {},
-          gpcrdb: position.gpcrdb || undefined
+          gpcrdb: position.gpcrdb || undefined,
+          confidence: position.confidence,
+          votes: position.votes,
+          nReps: position.nReps
         };
       });
 
@@ -680,14 +781,14 @@ const SuperfamilyLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotD
       allowedPositions = new Set(Array.from(allowedPositions).filter((position) => externalSet.has(position)));
     }
 
-    const finalData = selectedAlignments.map((name) => {
+    const finalData = displayRows.map((name) => {
       const positionData = alignmentPositionData[name] || {};
       const logoData: PositionLogoData[] = [];
 
       Array.from(allowedPositions)
         .sort((a, b) => a - b)
         .forEach((pos, index) => {
-          const currentPositionData = positionData[pos] || {
+          const emptyPosition = {
             position: pos + 1,
             msaColumn: pos,
             residueCounts: {},
@@ -695,6 +796,11 @@ const SuperfamilyLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotD
             informationContent: 0,
             letterHeights: {}
           };
+          // Masked: a family position below the minimum mapping confidence is covered by a
+          // grey box. Only that family's position; the columns shown are chosen without the mask.
+          const unmasked = positionData[pos];
+          const masked = Boolean(unmasked && minMappingConfidence > 0 && (unmasked.confidence ?? 0) < minMappingConfidence);
+          const currentPositionData = unmasked ? { ...unmasked, masked } : emptyPosition;
           const crossConservation = crossAlignmentConservation[pos];
           const shouldBlur = useSimpleConservation
             ? (crossConservation?.matchPercentage || 0) < conservationThreshold
@@ -721,6 +827,8 @@ const SuperfamilyLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotD
   }, [
     mappingsLoaded,
     mappingData,
+    kingdomMappingData,
+    displayRows,
     selectedAlignments,
     coreAlignments,
     conservationThreshold,
@@ -728,7 +836,8 @@ const SuperfamilyLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotD
     calculateCrossAlignmentConservation,
     minConservationThreshold,
     minFamiliesCount,
-    filteredPositions
+    filteredPositions,
+    minMappingConfidence
   ]);
 
   // Display statistics function removed - no longer needed
@@ -893,7 +1002,11 @@ const SuperfamilyLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotD
       minConservationThreshold,
       minFamiliesCount,
       showReferenceRows,
-      showProteinRegions
+      showProteinRegions,
+      showConfidenceBars,
+      // the expand toggles are drawn from these
+      expandedAlignments,
+      expandable: Object.keys(kingdomsByFamily).sort()
     });
 
     // Only rebuild if data actually changed
@@ -1002,6 +1115,16 @@ const SuperfamilyLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotD
       
       const gapBetweenReceptors = 5; // No gap between rows to eliminate unwanted spacing
       const logoAreaHeight = rowHeight;
+      // Kingdom rows are drawn shorter than family rows.
+      const kingdomRowHeight = Math.max(12, Math.round(rowHeight * 0.6));
+      const rowHeights = data.map((d) => (splitKingdomRow(d.receptorName).kingdom ? kingdomRowHeight : logoAreaHeight));
+      // Mapping confidence bars sit above the logo rows and push them down.
+      const confidenceBarHeight = 40;
+      const confidenceAreaHeight = showConfidenceBars ? confidenceBarHeight + 10 : 0;
+      const rowsTop = margin.top + confidenceAreaHeight;
+      const rowTops: number[] = [];
+      rowHeights.reduce((top, h) => { rowTops.push(top); return top + h + gapBetweenReceptors; }, rowsTop);
+      const rowsBlockHeight = rowHeights.reduce((sum, h) => sum + h, 0) + gapBetweenReceptors * (data.length - 1);
       const conservationBarHeight = 0; // Simple conservation removed
       // Dot plot removed
       const dotPlotHeight = 0;
@@ -1177,7 +1300,7 @@ const SuperfamilyLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotD
       const evolutionaryPatternAreaHeight = 0;
 
       // Total chart height: logos + dot plot + optional reference rows + evolutionary pattern + protein regions + conservation bar + margins
-      const totalHeight = (logoAreaHeight * data.length) + (gapBetweenReceptors * (data.length - 1)) + dotPlotHeight + referenceAreaHeight + proteinRegionAreaHeight + evolutionaryPatternAreaHeight + conservationBarHeight + margin.top + margin.bottom + 20;
+      const totalHeight = confidenceAreaHeight + rowsBlockHeight + dotPlotHeight + referenceAreaHeight + proteinRegionAreaHeight + evolutionaryPatternAreaHeight + conservationBarHeight + margin.top + margin.bottom + 20;
 
       // Create SVGs
       const yAxisSvg = d3
@@ -1219,34 +1342,56 @@ const SuperfamilyLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotD
       const x = createXScale();
 
       const yDomainMax = 4.32;
-      const y = d3.scaleLinear().domain([0, yDomainMax]).range([logoAreaHeight, 0]);
+
+      // Row label nodes, so the family bracket can sit right next to its kingdom labels.
+      const rowLabelNodes: Array<SVGTextElement | null> = [];
 
       // Create Y-axes for each receptor
       data.forEach((receptorData, receptorIndex) => {
-        const receptorY = margin.top + receptorIndex * (logoAreaHeight + gapBetweenReceptors);
+        const receptorY = rowTops[receptorIndex];
+        const rowH = rowHeights[receptorIndex];
+        const yRow = d3.scaleLinear().domain([0, yDomainMax]).range([rowH, 0]);
         
 
 
+        const { parent: rowParent, kingdom: rowKingdom } = splitKingdomRow(receptorData.receptorName);
         const yLabel = yAxisSvg
           .append('text')
           .attr('text-anchor', 'end')
           .attr('x', rowLabelX)
-          .attr('y', receptorY + logoAreaHeight / 2 + 5)
-          .attr('class', 'text-foreground fill-current')
-          .style('font-size', '12px')
+          .attr('y', receptorY + rowH / 2 + 5)
+          .attr('class', rowKingdom ? 'text-muted-foreground fill-current' : 'text-foreground fill-current')
+          .style('font-size', rowKingdom ? '11px' : '12px')
           .style('font-family', 'Helvetica');
 
-        // Format receptor name: ClassX -> Class X, except ClassOlf -> Olfactory
-        const displayName = getPlotDisplayName 
-          ? getPlotDisplayName(receptorData.receptorName) 
-          : receptorData.receptorName.split('_')[0];
-        
+        // Format receptor name: ClassX -> Class X, except ClassOlf -> Olfactory.
+        // Kingdom rows are labelled by their kingdom alone, under their family's row.
+        const displayName = rowKingdom
+          ? rowKingdom
+          : getPlotDisplayName
+            ? getPlotDisplayName(receptorData.receptorName)
+            : receptorData.receptorName.split('_')[0];
+
         yLabel.append('tspan').text(displayName);
+        rowLabelNodes[receptorIndex] = yLabel.node();
+
+        // Families with kingdom rows: a bold label that expands them on click.
+        if (!rowKingdom && (kingdomsByFamily[fileBaseToFamily[rowParent]] || []).length > 0) {
+          const hint = 'Click to show conservation per Kingdom (Animals, Fungi, Plants)';
+          yLabel
+            .style('font-weight', 'bold')
+            .style('cursor', 'pointer')
+            .style('user-select', 'none')
+            .on('click', () => { hideTooltip(); toggleExpanded(rowParent); })
+            .on('mouseover', (event) => showTooltip(event, hint))
+            .on('mousemove', (event) => updateTooltipPosition(event))
+            .on('mouseout', () => hideTooltip());
+        }
         // yLabel.append('tspan').attr('x', 0).attr('dy', '1.2em').text('Information');
         // yLabel.append('tspan').attr('x', 0).attr('dy', '1.2em').text('Content (bits)');
         
         // Create individual y-scale for this receptor to avoid continuous lines
-        const receptorY_scale = d3.scaleLinear().domain([0, yDomainMax]).range([logoAreaHeight, 0]);
+        const receptorY_scale = yRow;
         
         // Add y-axis line with tick marks only at min and max, no labels
         const yAxis = d3.axisLeft(receptorY_scale)
@@ -1263,12 +1408,56 @@ const SuperfamilyLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotD
                          .attr('stroke-width', 2));
       });
 
+      // Expanded families: their kingdom rows replace the family row, under a bracket with the
+      // family name (inside the lineage bracket). Clicking the name collapses them again.
+      data.forEach((receptorData, index) => {
+        const { parent, kingdom } = splitKingdomRow(receptorData.receptorName);
+        if (!kingdom || (index > 0 && splitKingdomRow(data[index - 1].receptorName).parent === parent)) return;
+        let last = index;
+        while (last + 1 < data.length && splitKingdomRow(data[last + 1].receptorName).parent === parent) last++;
+
+        const startY = rowTops[index];
+        const endY = rowTops[last] + rowHeights[last];
+        const centerY = (startY + endY) / 2;
+        let labelLeft = rowLabelX;
+        for (let i = index; i <= last; i++) {
+          const node = rowLabelNodes[i];
+          if (node) labelLeft = Math.min(labelLeft, node.getBBox().x);
+        }
+        const lineX = labelLeft - 5;
+        yAxisSvg.append('line')
+          .attr('x1', lineX)
+          .attr('y1', startY)
+          .attr('x2', lineX)
+          .attr('y2', endY)
+          .attr('stroke', '#666')
+          .attr('stroke-width', 1.5)
+          .attr('class', 'text-foreground stroke-current');
+        const textX = lineX - 6;
+        yAxisSvg.append('text')
+          .attr('x', textX)
+          .attr('y', centerY)
+          .attr('text-anchor', 'middle')
+          .attr('transform', `rotate(-90, ${textX}, ${centerY})`)
+          .attr('class', 'text-foreground fill-current')
+          .style('font-size', '12px')
+          .style('font-weight', 'bold')
+          .style('font-family', 'Helvetica')
+          .style('cursor', 'pointer')
+          .style('user-select', 'none')
+          .text(getPlotDisplayName ? getPlotDisplayName(parent) : parent.split('_')[0])
+          .on('click', () => { hideTooltip(); toggleExpanded(parent); })
+          .on('mouseover', (event) => showTooltip(event, 'Click to show the combined family row'))
+          .on('mousemove', (event) => updateTooltipPosition(event))
+          .on('mouseout', () => hideTooltip());
+      });
+
       // Draw group annotations
       receptorGroups.forEach(group => {
         // Find which selected receptors belong to this group
         const groupReceptorIndices: number[] = [];
         data.forEach((receptorData, index) => {
-          if (group.members.includes(receptorData.receptorName)) {
+          if (group.members.includes(splitKingdomRow(receptorData.receptorName).parent)) {
             groupReceptorIndices.push(index);
           }
         });
@@ -1286,8 +1475,8 @@ const SuperfamilyLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotD
           const lastIndex = Math.max(...groupReceptorIndices);
           
           // Calculate Y positions to span the full height of the group rows
-          const groupStartY = margin.top + firstIndex * (logoAreaHeight + gapBetweenReceptors);
-          const groupEndY = margin.top + lastIndex * (logoAreaHeight + gapBetweenReceptors) + logoAreaHeight;
+          const groupStartY = rowTops[firstIndex];
+          const groupEndY = rowTops[lastIndex] + rowHeights[lastIndex];
           const groupCenterY = (groupStartY + groupEndY) / 2;
           
           // Draw vertical line spanning the full height of the group rows
@@ -1328,11 +1517,16 @@ const SuperfamilyLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotD
         }
       });
 
+
       const letterPromises: Promise<void>[] = [];
+      // Grey boxes over masked positions; raised above the letters once these are drawn.
+      const maskLayer = chartSvg.append('g').attr('pointer-events', 'none');
 
       // Render each receptor row
       data.forEach((receptorData, receptorIndex) => {
-        const receptorY = margin.top + receptorIndex * (logoAreaHeight + gapBetweenReceptors);
+        const receptorY = rowTops[receptorIndex];
+        const rowH = rowHeights[receptorIndex];
+        const yRow = d3.scaleLinear().domain([0, yDomainMax]).range([rowH, 0]);
         
         receptorData.logoData.forEach((d) => {
           const positionX = x.getX(d.position.toString());
@@ -1371,13 +1565,19 @@ const SuperfamilyLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotD
           const sortedResidues = Object.entries(d.letterHeights)
             .sort(([,a], [,b]) => a - b);
 
-          let stackY = receptorY + y(0);
+          let stackY = receptorY + yRow(0);
+
+          // Mapping confidence of this family position, in the tooltip wherever it is known.
+          const confidenceLine = d.confidence !== undefined
+            ? `<strong>Mapping confidence:</strong> ${d.confidence.toFixed(2)}` +
+              (d.votes !== undefined && d.nReps !== undefined ? ` (${d.votes} of ${d.nReps} representatives)` : '') + '<br/>'
+            : '';
 
           const createCustomSvgLetters = async () => {
             for (const [residue, height] of sortedResidues) {
               if (cancelled) return;
               if (height > 0) {
-                const letterHeightPx = y(0) - y(height);
+                const letterHeightPx = yRow(0) - yRow(height);
                 const letterBaselineY = stackY;
                 const letterX = positionX + positionWidth / 2;
 
@@ -1426,15 +1626,16 @@ const SuperfamilyLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotD
 
                   nestedSvg
                     .on('mouseover', (event) => {
-                      const alignmentDisplayName = getDisplayName 
-                        ? getDisplayName(receptorData.receptorName) 
-                        : receptorData.receptorName;
+                      const { parent: tipParent, kingdom: tipKingdom } = splitKingdomRow(receptorData.receptorName);
+                      const alignmentDisplayName = (getDisplayName ? getDisplayName(tipParent) : tipParent)
+                        + (tipKingdom ? ` (${tipKingdom})` : '');
                       let tooltipContent = `<strong>Alignment:</strong> ${alignmentDisplayName}<br/>` +
                         `<strong>Position:</strong> ${d.position} (superfamily column ${d.msaColumn + 1})<br/>` +
                         (d.reference ? `<strong>Reference:</strong> ${d.reference}<br/>` : '') +
                         `<strong>Residue:</strong> ${residue}<br/>` +
                         `<strong>Count:</strong> ${d.residueCounts[residue]} / ${d.totalSequences}<br/>` +
-                        `<strong>Frequency:</strong> ${((d.residueCounts[residue] / d.totalSequences) * 100).toFixed(1)}%<br/>`;
+                        `<strong>Frequency:</strong> ${((d.residueCounts[residue] / d.totalSequences) * 100).toFixed(1)}%<br/>` +
+                        confidenceLine;
 
 
                       tooltipContent += `<strong>Information:</strong> ${height.toFixed(2)} bits`;
@@ -1472,15 +1673,16 @@ const SuperfamilyLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotD
 
                   fallbackSvg
                     .on('mouseover', (event) => {
-                      const alignmentDisplayName = getDisplayName 
-                        ? getDisplayName(receptorData.receptorName) 
-                        : receptorData.receptorName;
+                      const { parent: tipParent, kingdom: tipKingdom } = splitKingdomRow(receptorData.receptorName);
+                      const alignmentDisplayName = (getDisplayName ? getDisplayName(tipParent) : tipParent)
+                        + (tipKingdom ? ` (${tipKingdom})` : '');
                       let tooltipContent = `<strong>Alignment:</strong> ${alignmentDisplayName}<br/>` +
                         `<strong>Position:</strong> ${d.position} (superfamily column ${d.msaColumn + 1})<br/>` +
                         (d.reference ? `<strong>Reference:</strong> ${d.reference}<br/>` : '') +
                         `<strong>Residue:</strong> ${residue}<br/>` +
                         `<strong>Count:</strong> ${d.residueCounts[residue]} / ${d.totalSequences}<br/>` +
-                        `<strong>Frequency:</strong> ${((d.residueCounts[residue] / d.totalSequences) * 100).toFixed(1)}%<br/>`;
+                        `<strong>Frequency:</strong> ${((d.residueCounts[residue] / d.totalSequences) * 100).toFixed(1)}%<br/>` +
+                        confidenceLine;
 
 
                       tooltipContent += `<strong>Information:</strong> ${height.toFixed(2)} bits`;
@@ -1503,6 +1705,16 @@ const SuperfamilyLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotD
           });
           letterPromises.push(letterPromise);
           
+          if (d.masked && Object.keys(d.residueCounts).length > 0) {
+            maskLayer.append('rect')
+              .attr('x', positionX)
+              .attr('y', receptorY)
+              .attr('width', positionWidth)
+              .attr('height', rowH)
+              .attr('fill', '#808080')
+              .attr('opacity', 0.8);
+          }
+
           // Add blur overlay if needed
           if (d.crossAlignmentData?.shouldBlur) {
             chartSvg
@@ -1510,7 +1722,7 @@ const SuperfamilyLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotD
               .attr('x', positionX)
               .attr('y', receptorY)
               .attr('width', positionWidth)
-              .attr('height', logoAreaHeight)
+              .attr('height', rowH)
               .attr('fill', 'rgba(128, 128, 128, 0.7)')
               .attr('pointer-events', 'none')
               .style('mix-blend-mode', 'multiply');
@@ -1519,9 +1731,91 @@ const SuperfamilyLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotD
       });
 
 
+
+      Promise.all(letterPromises).then(() => { if (!cancelled) maskLayer.raise(); });
+
+      /* ─── Mapping confidence bars ─────────────────────────── */
+      // Per column, the mean confidence over the shown GPCR families mapped there (a family's
+      // kingdom rows share its mapping and count once; background families are left out).
+      // The scale runs from the lowest to the highest mean among the shown columns.
+      if (showConfidenceBars) {
+        const barTop = margin.top;
+        const familyRows = new Map<string, Record<number, PositionLogoData>>();
+        data.forEach((row) => {
+          const { parent } = splitKingdomRow(row.receptorName);
+          if (isBackgroundFamily(parent) || familyRows.has(parent)) return;
+          const byPos: Record<number, PositionLogoData> = {};
+          row.logoData.forEach((p) => { byPos[p.position] = p; });
+          familyRows.set(parent, byPos);
+        });
+
+        chartSvg.append('rect')
+          .attr('x', 0)
+          .attr('y', barTop)
+          .attr('width', chartContentWidth)
+          .attr('height', confidenceBarHeight)
+          .attr('fill', '#000000')
+          .attr('fill-opacity', 0.04);
+
+        const columnConfidence: Array<{ pos: number; mean: number; n: number }> = [];
+        positionsWithData.forEach((pos) => {
+          const values: number[] = [];
+          familyRows.forEach((byPos) => {
+            const p = byPos[pos];
+            if (p && p.confidence !== undefined && Object.keys(p.residueCounts).length > 0) values.push(p.confidence);
+          });
+          if (values.length > 0) columnConfidence.push({ pos, mean: values.reduce((sum, v) => sum + v, 0) / values.length, n: values.length });
+        });
+        const meanMin = columnConfidence.length ? Math.min(...columnConfidence.map((c) => c.mean)) : 0;
+        const meanMax = columnConfidence.length ? Math.max(...columnConfidence.map((c) => c.mean)) : 1;
+        const domain: [number, number] = meanMax > meanMin ? [meanMin, meanMax] : [Math.max(0, meanMin - 0.05), Math.min(1, meanMax + 0.05)];
+        // the lowest column keeps a sliver so it is still visible and hoverable
+        const barScale = d3.scaleLinear().domain(domain).range([2, confidenceBarHeight]);
+
+        columnConfidence.forEach(({ pos, mean, n }) => {
+          const h = barScale(mean);
+          const msaCol = allPositionsWithMsa.get(pos);
+          chartSvg.append('rect')
+            .attr('x', x.getX(pos.toString()))
+            .attr('y', barTop + confidenceBarHeight - h)
+            .attr('width', x.bandwidth())
+            .attr('height', h)
+            .attr('fill', '#6B7280')
+            .style('cursor', 'pointer')
+            .on('mouseover', (event) => showTooltip(event,
+              `<strong>Position:</strong> ${pos}` + (msaCol !== undefined ? ` (superfamily column ${msaCol + 1})` : '') + '<br/>' +
+              `<strong>Mean mapping confidence:</strong> ${mean.toFixed(2)}<br/>` +
+              `<strong>Families mapped:</strong> ${n} of ${familyRows.size}`))
+            .on('mousemove', (event) => updateTooltipPosition(event))
+            .on('mouseout', () => hideTooltip());
+        });
+
+        const confidenceAxis = d3.axisLeft(d3.scaleLinear().domain(domain).range([confidenceBarHeight - 2, 0]))
+          .tickValues(domain)
+          .tickFormat((v) => d3.format('.2f')(v as number))
+          .tickSize(0);
+        yAxisSvg.append('g')
+          .attr('transform', `translate(${axisX}, ${barTop})`)
+          .attr('class', 'axis')
+          .call(confidenceAxis)
+          .call(g => g.select('.domain').attr('stroke', '#888').attr('stroke-width', 2))
+          .selectAll('text')
+          .attr('class', 'text-foreground fill-current')
+          .style('font-size', '10px')
+          .style('font-family', 'Helvetica');
+        yAxisSvg.append('text')
+          .attr('text-anchor', 'end')
+          .attr('x', rowLabelX - 8)
+          .attr('y', barTop + confidenceBarHeight / 2 + 4)
+          .attr('class', 'text-foreground fill-current')
+          .style('font-size', '12px')
+          .style('font-family', 'Helvetica')
+          .text('Mapping confidence');
+      }
+
       /* ─── Reference GPCRdb rows ───────────────────────────── */
       if (showReferenceRows && referenceInfo.length > 0) {
-        const referencePlotOffset = margin.top + (logoAreaHeight * data.length) + (gapBetweenReceptors * (data.length - 1)) + dotPlotHeight + evolutionaryPatternAreaHeight + 2; // tighter padding
+        const referencePlotOffset = rowsTop + rowsBlockHeight + dotPlotHeight + evolutionaryPatternAreaHeight + 2; // tighter padding
 
         // Background stripes for readability
         referenceInfo.forEach((_, idx) => {
@@ -1580,7 +1874,7 @@ const SuperfamilyLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotD
 
       /* ─── Protein Region blocks (TM1-TM7, H8, ECL2) ─────────────────────────────────── */
       if (proteinRegions.length > 0) {
-        const proteinRegionPlotOffset = margin.top + (logoAreaHeight * data.length) + (gapBetweenReceptors * (data.length - 1)) + dotPlotHeight + referenceAreaHeight + evolutionaryPatternAreaHeight + 4;
+        const proteinRegionPlotOffset = rowsTop + rowsBlockHeight + dotPlotHeight + referenceAreaHeight + evolutionaryPatternAreaHeight + 4;
         
         // Background stripe for the entire region area
         if (proteinRegions.length > 0) {
@@ -1754,6 +2048,8 @@ const SuperfamilyLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotD
       cancelled = true;
       yAxisContainer.innerHTML = '';
       chartContainer.innerHTML = '';
+      // The chart was just cleared, so the next run has to draw it again.
+      previousDataHashRef.current = '';
       setTooltip(prev => ({ ...prev, visible: false }));
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1766,6 +2062,7 @@ const SuperfamilyLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotD
     minFamiliesCount,
     showReferenceRows,
     showProteinRegions,
+    showConfidenceBars,
     referenceInfo,
     // Stable function references - these rarely change
     getResidueColor, 
@@ -1775,7 +2072,10 @@ const SuperfamilyLogo: React.FC<Props> = ({ fastaNames, getDisplayName, getPlotD
     updateTooltipPosition,
     getDisplayName,
     getPlotDisplayName,
-    receptorGroups
+    receptorGroups,
+    kingdomsByFamily,
+    expandedAlignments,
+    toggleExpanded
   ]);
 
   // Keep chart mounted during loading/processing; show non-blocking overlay instead

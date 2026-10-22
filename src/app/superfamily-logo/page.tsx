@@ -8,12 +8,28 @@ import { Button } from '@/components/ui/button';
 import { isBackgroundFamily } from '@/lib/superfamilyBackground';
 import { ControlHint } from '@/components/phyletic-distribution/ControlPanel';
 
-// Superfamily alignments, each with its own precomputed mapping folder under public/.
+// Superfamily alignments: four sequence sets, each aligned with two gap settings. Every one has
+// its own precomputed mapping folder, public/superfamily_logo_mappings<set suffix><gap suffix>.
 const gapPenaltyOptions = {
-  higher: { label: 'Higher', mappingsDir: 'superfamily_logo_mappings' },
-  lower: { label: 'Lower', mappingsDir: 'superfamily_logo_mappings_lower_gap' }
+  higher: { label: 'Higher', suffix: '' },
+  lower: { label: 'Lower', suffix: '_lower_gap' }
 } as const;
 type GapPenalty = keyof typeof gapPenaltyOptions;
+
+const sequenceSetOptions = {
+  all: { label: 'All families', suffix: '' },
+  no_ste2: { label: 'Without STE2', suffix: '_no_ste2' },
+  core: { label: 'Without STE2, STE3, Class C and V2R', suffix: '_no_ste2ste3classCV2' },
+  literature: { label: 'Core with literature sequences', suffix: '_and_literature' }
+} as const;
+type SequenceSet = keyof typeof sequenceSetOptions;
+
+// Guide tree of the G-INS-i alignment: MAFFT's own, or the ML tree (STE2, (Glutamate, rest)).
+const guideTreeOptions = {
+  default: { label: 'MAFFT default', suffix: '' },
+  treein: { label: 'ML tree', suffix: '_treein' }
+} as const;
+type GuideTree = keyof typeof guideTreeOptions;
 
 // Family selection IDs. Runtime logo/scatter data comes from public/superfamily_logo_mappings/*.json.
 const fastaNames = [
@@ -35,9 +51,7 @@ const fastaNames = [
   'Vomeronasal1_genes_filtered_db_FAMSA.ref_trimmed',
   'Vomeronasal2_genes_filtered_db_FAMSA.ref_trimmed',
   'Mth_genes_filtered_db_FAMSA.ref_trimmed',
-  'Nematode_genes_filtered_db_FAMSA.ref_trimmed',
-  // Non-GPCR 7TM background, placed on the superfamily alignment by its helices alone.
-  'SLT_TRNS_genes_filtered_db_FAMSA.ref_trimmed'
+  'Nematode_genes_filtered_db_FAMSA.ref_trimmed'
 ];
 
 // Custom order for "Select All".
@@ -60,23 +74,38 @@ const selectAllOrder = [
   'STE3_genes_filtered_db_FAMSA.ref_trimmed',
   'classC_genes_filtered_db_FAMSA.ref_trimmed',
   'Vomeronasal2_genes_filtered_db_FAMSA.ref_trimmed',
-  // In no receptorGroups bracket, so kept last where they split no group.
-  'STE2_genes_filtered_db_FAMSA.ref_trimmed',
-  'SLT_TRNS_genes_filtered_db_FAMSA.ref_trimmed'
+  // In no receptorGroups bracket, so kept last where it splits no group.
+  'STE2_genes_filtered_db_FAMSA.ref_trimmed'
 ];
 
 export default function SuperfamilyLogoPage() {
   const [filteredPositions, setFilteredPositions] = useState<number[]>([]);
+  // Stable callback that keeps the old array when the selection is unchanged: the scatter plot
+  // reports its selection whenever this callback changes, so a new one (or a new empty array)
+  // on every render would re-render the page forever.
+  const handleScatterSelection = useCallback((positions: number[]) => {
+    setFilteredPositions((prev) =>
+      prev.length === positions.length && prev.every((p, i) => p === positions[i]) ? prev : positions);
+  }, []);
   const [selectedFamilies, setSelectedFamilies] = useState<string[]>([]);
   const [selectedAlignments, setSelectedAlignments] = useState<string[]>([]);
   const [showReferenceRows, setShowReferenceRows] = useState(false);
   const [showProteinRegions, setShowProteinRegions] = useState(false);
+  // Mapping confidence of each family position (share of the family's representatives
+  // that place it in that superfamily column): positions below the minimum are masked, and a
+  // bar row shows column means.
+  const [minMappingConfidence, setMinMappingConfidence] = useState(0);
+  const [showConfidenceBars, setShowConfidenceBars] = useState(false);
   const [regionSourceAlignment, setRegionSourceAlignment] = useState<string | null>(null);
   const [rowHeight, setRowHeight] = useState(30);
   const [minConservationThreshold, setMinConservationThreshold] = useState(0);
   const [minFamiliesCount, setMinFamiliesCount] = useState(0);
   const [gapPenalty, setGapPenalty] = useState<GapPenalty>('higher');
-  const mappingsDir = gapPenaltyOptions[gapPenalty].mappingsDir;
+  const [sequenceSet, setSequenceSet] = useState<SequenceSet>('all');
+  const [guideTree, setGuideTree] = useState<GuideTree>('default');
+  const mappingsDir =
+    `superfamily_logo_mappings${sequenceSetOptions[sequenceSet].suffix}${gapPenaltyOptions[gapPenalty].suffix}` +
+    guideTreeOptions[guideTree].suffix;
   // Background families are shown but not counted towards the families-above-threshold filter.
   const coreSelectedCount = selectedAlignments.filter((name) => !isBackgroundFamily(name)).length;
 
@@ -104,8 +133,7 @@ export default function SuperfamilyLogoPage() {
       'STE3': 'STE3',
       'TM116': 'TMEM116',
       'Mth': 'Mth',
-      'Nematode': 'Nematode',
-      'SLT': 'SLT_TRNS'
+      'Nematode': 'Nematode'
     };
 
     return displayNameMap[baseName] || baseName;
@@ -134,8 +162,7 @@ export default function SuperfamilyLogoPage() {
       'STE3': 'STE3',
       'TM116': 'TMEM116',
       'Mth': 'Mth',
-      'Nematode': 'Nematode',
-      'SLT': 'SLT_TRNS'
+      'Nematode': 'Nematode'
     };
 
     return plotNameMap[baseName] || baseName;
@@ -187,10 +214,9 @@ export default function SuperfamilyLogoPage() {
             {/* Left: Scatter Plot */}
             <div className="flex-1 lg:w-1/2">
               <FamilyScatterPlot
-                key={mappingsDir}
                 fastaNames={fastaNames}
                 getDisplayName={getDisplayName}
-                onSelectionChange={(positions) => setFilteredPositions(positions)}
+                onSelectionChange={handleScatterSelection}
                 selectedFamilies={selectedFamilies}
                 height={500}
                 minConservationThreshold={minConservationThreshold}
@@ -206,16 +232,42 @@ export default function SuperfamilyLogoPage() {
             <div className="flex-1 lg:w-1/2 flex flex-col">
               <h3 className="text-lg font-semibold mb-3">Logo Controls</h3>
 
-              {/* Superfamily alignment */}
-              <div className="mb-4 flex items-center gap-2">
+              {/* Superfamily alignment: sequence set */}
+              <div className="mb-2 flex items-center gap-2">
+                <label htmlFor="sequence-set" className="text-sm font-medium">Alignment Sequence Set:</label>
+                <select
+                  id="sequence-set"
+                  value={sequenceSet}
+                  onChange={(e) => {
+                    // the scatter plot re-applies its brushed value ranges to the new alignment's positions
+                    setSequenceSet(e.target.value as SequenceSet);
+                  }}
+                  className="h-8 rounded border bg-background px-2 text-sm text-foreground"
+                >
+                  {(Object.keys(sequenceSetOptions) as SequenceSet[]).map((key) => (
+                    <option key={key} value={key}>{sequenceSetOptions[key].label}</option>
+                  ))}
+                </select>
+                <ControlHint id="sequence-set-hint" label="About the alignment sequence sets">
+                  The superfamily alignment was built from four sets of family representatives.{' '}
+                  <strong>All families</strong> holds every family. <strong>Without STE2</strong> leaves out
+                  the STE2 control. <strong>Without STE2, STE3, Class C and V2R</strong> also leaves out the
+                  most divergent families. <strong>Core with literature sequences</strong> adds published
+                  receptor sequences to that set. A family that is not in the chosen set has no logo row.
+                  Column numbers differ between the alignments, so switching clears the scatter-plot
+                  selection.
+                </ControlHint>
+              </div>
+
+              {/* Superfamily alignment: gap penalty */}
+              <div className="mb-2 flex items-center gap-2">
                 <label htmlFor="gap-penalty" className="text-sm font-medium">Alignment Gap Penalty:</label>
                 <select
                   id="gap-penalty"
                   value={gapPenalty}
                   onChange={(e) => {
-                    // column numbers differ between the alignments, so a position selection does not carry over
+                    // the scatter plot re-applies its brushed value ranges to the new alignment's positions
                     setGapPenalty(e.target.value as GapPenalty);
-                    setFilteredPositions([]);
                   }}
                   className="h-8 rounded border bg-background px-2 text-sm text-foreground"
                 >
@@ -233,7 +285,32 @@ export default function SuperfamilyLogoPage() {
                   clears the scatter-plot selection.
                 </ControlHint>
               </div>
-              
+
+              {/* Superfamily alignment: guide tree */}
+              <div className="mb-4 flex items-center gap-2">
+                <label htmlFor="guide-tree" className="text-sm font-medium">Alignment Guide Tree:</label>
+                <select
+                  id="guide-tree"
+                  value={guideTree}
+                  onChange={(e) => {
+                    // the scatter plot re-applies its brushed value ranges to the new alignment's positions
+                    setGuideTree(e.target.value as GuideTree);
+                  }}
+                  className="h-8 rounded border bg-background px-2 text-sm text-foreground"
+                >
+                  {(Object.keys(guideTreeOptions) as GuideTree[]).map((key) => (
+                    <option key={key} value={key}>{guideTreeOptions[key].label}</option>
+                  ))}
+                </select>
+                <ControlHint id="guide-tree-hint" label="About the alignment guide tree">
+                  <strong>MAFFT default</strong> lets G-INS-i build its own guide tree.{' '}
+                  <strong>ML tree</strong> aligns the families in the order of the maximum-likelihood tree
+                  of the representatives, rooted between the Glutamate-related families and the rest, with
+                  STE2 merged last against the whole superfamily. Column numbers differ between the
+                  alignments, so switching clears the scatter-plot selection.
+                </ControlHint>
+              </div>
+
               {/* Family Selection */}
               <div className="mb-4 flex-grow flex flex-col min-h-0">
                 <div className="flex items-center justify-between mb-2">
@@ -360,6 +437,36 @@ export default function SuperfamilyLogoPage() {
                 </div>
               </div>
 
+              {/* Mapping confidence mask */}
+              <div className="mb-4">
+                <label className="text-sm font-medium block mb-2">Minimum Mapping Confidence:</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value={minMappingConfidence}
+                    onChange={(e) => setMinMappingConfidence(Number(e.target.value))}
+                    className="flex-1"
+                  />
+                  <input
+                    type="number"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value={minMappingConfidence}
+                    onChange={(e) => {
+                      const val = Number(e.target.value);
+                      if (!isNaN(val)) {
+                        setMinMappingConfidence(Math.min(1, Math.max(0, val)));
+                      }
+                    }}
+                    className="w-16 px-2 py-1 text-xs border rounded bg-background text-foreground text-center"
+                  />
+                </div>
+              </div>
+
               {/* Show Reference Checkbox */}
               <div className="flex flex-wrap items-center gap-4">
                 <div className="flex items-center gap-2">
@@ -384,6 +491,18 @@ export default function SuperfamilyLogoPage() {
                   />
                   <label htmlFor="show-protein-regions" className="text-sm cursor-pointer">
                     Show Protein Regions
+                  </label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="show-confidence-bars"
+                    checked={showConfidenceBars}
+                    onChange={(e) => setShowConfidenceBars(e.target.checked)}
+                    className="cursor-pointer"
+                  />
+                  <label htmlFor="show-confidence-bars" className="text-sm cursor-pointer">
+                    Show Mapping Confidence
                   </label>
                 </div>
                 {showProteinRegions && (
@@ -424,6 +543,8 @@ export default function SuperfamilyLogoPage() {
               selectedAlignmentsExternal={selectedAlignments}
               showReferenceRowsExternal={showReferenceRows}
               showProteinRegionsExternal={showProteinRegions}
+              minMappingConfidence={minMappingConfidence}
+              showConfidenceBars={showConfidenceBars}
               regionSourceAlignmentExternal={regionSourceAlignment}
               rowHeightExternal={rowHeight}
               minConservationThresholdExternal={minConservationThreshold}
