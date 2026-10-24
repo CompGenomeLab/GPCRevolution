@@ -188,7 +188,9 @@ export function SiteSearch({ variant = 'compact', className, scope: scopeProp, o
                                onSelect={() => go(`/species?taxid=${encodeURIComponent(taxID)}`)}>
                     <div className="flex w-full flex-col items-start">
                       <span className="font-medium">
-                        <i>{name}</i>{common ? <span className="font-normal text-muted-foreground"> ({common})</span> : null}
+                        <i>{name}</i>{common ? (
+                          <span className="font-normal text-muted-foreground"> | {common.charAt(0).toUpperCase() + common.slice(1)}</span>
+                        ) : null}
                       </span>
                       <span className="text-sm text-muted-foreground">
                         {lineage} | GPCRs: {total.toLocaleString('en-US')} | Taxonomy ID: {taxID}

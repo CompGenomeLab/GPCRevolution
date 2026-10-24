@@ -223,6 +223,7 @@ export function GeneVisualization() {
             selectedLevels={state.selectedLevels}
             activeGenes={state.activeGenes}
             countMap={state.countMap}
+            finalStep={sourceData === 'final'}
           />
         </div>
       )}

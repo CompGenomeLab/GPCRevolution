@@ -14,7 +14,8 @@ items follow.
 
 - [ ] **Cite the manuscript on the transparency pages and their FAQ entries.** Each transparency page and its
   FAQ answer (`src/lib/transparency.ts`) should refer to the paper, as the preprint until it is published and
-  then the published version, so readers can find the full methods.
+  then the published version, so readers can find the full methods. Waiting (user, 2026-10-24): the manuscript
+  is not public yet; possible once a preprint is posted.
 - [ ] **Per-species page** (new). For each searched species: every potential GPCR (all sequences after clade
   extraction) with its search E-value and whether and at which step it was removed (single 7TM core, topology
   score, overlap assignment, Dikarya reassignment); UniProt IDs and counts per family, per lineage
@@ -29,8 +30,11 @@ items follow.
     home page and in the header; species names from `public/species/search.json` (with NCBI common names).
     Built 2026-10-23; 2026-10-24: dropdown restyled as part of the box, "Species" marked Beta, the home heading
     follows it ("Find your receptor" / "Find your species").
-  - Requested next (user, 2026-10-23): show the database version on the page; FASTA download of a species'
-    sequences.
+  - Later (user, 2026-10-24; requested 2026-10-23): show the database version on the page.
+  - **FASTA download built 2026-10-24:** "Download FASTA" above the sequence table gives exactly the rows shown
+    (kept, removed and control sequences, after the filters and search), one FASTA per family in a ZIP;
+    `public/sequences/` (final, `removed/`, `controls/`; indexes by `scripts/index-sequence-fasta.mjs`; README
+    "Sequence downloads"). Check range requests on the live host after the push.
   - **Literature sequences on the species pages (long run; user, 2026-10-24).** All sequences of the literature
     comparison (not only the 18 of the trees), each on its species page with the study's citation, the family
     the study gave, our matching family and the MMseqs2 search metrics (best hit, bits, identity, coverage,
@@ -56,11 +60,15 @@ items follow.
   under the plot. Columns: the selected lineage ranks, species (always, linked to its species page), then the
   selected families in plot order; counts from the Source Data step selected; rows = genomes in view (follows
   lineage clicks and filters); sortable headers and TSV download as on the species page (`SortTh`, `downloadTsv`
-  now exported from `SpeciesViewer.tsx`). FASTA download still open.
+  now exported from `SpeciesViewer.tsx`). Built 2026-10-24: "Download FASTA" (final members of the genomes and
+  families in view; Final step only) and "Download counts" (the table as shown, TSV) above the table.
 - [ ] **Topology filter and long ICL3 (found 2026-10-23, user to decide).** `trimal -gt 0.1` drops the TM6/TM7
   columns of sequences with a long ICL3 (human CHRM1-5, HRH1), so they score 0 there and fail. Scoring over the
   helices present (at least 5) would recover 9,429 of 16,853 topology removals (Class A 7,712). Changes the
   paper's counts; not applied.
+- [ ] **Recover sequences filtered out wrongly (idea, user, 2026-10-24; no solid approach yet).** Some true
+  GPCRs are removed by the filters (e.g. the long-ICL3 case above). Find a general way to recover them for the
+  database without changing the paper's counts, e.g. as a separate, flagged set.
 - [ ] **Fig. 2, lineage distribution and origins** (new). Port `06_family_origins/lineage_origin_figure.html`
   of the archive.
 - [ ] **ML trees page: built 2026-10-23, user-approved state, not committed, not in the menu.** `/superfamily-trees`

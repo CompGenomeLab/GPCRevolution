@@ -106,3 +106,35 @@ The generator reads
 For future visualization, prune the tree by visible taxID tips and retain child
 arrays of arbitrary length. The NCBI tree should be described as a taxonomy
 hierarchy and displayed as a cladogram by default.
+
+## Sequence downloads (FASTA)
+
+`public/sequences/` holds the full-length, unaligned sequences (UniProtKB 2025_02, as searched, with their UniProt
+headers) of every sequence the species pages list, one FASTA per family:
+
+- `<family>.fasta`: the final members of each GPCR family (after the GPR1 reassignment);
+- `removed/<family>.fasta`: the members of each family's clade removed by the filters (no single 7TM core, or
+  topology score below 0.8); a sequence removed from two clades is in both;
+- `controls/<control>.fasta`: the control clades (G alpha, G beta, G gamma, TBP, RPB1).
+
+A file over 95 MB is split into numbered parts (`classA_1.fasta`, `classA_2.fasta`), since GitHub refuses files
+over 100 MB. Within each file the sequences of one genome form one contiguous block.
+
+The **Download FASTA** buttons do not fetch whole files. They read `<family>.index.json`, which gives for each
+taxID the file, byte offset, byte length and number of sequences of its block, and fetch only the genomes needed
+with HTTP range requests (`src/lib/sequence-download.ts`), then zip one FASTA per family in the browser. For all
+human Class A sequences that is 0.18 MB instead of 111 MB. The species page downloads exactly the rows its table
+shows (kept, removed and control sequences, after its filters and search); the taxonomic-distribution page the
+final members of the genomes and families in view (Final step only).
+
+To update the sequences, rebuild the FASTA files and then their indexes:
+
+```bash
+# in the GPCR_Superfamily repository (needs its Zenodo archive)
+python code_and_data/04_overlap_assignment/website/build_family_fasta.py --out <GPCRevolution>/public/sequences
+# here: rewrite the byte-position indexes of public/sequences/ and its subfolders; run it after any FASTA change
+node scripts/index-sequence-fasta.mjs
+```
+
+The index script stops with an error if a genome's sequences are not one contiguous block or a header has no
+`OX=` taxID. A FASTA replaced without rerunning it leaves stale offsets, and the downloads return wrong sequences.

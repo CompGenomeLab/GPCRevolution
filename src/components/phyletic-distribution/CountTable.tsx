@@ -1,10 +1,12 @@
 'use client'
 
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { SortTh, downloadTsv } from '@/components/species/SpeciesViewer'
+import { FastaDownloadButton } from '@/components/FastaDownloadButton'
+import { SEQUENCE_FAMILIES, countSequences, downloadFastaZip } from '@/lib/sequence-download'
 import { ControlHint } from './ControlPanel'
 import { formatPhyleticGeneLabel } from '@/lib/phyletic-distribution-families'
 import type { GeneCountData, TaxonomicLevel, TaxonomyRecord } from '@/types/phyletic-distribution'
@@ -24,11 +26,13 @@ const lineageValue = (row: TaxonomyRecord, level: string) => {
 }
 
 /** The genomes in view with their lineages and their counts for the shown families, in the order of the plot. */
-export function CountTable({ data, selectedLevels, activeGenes, countMap }: {
+export function CountTable({ data, selectedLevels, activeGenes, countMap, finalStep = true }: {
   data: TaxonomyRecord[]
   selectedLevels: TaxonomicLevel[]
   activeGenes: string[]
   countMap: Map<string, GeneCountData>
+  /** whether the counts shown are of the final step (the only one with sequence files) */
+  finalStep?: boolean
 }) {
   const [sort, setSort] = useState<{ col: string; dir: 1 | -1 } | null>(null)
   const onSort = (col: string) => setSort(cur =>
@@ -52,6 +56,18 @@ export function CountTable({ data, selectedLevels, activeGenes, countMap }: {
     })
   }, [data, sort, countMap])
 
+  // the study's families among the shown columns (uploaded columns carry a '*' and have no sequences)
+  const families = useMemo(() => activeGenes.filter(g => g.endsWith('_count')).map(g => g.slice(0, -'_count'.length))
+    .filter(f => SEQUENCE_FAMILIES.has(f)), [activeGenes])
+  const taxids = useMemo(() => data.map(r => String(r.taxID)), [data])
+  const [fastaCount, setFastaCount] = useState<number | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    setFastaCount(null)
+    countSequences(families, taxids).then(n => { if (!cancelled) setFastaCount(n) }).catch(() => {})
+    return () => { cancelled = true }
+  }, [families, taxids])
+
   if (!data.length) return null
 
   return (
@@ -65,16 +81,25 @@ export function CountTable({ data, selectedLevels, activeGenes, countMap }: {
           </ControlHint>{' '}
           <span className="text-sm font-normal text-muted-foreground">{fmtInt(data.length)} genomes</span>
         </h2>
-        <Button variant="outline" size="sm" onClick={() => downloadTsv(
-          'phyletic_distribution_counts.tsv',
+        <div className="flex flex-wrap items-center gap-2">
+        <FastaDownloadButton count={fastaCount}
+          detail={`The sequences counted in the table: ${fastaCount === null ? '…' : fmtInt(fastaCount)} final members of ` +
+            `${families.length} ${families.length === 1 ? 'family' : 'families'} in ${fmtInt(taxids.length)} genomes, ` +
+            'full length (UniProtKB 2025_02), one FASTA per family in a ZIP file'}
+          unavailable={!finalStep ? 'Sequences can be downloaded for the Final step (Source Data: 5. Final)'
+            : !families.length ? 'No family of the study is shown' : undefined}
+          download={onProgress => downloadFastaZip({ families, taxids, name: 'taxonomic_distribution', onProgress })} />
+        <Button variant="outline" size="sm" title="The table as shown (genomes, lineages and families in view), as TSV" onClick={() => downloadTsv(
+          'taxonomic_distribution_counts.tsv',
           ['taxID', 'species', ...levels, ...activeGenes.map(formatPhyleticGeneLabel)],
           rows.map(r => {
             const counts = countMap.get(String(r.taxID))
             return [String(r.taxID), genomeName(r), ...levels.map(l => lineageValue(r, l)),
                     ...activeGenes.map(g => counts?.[g] ?? 0)]
           }))}>
-          <Download className="mr-1 h-4 w-4" /> TSV
+          <Download className="mr-1 h-4 w-4" /> Download counts
         </Button>
+        </div>
       </div>
       <div className="max-h-[640px] w-fit max-w-full overflow-auto rounded-lg border">
         <table className="whitespace-nowrap text-sm">

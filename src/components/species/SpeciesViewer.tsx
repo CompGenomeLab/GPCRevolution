@@ -3,6 +3,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, Check, Download, Loader2, X } from 'lucide-react';
+import { FastaDownloadButton } from '@/components/FastaDownloadButton';
+import { downloadSequencesZip, type SequenceRef } from '@/lib/sequence-download';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -36,6 +38,24 @@ function evalueNumber(e: string) {
 
 /** The family a row is listed under: the Dikarya Class A sequences moved to GPR1 are GPR1's. */
 const listedFamily = (r: GpcrRow) => (r[4] === 'dikarya' ? r[5] : r[1]);
+
+/** Where a row's sequence is stored for download: the final family's file, the clade's removed file, or the
+ * control's file (public/sequences/, build_family_fasta.py). */
+const sequenceRef = (r: GpcrRow): SequenceRef =>
+  r[4] === 'control' ? { set: 'controls', family: r[1], accession: r[0] }
+    : r[4] === 'core' || r[4] === 'topology' ? { set: 'removed', family: r[1], accession: r[0] }
+      : { set: '', family: r[5], accession: r[0] };
+
+/** The rows as FASTA groups, one per family label, in the order the table shows them. */
+function groupRows(rows: GpcrRow[], label: (r: GpcrRow) => string) {
+  const groups = new Map<string, SequenceRef[]>();
+  for (const r of rows) {
+    const l = label(r);
+    if (!groups.has(l)) groups.set(l, []);
+    groups.get(l)!.push(sequenceRef(r));
+  }
+  return [...groups].map(([l, sequences]) => ({ label: l, sequences }));
+}
 
 /** Pipeline stages a row passed, in the order of the Methods. */
 const passedCore = (r: GpcrRow) => r[4] !== 'core';
@@ -531,6 +551,15 @@ export function SpeciesViewer() {
               </Select>
               <Input className="w-64" value={text} onChange={e => setText(e.target.value)}
                      placeholder="Accession, gene or protein name" />
+              <FastaDownloadButton count={sortedRows.length}
+                detail={`The ${fmtInt(sortedRows.length)} sequences of the table as shown (filters and search applied), ` +
+                  'full length (UniProtKB 2025_02), one FASTA per family in a ZIP file'}
+                download={onProgress => downloadSequencesZip({
+                  taxid: data.taxID,
+                  name: `${data.name.replace(/\W+/g, '_')}_${data.taxID}`,
+                  groups: groupRows(sortedRows, r => name(listedFamily(r))),
+                  onProgress,
+                })} />
               <Button variant="outline" size="sm" onClick={() => downloadTsv(
                 `${data.name.replace(/\W+/g, '_')}_${data.taxID}_potential_GPCRs.tsv`,
                 ['accession', 'gene', 'protein', 'family', 'search', 'search_evalue', 'single_7TM_core',
