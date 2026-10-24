@@ -220,8 +220,19 @@ export function ControlPanel({
     <div className="flex w-full flex-wrap items-end gap-1.5 overflow-x-auto pb-1 text-[12px] xl:flex-nowrap">
       <div className={controlClass}>
         <ControlHeading title="Source Data" hintId="phyletic-hint-source" hintLabel="About Source Data">
-          Choose one of the built-in GPCR family count tables. The table requiring all controls is
-          loaded initially. Switching tables keeps any separately loaded User Input tracks.
+          The GPCR counts of every genome after each step of the family assignment. The final counts open first.
+          <span className="mt-1 block"><b>1. Found by the searches:</b> sequences found by a family&apos;s search
+          that group with the family&apos;s known members in the tree of the search results.</span>
+          <span className="block"><b>2. Seven-helix core:</b> those with a single GPCR-like core of seven
+          transmembrane helices.</span>
+          <span className="block"><b>3. Structural fit:</b> those whose predicted helices fit those of their family,
+          measured with our topology score (at least 0.8).</span>
+          <span className="block"><b>4. Overlaps resolved:</b> a sequence found by two families is kept in one of
+          them.</span>
+          <span className="block"><b>5. Final:</b> fungal (Dikarya) sequences of the Class A search that phylogenies
+          place with GPR1 are counted as GPR1.</span>
+          <span className="mt-1 block">The controls (G proteins, TBP, RPB1) are not filtered and are the same at
+          every step. Switching tables keeps any separately loaded User Input tracks.</span>
         </ControlHeading>
         <Select value={selectedSourceData} onValueChange={onSourceDataChange}>
           <SelectTrigger className="h-7 w-48 text-xs [&>span]:truncate">

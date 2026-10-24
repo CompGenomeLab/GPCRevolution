@@ -131,7 +131,7 @@ export default function SuperfamilyLogoPage() {
       'cAMP': 'cAMP',
       'STE2': 'STE2',
       'STE3': 'STE3',
-      'TM116': 'TMEM116',
+      'TM116': 'TM116',
       'Mth': 'Mth',
       'Nematode': 'Nematode'
     };
@@ -160,7 +160,7 @@ export default function SuperfamilyLogoPage() {
       'cAMP': 'cAMP',
       'STE2': 'STE2',
       'STE3': 'STE3',
-      'TM116': 'TMEM116',
+      'TM116': 'TM116',
       'Mth': 'Mth',
       'Nematode': 'Nematode'
     };

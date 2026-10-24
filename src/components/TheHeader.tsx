@@ -6,31 +6,13 @@ import { useTheme } from 'next-themes';
 import { Button } from '@/components/ui/button';
 import { Moon, Sun } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from '@/components/ui/command';
-import receptors from '../../public/receptors.json';
+import { useState, useEffect } from 'react';
+import { SiteSearch } from './SiteSearch';
 import DesktopNavigation from './DesktopNavigation';
 import MobileNavigation from './MobileNavigation';
 
 interface Props {
   className?: string;
-}
-
-interface Receptor {
-  geneName: string;
-  class: string;
-  numOrthologs: number;
-  lca: string;
-  gpcrdbId: string;
-  name: string;
 }
 
 export const navigationItems = [
@@ -52,6 +34,21 @@ export const navigationItems = [
         href: '/tools/combine-orthologs',
         description: 'Merge and analyze orthologous sequences',
       },
+      {
+        title: 'Superfamily Logo Comparison (Beta)',
+        href: '/superfamily-logo',
+        description: 'Compare sequence logos of the GPCR families on one superfamily alignment',
+      },
+      {
+        title: 'Family Taxonomic Distribution (Beta)',
+        href: '/taxonomic-distribution',
+        description: 'Browse GPCR family counts across eukaryotic genomes, with a count table',
+      },
+      {
+        title: 'Superfamily Trees (Beta)',
+        href: '/superfamily-trees',
+        description: 'Explore the maximum likelihood trees of the GPCR superfamily',
+      },
     ],
   },
   {
@@ -71,56 +68,9 @@ export const navigationItems = [
 export function TheHeader({ className }: Props) {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
-  const [searchResults, setSearchResults] = useState<Receptor[]>([]);
-  const [hasSearched, setHasSearched] = useState(false);
-  const [searchValue, setSearchValue] = useState('');
-  const router = useRouter();
-  const searchRef = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
     setMounted(true);
   }, []);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
-        setHasSearched(false);
-        setSearchResults([]);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
-
-  const handleSearch = (value: string) => {
-    setSearchValue(value);
-    if (!value.trim()) {
-      setSearchResults([]);
-      setHasSearched(false);
-      return;
-    }
-
-    setHasSearched(true);
-    const term = value.toLowerCase();
-    const results = receptors
-      .filter(
-        (receptor: Receptor) =>
-          receptor.geneName.toLowerCase().includes(term) || receptor.name.toLowerCase().includes(term)
-      )
-      .slice(0, 10);
-
-    setSearchResults(results);
-  };
-
-  const handleSelect = (geneName: string) => {
-    setHasSearched(false);
-    setSearchResults([]);
-    setSearchValue('');
-    router.push(`/receptor?gene=${encodeURIComponent(geneName)}`);
-  };
 
   return (
     <header className={cn('bg-background border-b border-border', className)}>
@@ -144,42 +94,7 @@ export function TheHeader({ className }: Props) {
           
           {/* Bottom line: Search + Theme Toggle + Mobile Navigation */}
           <div className="flex items-center justify-between pb-2">
-            <div className="relative w-64" ref={searchRef}>
-              <Command shouldFilter={false} className="rounded-lg border shadow-none">
-                <CommandInput
-                  placeholder="Search for a receptor..."
-                  value={searchValue}
-                  onValueChange={handleSearch}
-                  className="h-9"
-                />
-                {hasSearched && (
-                  <CommandList className="absolute top-full left-0 right-0 z-50 bg-background border rounded-lg shadow-lg max-h-[300px] overflow-y-auto">
-                    {searchResults.length === 0 ? (
-                      <CommandEmpty>No results found.</CommandEmpty>
-                    ) : (
-                      <CommandGroup>
-                        {searchResults.map((receptor, index) => (
-                          <CommandItem
-                            key={index}
-                            value={`${receptor.geneName} ${receptor.name}`}
-                            className="cursor-pointer"
-                            onSelect={() => handleSelect(receptor.geneName)}
-                          >
-                            <div className="flex flex-col">
-                              <span className="font-medium">{`${receptor.geneName} - ${receptor.name}`}</span>
-                              <span className="text-sm text-muted-foreground">
-                                Class: {receptor.class} | Orthologs: {receptor.numOrthologs} | LCA:{' '}
-                                {receptor.lca}
-                              </span>
-                            </div>
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    )}
-                  </CommandList>
-                )}
-              </Command>
-            </div>
+            <SiteSearch className="min-w-0 flex-1" />
 
             <div className="flex items-center gap-4 ml-4">
               <Button
@@ -217,42 +132,7 @@ export function TheHeader({ className }: Props) {
           </div>
 
           <div className="flex items-center gap-4">
-            <div className="relative w-36 sm:w-72" ref={searchRef}>
-              <Command shouldFilter={false} className="rounded-lg border shadow-none">
-                <CommandInput
-                  placeholder="Search for a receptor..."
-                  value={searchValue}
-                  onValueChange={handleSearch}
-                  className="h-9"
-                />
-                {hasSearched && (
-                  <CommandList className="absolute top-full left-0 right-0 z-50 bg-background border rounded-lg shadow-lg max-h-[300px] overflow-y-auto">
-                    {searchResults.length === 0 ? (
-                      <CommandEmpty>No results found.</CommandEmpty>
-                    ) : (
-                      <CommandGroup>
-                        {searchResults.map((receptor, index) => (
-                          <CommandItem
-                            key={index}
-                            value={`${receptor.geneName} ${receptor.name}`}
-                            className="cursor-pointer"
-                            onSelect={() => handleSelect(receptor.geneName)}
-                          >
-                            <div className="flex flex-col">
-                              <span className="font-medium">{`${receptor.geneName} - ${receptor.name}`}</span>
-                              <span className="text-sm text-muted-foreground">
-                                Class: {receptor.class} | Orthologs: {receptor.numOrthologs} | LCA:{' '}
-                                {receptor.lca}
-                              </span>
-                            </div>
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    )}
-                  </CommandList>
-                )}
-              </Command>
-            </div>
+            <SiteSearch className="w-72 lg:w-96" />
 
             <Button
               variant="ghost"

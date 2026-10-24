@@ -1,0 +1,91 @@
+{
+ "groups": [
+  "Metazoa",
+  "Fungi",
+  "Amoebozoa and unicellular holozoans",
+  "Viridiplantae",
+  "SAR and other eukaryotes"
+ ],
+ "trees": [
+  {
+   "file": "representatives_no_ste2ste3classCV2_ginsi_ep0.123_kpicgappy.raxml",
+   "set": "no_ste2ste3classCV2",
+   "setName": "Core families",
+   "setNote": "without STE2, STE3, Class C and Vomeronasal 2",
+   "alignment": "ginsi_ep0.123",
+   "alignmentName": "Higher gap penalty",
+   "alignmentNote": "MAFFT G-INS-i, --ep 0.123 (main)",
+   "leaves": 475
+  },
+  {
+   "file": "representatives_no_ste2ste3classCV2_ginsi_kpicgappy.raxml",
+   "set": "no_ste2ste3classCV2",
+   "setName": "Core families",
+   "setNote": "without STE2, STE3, Class C and Vomeronasal 2",
+   "alignment": "ginsi",
+   "alignmentName": "Default gap penalty",
+   "alignmentNote": "MAFFT G-INS-i, default --ep",
+   "leaves": 475
+  },
+  {
+   "file": "representatives_and_literature_ginsi_ep0.123_kpicgappy.raxml",
+   "set": "and_literature",
+   "setName": "Core families + literature",
+   "setNote": "the core set and 18 literature sequences",
+   "alignment": "ginsi_ep0.123",
+   "alignmentName": "Higher gap penalty",
+   "alignmentNote": "MAFFT G-INS-i, --ep 0.123 (main)",
+   "leaves": 493
+  },
+  {
+   "file": "representatives_and_literature_ginsi_kpicgappy.raxml",
+   "set": "and_literature",
+   "setName": "Core families + literature",
+   "setNote": "the core set and 18 literature sequences",
+   "alignment": "ginsi",
+   "alignmentName": "Default gap penalty",
+   "alignmentNote": "MAFFT G-INS-i, default --ep",
+   "leaves": 493
+  },
+  {
+   "file": "representatives_no_ste2_ginsi_ep0.123_kpicgappy.raxml",
+   "set": "no_ste2",
+   "setName": "All families but STE2",
+   "setNote": "all families except STE2",
+   "alignment": "ginsi_ep0.123",
+   "alignmentName": "Higher gap penalty",
+   "alignmentNote": "MAFFT G-INS-i, --ep 0.123 (main)",
+   "leaves": 570
+  },
+  {
+   "file": "representatives_no_ste2_ginsi_kpicgappy.raxml",
+   "set": "no_ste2",
+   "setName": "All families but STE2",
+   "setNote": "all families except STE2",
+   "alignment": "ginsi",
+   "alignmentName": "Default gap penalty",
+   "alignmentNote": "MAFFT G-INS-i, default --ep",
+   "leaves": 570
+  },
+  {
+   "file": "representatives_all_ginsi_ep0.123_kpicgappy.raxml",
+   "set": "all",
+   "setName": "All 19 families",
+   "setNote": "every family",
+   "alignment": "ginsi_ep0.123",
+   "alignmentName": "Higher gap penalty",
+   "alignmentNote": "MAFFT G-INS-i, --ep 0.123 (main)",
+   "leaves": 590
+  },
+  {
+   "file": "representatives_all_ginsi_kpicgappy.raxml",
+   "set": "all",
+   "setName": "All 19 families",
+   "setNote": "every family",
+   "alignment": "ginsi",
+   "alignmentName": "Default gap penalty",
+   "alignmentNote": "MAFFT G-INS-i, default --ep",
+   "leaves": 590
+  }
+ ]
+}

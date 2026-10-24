@@ -1,0 +1,28 @@
+import type { Metadata } from 'next';
+import { GeneVisualization } from '@/components/phyletic-distribution/GeneVisualization';
+
+export const metadata: Metadata = {
+  title: 'Family Taxonomic Distribution | GPCR Evolution DB',
+  description: 'Explore gene-family distributions across eukaryotic taxa in the NCBI and Open Tree taxonomies.',
+  robots: {
+    index: false,
+    follow: false,
+    nocache: true,
+  },
+};
+
+export default function TaxonomicDistributionPage() {
+  return (
+    <div className="mx-auto w-full max-w-[1600px] px-3 py-6 sm:px-5 lg:px-6">
+      <div className="mb-6 max-w-4xl space-y-2">
+        <h1 className="text-3xl font-bold tracking-tight">Family Taxonomic Distribution</h1>
+        <p className="text-muted-foreground">
+          Upload taxID-indexed family counts to explore their distribution across eukaryotic
+          lineages in the NCBI Taxonomy or the Open Tree of Life taxonomy.
+        </p>
+      </div>
+
+      <GeneVisualization />
+    </div>
+  );
+}

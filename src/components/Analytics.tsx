@@ -5,17 +5,20 @@ import { usePathname } from 'next/navigation';
 import { useEffect } from 'react';
 import { GA_MEASUREMENT_ID, trackPageview } from '@/lib/gtag';
 
+// only the production build reports to Google Analytics, so local dev-server visits are not counted
+const ENABLED = process.env.NODE_ENV === 'production' && !!GA_MEASUREMENT_ID;
+
 export function Analytics() {
   const pathname = usePathname();
 
   useEffect(() => {
-    if (!GA_MEASUREMENT_ID) return;
+    if (!ENABLED) return;
     const search = typeof window !== 'undefined' ? window.location.search : '';
     const url = `${pathname}${search}`;
     trackPageview(url);
   }, [pathname]);
 
-  if (!GA_MEASUREMENT_ID) return null;
+  if (!ENABLED) return null;
 
   return (
     <>

@@ -3,6 +3,8 @@
 import React, { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle, useMemo } from 'react';
 import * as d3 from 'd3';
 // Colors are inlined below; no external color module imports
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Upload, Database, MousePointer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -37,9 +39,11 @@ interface TooltipProps {
   label: string;
   category: string;
   count: number;
+  /** the genome under the cursor, when the tooltip is over a count cell */
+  genome?: string;
 }
 
-function Tooltip({ isVisible, x, y, label, category, count }: TooltipProps) {
+function Tooltip({ isVisible, x, y, label, category, count, genome }: TooltipProps) {
   if (!isVisible) return null;
   
   return (
@@ -53,6 +57,8 @@ function Tooltip({ isVisible, x, y, label, category, count }: TooltipProps) {
     >
       <div className="font-semibold">{category}</div>
       <div>{label}: {count.toLocaleString()}</div>
+      {genome && <div className="mt-0.5 italic">{genome}</div>}
+      {genome && <div className="opacity-70">Click to open its species page</div>}
     </div>
   );
 }
@@ -308,6 +314,9 @@ async function createEmbeddedFontCss(fontFamily: string, usedWeights: Set<number
   return embeddedRules.join('\n');
 }
 
+/** Links to the species pages are listed under the plot once the view holds this many genomes or fewer. */
+const SPECIES_LINKS_MAX = 25;
+
 export const VisualizationCanvas = forwardRef<VisualizationCanvasHandle, VisualizationCanvasProps>(function VisualizationCanvas(
 {
   data,
@@ -328,6 +337,16 @@ ref
   const svgRef = useRef<SVGSVGElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
+  const genomeName = useMemo(() => {
+    const names = new Map<string, string>();
+    data.forEach(row => {
+      const strain = String(row.Strain ?? 'NA');
+      const species = String(row.species ?? row.Species ?? 'NA');
+      names.set(String(row.taxID), strain !== 'NA' ? strain : species !== 'NA' ? species : String(row.taxID));
+    });
+    return names;
+  }, [data]);
   const [containerWidth, setContainerWidth] = useState(1200);
   const [lastSvgHeight, setLastSvgHeight] = useState(0);
   const TREE_PANEL_HEIGHT = 180;
@@ -459,6 +478,7 @@ ref
     category: string;
     count: number;
     label?: string;
+    genome?: string;
   }>({
     isVisible: false,
     x: 0,
@@ -1151,6 +1171,8 @@ ref
       if (hoveredFamily && hoveredTaxon) {
         const cm = countMap.get(hoveredTaxon);
         const count = cm ? (cm[hoveredFamily] || 0) : 0;
+        container.style.cursor = 'pointer';
+        hovered = { taxon: hoveredTaxon, family: hoveredFamily };
         setTooltip({
           isVisible: true,
           x: mouseX,
@@ -1159,10 +1181,21 @@ ref
           label: '#',
           category: formatPhyleticGeneLabel(hoveredFamily),
           count,
+          genome: genomeName.get(hoveredTaxon) || hoveredTaxon,
         });
       } else {
+        container.style.cursor = '';
+        hovered = null;
         setTooltip(prev => ({ ...prev, isVisible: false }));
       }
+    };
+
+    // A click on a count cell opens that genome's species page, with its table filtered to the family.
+    let hovered: { taxon: string; family: string } | null = null;
+    const handleClick = () => {
+      if (!hovered) return;
+      const family = hovered.family.replace(/_count$/, '');
+      router.push(`/species?taxid=${encodeURIComponent(hovered.taxon)}&family=${encodeURIComponent(family)}`);
     };
 
     const handleMouseLeave = () => {
@@ -1171,11 +1204,14 @@ ref
 
     container.addEventListener('mousemove', handleMouseMove);
     container.addEventListener('mouseleave', handleMouseLeave);
+    container.addEventListener('click', handleClick);
     return () => {
       container.removeEventListener('mousemove', handleMouseMove);
       container.removeEventListener('mouseleave', handleMouseLeave);
+      container.removeEventListener('click', handleClick);
+      container.style.cursor = '';
     };
-  }, [data, selectedLevels, activeGenes, coordMap, widthMap, countMap, topTreeOffset]);
+  }, [data, selectedLevels, activeGenes, coordMap, widthMap, countMap, topTreeOffset, genomeName, router]);
 
   // Separate effect to handle highlight updates
   useEffect(() => {
@@ -1276,10 +1312,23 @@ ref
               label={tooltip.label || '#'}
               category={tooltip.category}
               count={tooltip.count}
+              genome={tooltip.genome}
             />
           </div>
         </CardContent>
       </Card>
+
+      {data.length <= SPECIES_LINKS_MAX && (
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm">
+          <span className="font-semibold">Species {data.length === 1 ? 'page' : 'pages'}:</span>
+          {data.map(row => (
+            <Link key={String(row.taxID)} href={`/species?taxid=${encodeURIComponent(String(row.taxID))}`}
+                  className="italic underline decoration-dotted hover:text-primary">
+              {genomeName.get(String(row.taxID)) || String(row.taxID)}
+            </Link>
+          ))}
+        </div>
+      )}
 
     </div>
   );

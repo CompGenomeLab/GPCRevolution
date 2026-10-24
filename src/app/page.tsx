@@ -1,56 +1,16 @@
 'use client';
 
 import { useState } from 'react';
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from '@/components/ui/command';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import receptors from '../../public/receptors.json';
 import { useRouter } from 'next/navigation';
 import RootContainer from '@/components/RootContainer';
+import { SiteSearch, type SearchScope } from '@/components/SiteSearch';
 import { BarChart3, Table, Combine } from 'lucide-react';
 
-interface Receptor {
-  geneName: string;
-  class: string;
-  numOrthologs: number;
-  lca: string;
-  gpcrdbId: string;
-  name: string;
-}
-
 export default function Home() {
-  const [searchResults, setSearchResults] = useState<Receptor[]>([]);
-  const [hasSearched, setHasSearched] = useState(false);
   const router = useRouter();
-
-  const handleSearch = (value: string) => {
-    if (!value.trim()) {
-      setSearchResults([]);
-      setHasSearched(false);
-      return;
-    }
-
-    setHasSearched(true);
-    const term = value.toLowerCase();
-    const results = receptors
-      .filter(
-        (receptor: Receptor) =>
-          receptor.geneName.toLowerCase().includes(term) || receptor.name.toLowerCase().includes(term)
-      )
-      .slice(0, 10);
-
-    setSearchResults(results);
-  };
-
-  const handleSelect = (geneName: string) => {
-    router.push(`/receptor?gene=${encodeURIComponent(geneName)}`);
-  };
+  const [scope, setScope] = useState<SearchScope>('receptors');
 
   const handleToolNavigation = (tool: string) => {
     router.push(`/tools/${tool}`);
@@ -65,74 +25,12 @@ export default function Home() {
         <RootContainer className="text-center">
           <div className="max-w-4xl mx-auto">
             {/* Search Section */}
-            <div className="max-w-2xl mx-auto mb-8 sm:mb-12">
-              <h2 className="text-2xl sm:text-4xl font-semibold mb-4 sm:mb-6">Find your receptor</h2>
-                                                        {/* Mobile Search */}
-              <Command shouldFilter={false} className="rounded-lg border-2 border-[#424874] shadow-none block sm:hidden">
-                <CommandInput
-                  placeholder="Search for a receptor (e.g., 5HT1A) ..."
-                  onValueChange={handleSearch}
-                  className="h-10 text-sm px-2"
-                />
-                {hasSearched && (
-                  <CommandList className={searchResults.length > 5 ? 'max-h-[300px] overflow-y-auto' : ''}>
-                    {searchResults.length === 0 ? (
-                      <CommandEmpty>No results found.</CommandEmpty>
-                    ) : (
-                      <CommandGroup>
-                        {searchResults.map((receptor, index) => (
-                          <CommandItem
-                            key={index}
-                            value={`${receptor.geneName} ${receptor.name}`}
-                            className="cursor-pointer text-left"
-                            onSelect={() => handleSelect(receptor.geneName)}
-                          >
-                            <div className="flex flex-col items-start w-full">
-                              <span className="font-medium">{`${receptor.geneName} - ${receptor.name}`}</span>
-                              <span className="text-sm text-muted-foreground">
-                                Class: {receptor.class} | Orthologs: {receptor.numOrthologs} | LCA: {receptor.lca}
-                              </span>
-                            </div>
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    )}
-                  </CommandList>
-                )}
-              </Command>
-              {/* Desktop Search */}
-              <Command shouldFilter={false} className="rounded-lg border-2 border-[#424874] shadow-none hidden sm:block">
-                <CommandInput
-                  placeholder="Search for a receptor (e.g., 5HT1A - 5-hydroxytryptamine receptor 1A) ..."
-                  onValueChange={handleSearch}
-                  className="h-14 text-lg px-2"
-                />
-                {hasSearched && (
-                  <CommandList className={searchResults.length > 5 ? 'max-h-[300px] overflow-y-auto' : ''}>
-                    {searchResults.length === 0 ? (
-                      <CommandEmpty>No results found.</CommandEmpty>
-                    ) : (
-                      <CommandGroup>
-                        {searchResults.map((receptor, index) => (
-                          <CommandItem
-                            key={index}
-                            value={`${receptor.geneName} ${receptor.name}`}
-                            className="cursor-pointer text-left"
-                            onSelect={() => handleSelect(receptor.geneName)}
-                          >
-                            <div className="flex flex-col items-start w-full">
-                              <span className="font-medium">{`${receptor.geneName} - ${receptor.name}`}</span>
-                              <span className="text-sm text-muted-foreground">
-                                Class: {receptor.class} | Orthologs: {receptor.numOrthologs} | LCA: {receptor.lca}
-                              </span>
-                            </div>
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    )}
-                  </CommandList>
-                )}
-              </Command>
+            <div className="max-w-3xl mx-auto mb-8 sm:mb-12">
+              <h2 className="text-2xl sm:text-4xl font-semibold mb-4 sm:mb-6">
+                {scope === 'species' ? 'Find your species' : 'Find your receptor'}
+              </h2>
+              <SiteSearch className="sm:hidden" scope={scope} onScopeChange={setScope} />
+              <SiteSearch variant="hero" className="hidden sm:flex" scope={scope} onScopeChange={setScope} />
             </div>
 
             {/* Key Statistics */}

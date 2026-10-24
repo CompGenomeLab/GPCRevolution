@@ -37,10 +37,31 @@ const TAXONOMIES = [
 ] as const;
 type TaxonomyValue = (typeof TAXONOMIES)[number]['value'];
 const DEFAULT_TAXONOMY: TaxonomyValue = 'ncbi';
+// One count table per filtering step, in pipeline order (build_step_count_tables.py); the final one opens first.
 const SOURCE_DATASETS = [
   {
+    value: 'clade',
+    label: '1. Found by the searches',
+    file: '/phyletic-distribution/tax_counts_per_family_clade.tsv',
+  },
+  {
+    value: 'core',
+    label: '2. Seven-helix core',
+    file: '/phyletic-distribution/tax_counts_per_family_core.tsv',
+  },
+  {
+    value: 'topology',
+    label: '3. Structural fit',
+    file: '/phyletic-distribution/tax_counts_per_family_topology.tsv',
+  },
+  {
+    value: 'overlap',
+    label: '4. Overlaps resolved',
+    file: '/phyletic-distribution/tax_counts_per_family_overlap.tsv',
+  },
+  {
     value: 'final',
-    label: 'Final (after the GPR1 reassignment)',
+    label: '5. Final',
     file: '/phyletic-distribution/tax_counts_per_family_final.tsv',
   },
 ] as const;

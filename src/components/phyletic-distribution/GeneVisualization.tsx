@@ -5,6 +5,7 @@ import { usePhyleticDistribution } from '@/hooks/usePhyleticDistribution'
 import { ControlPanel } from './ControlPanel'
 import { GeneSelectionSidebar } from './GeneSelectionSidebar'
 import { VisualizationCanvas } from './VisualizationCanvas'
+import { CountTable } from './CountTable'
 import { Loader2 } from 'lucide-react'
 
 // Loading overlay component
@@ -213,6 +214,18 @@ export function GeneVisualization() {
             </div>
           </div>
         </div>
+
+      {/* Counts of what the plot shows */}
+      {!state.isLoading && state.activeGenes.length > 0 && (
+        <div className="bg-card border border-border rounded-lg shadow-sm px-3 sm:px-5 lg:px-6 py-4">
+          <CountTable
+            data={state.raw}
+            selectedLevels={state.selectedLevels}
+            activeGenes={state.activeGenes}
+            countMap={state.countMap}
+          />
+        </div>
+      )}
     </section>
   )
 } 
