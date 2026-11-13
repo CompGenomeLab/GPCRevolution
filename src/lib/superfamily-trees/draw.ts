@@ -6,12 +6,14 @@
  * midway between its first and last child, and each branch an arc along the parent's radius followed by
  * a radial line out to the node (radius = root-to-node distance). Two views:
  *  - families: the tree alone, each single-family clade shaded and named, leaf tips coloured by lineage;
- *  - detailed: a family ring and a lineage ring around the tree, a label per leaf, and family names.
+ *  - detailed: a family ring and a lineage ring around the tree, a label per leaf, and family names;
+ *  - clado: Figure 3, the tree as a cladogram (leaf order flipped as in the figure) with a lineage ring
+ *    next to the leaves and, outside it, a family ring of grey blocks with each family's name written in it.
  * Every element tied to a node carries data-n, which the viewer uses for hovering, search and dimming.
  */
 import type { TreeData, TreeNode } from '@/types/superfamily-trees';
 
-export type TreeView = 'families' | 'detailed';
+export type TreeView = 'families' | 'detailed' | 'clado';
 
 const FAMILY_NAMES: Record<string, string> = {
   classA: 'Class A', classB1: 'Class B1', classB2: 'Class B2', classC: 'Class C', classF: 'Class F',
@@ -34,14 +36,18 @@ export const GROUP_COLORS: Record<string, string> = {
 export interface Palette {
   bg: string; ink: string; muted: string; branch: string; s8: string; s9: string; guide: string;
   shades: [string, string, string]; hl: string; sub: string; frame: string;
+  /** the two alternating greys of the cladogram view's family ring */
+  blocks: [string, string];
 }
 const LIGHT: Palette = {
   bg: '#ffffff', ink: '#1f2328', muted: '#6b7280', branch: '#8a8f98', s8: '#e8a33d', s9: '#d1495b',
   guide: '#e3e5e8', shades: ['#dcdfe3', '#f1f2f4', '#e7e9ec'], hl: '#c2185b', sub: '#1d6fd6', frame: '#d0d4da',
+  blocks: ['#bdbdbd', '#e4e4e4'],
 };
 const DARK: Palette = {
   bg: '#0b0d10', ink: '#e6e8eb', muted: '#9aa1ab', branch: '#7d838c', s8: '#e8a33d', s9: '#ef6a7b',
   guide: '#2a2e35', shades: ['#262a31', '#16191e', '#1e2228'], hl: '#ff4f9a', sub: '#5aa2ff', frame: '#3a3f47',
+  blocks: ['#3d424a', '#272b31'],
 };
 export const palette = (dark: boolean): Palette => (dark ? DARK : LIGHT);
 
@@ -49,6 +55,12 @@ export const W = 2600, H = 2600;
 const CX = 1300, CY = 1300, TREE_R = 760;
 const FAM: [number, number] = [6, 38], LIN: [number, number] = [42, 74];
 const ACC = 82, NAME = 230, HUG = 6, MIN_UNIT = 5;
+/** cladogram view (Figure 3): a smaller tree, with the rings and type at the usual sizes */
+const CLADO_R = 420, CLIN: [number, number] = [6, 26], CFAM: [number, number] = [30, 74];
+/** centre and outer radius of the cladogram view's rings, for placing the exported legends */
+export const CLADO_RING = { cx: CX, cy: CY, r: CLADO_R + CFAM[1] };
+/** the family ring's names, abbreviated as in Figure 3 */
+const RING_NAMES: Record<string, string> = { Vomeronasal1: 'V1R' };
 /** GPR1 nested in Class A gets one two-line name in the families view */
 const MIXED = ['GPR1', 'classA'];
 
@@ -75,9 +87,12 @@ function starPath(cx: number, cy: number, r: number) {
 
 export function drawTree(T: TreeData, view: TreeView, pal: Palette,
                          measure: (text: string, px: number) => number): DrawnTree {
-  const D: TreeNode[] = T.nodes, n = D.length, SIMPLE = view === 'families';
+  const D: TreeNode[] = T.nodes, n = D.length, SIMPLE = view === 'families', CLADO = view === 'clado';
+  const DETAILED = view === 'detailed';
   const kids: number[][] = D.map(() => []);
   D.forEach((d, i) => { if (d.p >= 0) kids[d.p].push(i); });
+  // Figure 3 is drawn flipped: each node's children in reverse order
+  if (CLADO) kids.forEach(k => k.reverse());
   const order: number[] = [];
   (function walk(v: number) { if (D[v].leaf) order.push(v); else kids[v].forEach(walk); })(0);
   const below: number[][] = D.map(() => []);
@@ -88,12 +103,21 @@ export function drawTree(T: TreeData, view: TreeView, pal: Palette,
 
   // layout
   const NL = order.length, step = (2 * Math.PI) / NL, off = -Math.PI / 2;
-  const scale = TREE_R / Math.max(...order.map(v => D[v].rt));
+  // depth from the root: the tree's own, or in the cladogram view the tree's height less the node's
+  // number of steps to its farthest leaf, so every leaf lands on one circle
+  let RT = D.map(d => d.rt);
+  if (CLADO) {
+    const ht = new Array(n).fill(0);
+    for (let i = n - 1; i >= 0; i--) if (D[i].p >= 0) ht[D[i].p] = Math.max(ht[D[i].p], ht[i] + 1);
+    RT = ht.map(h => ht[0] - h);
+  }
+  const TR = CLADO ? CLADO_R : TREE_R;
+  const scale = TR / Math.max(...order.map(v => RT[v]));
   const ang: number[] = new Array(n), rad: number[] = new Array(n);
   order.forEach((v, i) => { ang[v] = off + (i + 0.5) * step; });
   for (let i = n - 1; i >= 0; i--) if (!D[i].leaf) ang[i] = (ang[kids[i][0]] + ang[kids[i][kids[i].length - 1]]) / 2;
   const pos: [number, number][] = D.map((d, i) => {
-    rad[i] = d.rt * scale;
+    rad[i] = RT[i] * scale;
     return [CX + rad[i] * Math.cos(ang[i]), CY + rad[i] * Math.sin(ang[i])];
   });
   const edgePath = (v: number) => {
@@ -102,8 +126,8 @@ export function drawTree(T: TreeData, view: TreeView, pal: Palette,
     return `M${f2(x0)},${f2(y0)} A${f2(r)},${f2(r)} 0 ${Math.abs(a1 - a0) > Math.PI ? 1 : 0} ${a1 >= a0 ? 1 : 0} `
       + `${f2(x1)},${f2(y1)} L${f2(pos[v][0])},${f2(pos[v][1])}`;
   };
-  const E = (t: number, r: number): [number, number] => [CX + (TREE_R + r) * Math.cos(t), CY + (TREE_R + r) * Math.sin(t)];
-  const at = (t: number, R: number) => E(t, R - TREE_R);       // absolute radius
+  const E = (t: number, r: number): [number, number] => [CX + (TR + r) * Math.cos(t), CY + (TR + r) * Math.sin(t)];
+  const at = (t: number, R: number) => E(t, R - TR);       // absolute radius
   const tOf = (i: number) => off + (i + 0.5) * step;
   const tipR = order.map(v => rad[v]);
 
@@ -143,7 +167,7 @@ export function drawTree(T: TreeData, view: TreeView, pal: Palette,
       .dim { opacity: 0.1; } .unst { opacity: 0.15; }
     </style>`,
   ];
-  if (!SIMPLE) {
+  if (DETAILED) {
     out.push(`<g class="guides" stroke="${pal.guide}" stroke-width="0.5">`
       + order.map((v, i) => { const [x, y] = E(tOf(i), FAM[0]); return `<line x1="${f2(pos[v][0])}" y1="${f2(pos[v][1])}" x2="${f2(x)}" y2="${f2(y)}"/>`; }).join('')
       + '</g>');
@@ -151,17 +175,18 @@ export function drawTree(T: TreeData, view: TreeView, pal: Palette,
   const shadeAt = out.length; out.push('');
   const branches = D.map((_, v) => v).filter(v => v > 0);
   out.push('<g class="edges">' + branches.map(v => {
-    const c = supClass(D[v].leaf ? null : D[v].s);
-    return `<path data-n="${v}" class="${c}" stroke-width="${c ? 2.6 : 1.3}" d="${edgePath(v)}"/>`;
+    const c = supClass(D[v].leaf ? null : D[v].s), w = CLADO ? 2.2 : 1.3;   // the smaller cladogram gets thicker branches
+    return `<path data-n="${v}" class="${c}" stroke-width="${c ? 2 * w : w}" d="${edgePath(v)}"/>`;
   }).join('') + '</g>');
   out.push('<g class="hit">' + branches.map(v => `<path data-n="${v}" d="${edgePath(v)}"/>`).join('') + '</g>');
+  const cladoRingAt = out.length; out.push('');
 
   const color = (f: string) => T.colors[f] || '#999';
   const litLeaves = order.filter(v => D[v].lit);
   if (SIMPLE) {
     out.push('<g class="tips">' + order.filter(v => !D[v].lit).map(v =>
       `<circle data-n="${v}" cx="${f2(pos[v][0])}" cy="${f2(pos[v][1])}" r="4.5" fill="${GROUP_COLORS[D[v].grp!] || '#999'}"/>`).join('') + '</g>');
-  } else {
+  } else if (DETAILED) {
     const cell = (i: number, [r0, r1]: [number, number], fill: string, attr: string) => {
       const t0 = off + i * step, t1 = t0 + step, p = [E(t0, r0), E(t0, r1), E(t1, r1), E(t1, r0)];
       return `<path ${attr} d="M${p.map(q => f2(q[0]) + ',' + f2(q[1])).join(' L')} Z" fill="${fill}"/>`;
@@ -180,12 +205,70 @@ export function drawTree(T: TreeData, view: TreeView, pal: Palette,
   }
   // a star on the leaf's tip, hoverable like the leaf
   if (litLeaves.length) out.push('<g class="stars">' + litLeaves.map(v =>
-    `<path data-n="${v}" d="${starPath(pos[v][0], pos[v][1], SIMPLE ? 8 : 6)}" fill="${SIMPLE ? pal.bg : color(D[v].fam!)}" stroke="${pal.ink}" stroke-width="1"/>`).join('') + '</g>');
+    `<path data-n="${v}" d="${starPath(pos[v][0], pos[v][1], DETAILED ? 6 : 8)}" fill="${SIMPLE ? pal.bg : color(D[v].fam!)}" stroke="${pal.ink}" stroke-width="1"/>`).join('') + '</g>');
 
   const names: string[] = ['<g class="names">'];
   const shades: string[] = [];
   const fams = order.map(v => D[v].fam!);
-  if (!SIMPLE) {
+  if (CLADO) {
+    // Figure 3: no shading; two rings outside the leaves, built from runs of consecutive leaves of one
+    // family (whether or not a run is a clade; GPR1 and Class A counted together). Next to the leaves,
+    // the lineage ring gives each leaf its lineage colour; outside it, the family ring has one block per
+    // run, alternating between two greys, with the family's name written along the block in the largest
+    // type that fits (a block too short even for MINFS stays unnamed). Runs are kept RGAP apart in both
+    // rings. Each run's cells and name are grouped with its leaves (data-leaves), so the viewer fades or
+    // dims them only when every leaf of the run is faded or dimmed.
+    const CFS = 32, MINFS = 12, RGAP = 6, g = RGAP / 2, rm = TR + (CFAM[0] + CFAM[1]) / 2;
+    const key = (f: string) => (MIXED.includes(f) ? MIXED.join('+') : f);
+    const famKey = (j: number) => key(fams[j]);
+    let s0 = order.findIndex((_, i) => famKey(i) !== famKey((i + NL - 1) % NL));
+    if (s0 < 0) s0 = 0;
+    interface Run { first: number; len: number; label: string; fit: number; fam: string | null }
+    const runs: Run[] = [];
+    for (let k = 0; k < NL;) {
+      let len = 1;
+      while (k + len < NL && famKey((s0 + k + len) % NL) === famKey((s0 + k) % NL)) len++;
+      const js = [...Array(len).keys()].map(jj => (s0 + k + jj) % NL), fs = [...new Set(js.map(j => fams[j]))];
+      // the GPR1 clade is named GPR1 alone: its Class A sequences are reassigned to GPR1 (Figure 3 in the
+      // manuscript keeps "GPR1 / Class A")
+      const label = fs.length > 1 && MIXED.every(f => fs.includes(f)) ? familyName('GPR1')
+        : RING_NAMES[fs[0]] || familyLabel(fs[0]);
+      runs.push({ first: s0 + k, len, label, fam: fs.length === 1 ? fs[0] : null,
+                  fit: Math.min(CFS, (CFS * (rm * len * step - RGAP)) / measure(label, CFS)) });
+      k += len;
+    }
+    // every name is set no larger than Class B2's (its largest block), so the names share one top size
+    const b2 = runs.filter(r => r.fam === 'classB2' && r.fit >= MINFS).sort((x, y) => y.len - x.len)[0];
+    const CAP = b2 ? b2.fit : CFS;
+    const xy = (p: [number, number]) => f2(p[0]) + ',' + f2(p[1]);
+    // a cell from angle t0 to t1 across a band; an end at a run's edge is drawn g in at each radius
+    const sect = (t0: number, t1: number, [b0, b1]: [number, number], fill: string, attr: string, in0: number, in1: number) => {
+      const p = ([[t0, b0, in0], [t0, b1, in0], [t1, b1, -in1], [t1, b0, -in1]] as [number, number, number][])
+        .map(([t, b, s]) => E(t + s * Math.min(g / (TR + b), (t1 - t0) * 0.3), b));   // a one-leaf run keeps 40% of its width
+      return `<path ${attr} d="M${p.map(xy).join(' L')} Z" fill="${fill}" stroke="${fill}"/>`;
+    };
+    const cells: string[] = [];
+    runs.forEach((r, k) => {
+      const fill = pal.blocks[k % 2], js = [...Array(r.len).keys()].map(jj => (r.first + jj) % NL);
+      const ta = off + r.first * step, tb = ta + r.len * step, tm = (ta + tb) / 2;
+      const leaves = js.map(j => order[j]).join(' ');
+      const rc = js.map((j, jj) => {
+        const t0 = ta + jj * step, t1 = t0 + step, e0 = jj === 0 ? 1 : 0, e1 = jj === r.len - 1 ? 1 : 0, v = order[j];
+        return sect(t0, t1, CFAM, fill, `data-n="${v}"`, e0, e1)
+          + sect(t0, t1, CLIN, GROUP_COLORS[D[v].grp!] || '#999', `data-n="${v}"`, e0, e1);
+      });
+      cells.push(`<g data-leaves="${leaves}">${rc.join('')}</g>`);
+      const fs = Math.min(r.fit, CAP);
+      if (fs >= MINFS) {
+        const up = Math.sin(tm) < 0, [a0, a1] = up ? [ta, tb] : [tb, ta];   // read upright: clockwise on top, back below
+        const id = `famarc${k}`;
+        names.push(`<g data-leaves="${leaves}"><path id="${id}" d="M${xy(at(a0, rm))} A${f2(rm)},${f2(rm)} 0 0 ${up ? 1 : 0} ${xy(at(a1, rm))}" fill="none"/>`
+          + `<text font-size="${f2(fs)}" font-weight="bold" dominant-baseline="central" pointer-events="none">`
+          + `<textPath href="#${id}" startOffset="50%" text-anchor="middle">${esc(r.label)}</textPath></text></g>`);
+      }
+    });
+    out[cladoRingAt] = '<g class="ring" stroke-width="0.6">' + cells.join('') + '</g>';
+  } else if (DETAILED) {
     // detailed view: a coloured arc and the name for runs of three or more leaves of one family;
     // shorter runs get the name alone
     let s0 = fams.findIndex((f, i) => f !== fams[(i + NL - 1) % NL]);
@@ -326,7 +409,8 @@ export function drawTree(T: TreeData, view: TreeView, pal: Palette,
   out[shadeAt] = '<g class="shades" pointer-events="none">' + shades.join('') + '</g>';
 
   // scale bar: a round value near a fifth of the deepest root-to-tip distance, drawn with its right end
-  // at the origin; the viewer moves it into the top-right corner of the drawn tree
+  // at the origin; the viewer moves it into the top-right corner of the drawn tree. A cladogram has none.
+  if (CLADO) { out.push('</svg>'); return { svg: out.join('\n'), kids, below, order }; }
   const raw = TREE_R / scale / 5, mag = 10 ** Math.floor(Math.log10(raw));
   const val = [1, 2, 5, 10].map(m => m * mag).reduce((a, b) => (Math.abs(b - raw) < Math.abs(a - raw) ? b : a));
   const len = val * scale;

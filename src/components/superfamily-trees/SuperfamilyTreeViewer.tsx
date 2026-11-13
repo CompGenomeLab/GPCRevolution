@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { ControlHint } from '@/components/phyletic-distribution/ControlPanel';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
-  GROUP_COLORS, drawTree, familyLabel, familyName, palette, type DrawnTree, type TreeView,
+  CLADO_RING, GROUP_COLORS, drawTree, familyLabel, familyName, palette, type DrawnTree, type TreeView,
 } from '@/lib/superfamily-trees/draw';
 import type { TreeData, TreeIndex, TreeNode } from '@/types/superfamily-trees';
 
@@ -21,6 +21,7 @@ const LABELS: Record<LabelMode, string> = {
 const VIEWS: Record<TreeView, string> = {
   families: 'Simplified',
   detailed: 'Circular',
+  clado: 'Circular (Simplified)',
 };
 
 /** the site's dark-mode checkbox colour (globals.css), kept in both themes */
@@ -32,6 +33,47 @@ function measure(text: string, px: number) {
   if (!measureCtx) return text.length * px * 0.62;
   measureCtx.font = `bold ${px}px Arial, Helvetica, sans-serif`;
   return measureCtx.measureText(text).width;
+}
+
+function measurePlain(text: string, px: number) {
+  if (!measureCtx) measureCtx = document.createElement('canvas').getContext('2d');
+  if (!measureCtx) return text.length * px * 0.55;
+  measureCtx.font = `${px}px Arial, Helvetica, sans-serif`;
+  return measureCtx.measureText(text).width;
+}
+
+/**
+ * The Figure 3 legends for an exported Circular (Simplified) drawing: Lineage in the top-left corner and
+ * Branch support in the top-right one, each set as low as it can go while clearing the rings by GAP;
+ * returns the legends' SVG and the top edge they reach.
+ */
+function cladoLegends(x0: number, x1: number, y0: number, groups: string[], support: [string, string][], ink: string) {
+  const TS = 22, FS = 18, ROW = 26, SW = 16, LINE = 40, GAP = 8, { cx, cy, r } = CLADO_RING;
+  const ringTop = (x: number) => (Math.abs(x - cx) < r ? cy - Math.sqrt(r * r - (x - cx) ** 2) : Infinity);
+  const block = (rows: number) => TS + 10 + rows * ROW;
+  const esc = (s: string) => s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]!));
+  // lineage, left-aligned with the drawing
+  const linW = Math.max(measure('Lineage', TS), ...groups.map(g => SW + 10 + measurePlain(g, FS)));
+  const linH = block(groups.length);
+  const linTop = Math.min(y0, ringTop(x0 + linW) - GAP - linH);
+  const lin = [`<text x="${x0}" y="${linTop + TS * 0.8}" font-size="${TS}" font-weight="bold" fill="${ink}">Lineage</text>`]
+    .concat(groups.map((g, k) => {
+      const y = linTop + TS + 10 + k * ROW;
+      return `<rect x="${x0}" y="${y}" width="${SW}" height="${SW}" fill="${GROUP_COLORS[g]}"/>`
+        + `<text x="${x0 + SW + 10}" y="${y + SW / 2}" font-size="${FS}" dominant-baseline="central" fill="${ink}">${esc(g)}</text>`;
+    }));
+  // branch support, right-aligned with the drawing
+  const supW = Math.max(measure('Branch support', TS), ...support.map(([, t]) => LINE + 12 + measurePlain(t, FS)));
+  const sx = x1 - supW, supH = block(support.length);
+  const supTop = Math.min(y0, ringTop(sx) - GAP - supH);
+  const sup = [`<text x="${sx}" y="${supTop + TS * 0.8}" font-size="${TS}" font-weight="bold" fill="${ink}">Branch support</text>`]
+    .concat(support.map(([c, t], k) => {
+      const y = supTop + TS + 10 + k * ROW + SW / 2;
+      return `<line x1="${sx}" y1="${y}" x2="${sx + LINE}" y2="${y}" stroke="${c}" stroke-width="4.4" stroke-linecap="round"/>`
+        + `<text x="${sx + LINE + 12}" y="${y}" font-size="${FS}" dominant-baseline="central" fill="${ink}">${esc(t)}</text>`;
+    }));
+  return { svg: `<g class="legends" font-family="Arial, Helvetica, sans-serif">${lin.join('')}${sup.join('')}</g>`,
+           top: Math.min(linTop, supTop) };
 }
 
 const fmt = (v: number | null | undefined, d = 3) => (v == null ? '–' : v.toFixed(d));
@@ -103,7 +145,8 @@ export function SuperfamilyTreeViewer() {
   }, [index]);
   const setKey = searchParams.get('set') || sets[0]?.set;
   const alnKey = searchParams.get('alignment') || alignments[0]?.alignment;
-  const view: TreeView = searchParams.get('view') === 'detailed' ? 'detailed' : 'families';
+  const viewParam = searchParams.get('view');
+  const view: TreeView = viewParam === 'detailed' || viewParam === 'clado' ? viewParam : 'families';
   const labels: LabelMode = searchParams.get('labels') === 'trees' ? 'trees' : 'final';
   const entry = index?.trees.find(t => t.set === setKey && t.alignment === alnKey) || index?.trees[0];
 
@@ -255,11 +298,22 @@ export function SuperfamilyTreeViewer() {
     const D = tree.nodes, cut = tree.ste2Cut;
     const unstable = (i: number) => D[i].mti != null && D[i].mti! >= cut;
     const off = (i: number) => hiddenFam.has(D[i].fam!) || hiddenGrp.has(D[i].grp!);
+    const anyOff = hiddenFam.size > 0 || hiddenGrp.size > 0;
     elsRef.current.forEach((list, v) => {
       const under = drawn.below[v];
       const fade = fadeUnstable && under.every(unstable);
-      const dim = (hiddenFam.size > 0 || hiddenGrp.size > 0) && under.every(off);
-      list.forEach(el => { el.classList.toggle('unst', fade); el.classList.toggle('dim', dim); });
+      const dim = anyOff && under.every(off);
+      // ring cells of the Circular (Simplified) view follow their run, below
+      list.forEach(el => {
+        if (el.closest('[data-leaves]')) return;
+        el.classList.toggle('unst', fade); el.classList.toggle('dim', dim);
+      });
+    });
+    // a run's ring cells and name fade or dim only when every leaf of the run does
+    boxRef.current?.querySelectorAll('[data-leaves]').forEach(g => {
+      const leaves = g.getAttribute('data-leaves')!.split(' ').map(Number);
+      g.classList.toggle('unst', fadeUnstable && leaves.every(unstable));
+      g.classList.toggle('dim', anyOff && leaves.every(off));
     });
   }, [fadeUnstable, hiddenFam, hiddenGrp, tree, drawn]);
 
@@ -268,8 +322,20 @@ export function SuperfamilyTreeViewer() {
     if (!svg || !entry) return;
     const c = svg.cloneNode(true) as SVGSVGElement;
     c.querySelectorAll('.hit').forEach(g => g.remove());
-    const [, , vw, vh] = (svg.getAttribute('viewBox') || '0 0 2600 2600').split(/\s+/);
-    c.setAttribute('width', vw); c.setAttribute('height', vh);
+    if (view === 'clado') {
+      // the whole drawing with the Figure 3 legends in its top corners, whatever the zoom on screen
+      const bb = svg.getBBox(), pal = palette(dark), PAD = 16;
+      const leg = cladoLegends(bb.x, bb.x + bb.width, bb.y, index?.groups || [],
+        [[pal.s9, 'TBE ≥ 0.9'], [pal.s8, 'TBE ≥ 0.8'], [pal.branch, 'TBE < 0.8, or leaf']], pal.ink);
+      c.insertAdjacentHTML('beforeend', leg.svg);
+      const box = [bb.x - PAD, leg.top - PAD, bb.width + 2 * PAD, bb.y + bb.height - leg.top + 2 * PAD];
+      c.setAttribute('viewBox', box.map(v => v.toFixed(1)).join(' '));
+      c.insertAdjacentHTML('afterbegin', `<rect x="${box[0]}" y="${box[1]}" width="${box[2]}" height="${box[3]}" fill="${pal.bg}"/>`);
+      c.setAttribute('width', box[2].toFixed(1)); c.setAttribute('height', box[3].toFixed(1));
+    } else {
+      const [, , vw, vh] = (svg.getAttribute('viewBox') || '0 0 2600 2600').split(/\s+/);
+      c.setAttribute('width', vw); c.setAttribute('height', vh);
+    }
     const blob = new Blob(['<?xml version="1.0" encoding="UTF-8"?>\n' + new XMLSerializer().serializeToString(c)], { type: 'image/svg+xml' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -316,10 +382,10 @@ export function SuperfamilyTreeViewer() {
         </div>
         <div className="space-y-1 text-sm">
           <span className="flex items-center gap-1 text-muted-foreground">View
-            <ControlHint id="sft-view" label="About view">Simplified shows the tree with each single-family clade shaded and named, and the leaf tips coloured by lineage. Circular adds a family ring and a lineage ring around the tree and labels every sequence with its accession and species.</ControlHint>
+            <ControlHint id="sft-view" label="About view">Simplified shows the tree with each single-family clade shaded and named, and the leaf tips coloured by lineage. Circular adds a family ring and a lineage ring around the tree and labels every sequence with its accession and species. Circular (Simplified) is the drawing of Figure 3: the tree as a cladogram (branch lengths not to scale), with a lineage ring next to the leaves and, outside it, a ring of grey blocks naming the family of each run of neighbouring sequences.</ControlHint>
           </span>
           <Select value={view} onValueChange={v => setParam('view', v)}>
-            <SelectTrigger className="w-[125px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-[200px]"><SelectValue /></SelectTrigger>
             <SelectContent>
               {(Object.keys(VIEWS) as TreeView[]).map(k => <SelectItem key={k} value={k}>{VIEWS[k]}</SelectItem>)}
             </SelectContent>
@@ -393,7 +459,7 @@ export function SuperfamilyTreeViewer() {
           </section>
           <section className="space-y-2">
             <div className="flex items-baseline justify-between">
-              <h3 className="flex items-center gap-1 font-semibold">Lineage {view === 'families' ? '(leaf tips)' : '(outer ring)'}
+              <h3 className="flex items-center gap-1 font-semibold">Lineage {view === 'families' ? '(leaf tips)' : view === 'clado' ? '(inner ring)' : '(outer ring)'}
                 <ControlHint id="sft-lineage" label="About lineages">
                   The five lineage groups of Figure 3, with the number of sequences in this tree. Uncheck a lineage to
                   dim its sequences; a branch is dimmed when every sequence beyond it is.
@@ -412,7 +478,7 @@ export function SuperfamilyTreeViewer() {
           </section>
           <section className="space-y-2">
             <div className="flex items-baseline justify-between">
-              <h3 className="flex items-center gap-1 font-semibold">Families {view === 'detailed' ? '(inner ring)' : ''}
+              <h3 className="flex items-center gap-1 font-semibold">Families {view === 'detailed' ? '(inner ring)' : view === 'clado' ? '(outer ring)' : ''}
                 <ControlHint id="sft-families" label="About families">
                   The families in this tree, with their number of representatives. Uncheck a family to dim its
                   sequences. Literature entries are sequences reported in earlier studies, under the family their
