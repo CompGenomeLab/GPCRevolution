@@ -71,7 +71,11 @@ items follow.
   database without changing the paper's counts, e.g. as a separate, flagged set.
 - [ ] **Fig. 2, lineage distribution and origins** (new). Port `06_family_origins/lineage_origin_figure.html`
   of the archive.
-- [ ] **ML trees page: built 2026-10-23, user-approved state, not committed, not in the menu.** `/superfamily-trees`
+- [ ] **ML trees page: live (pushed), not in the menu.** `/superfamily-trees`. 2026-11-13: third view
+  "Circular (Simplified)" = the Figure 3 drawing (cladogram, flipped leaf order, lineage ring + grey family ring
+  with names; the GPR1 clade is named GPR1 here, "GPR1 / Class A" only in the manuscript figure); a run's ring
+  blocks and name fade only when all its sequences are unstable; its SVG export adds the Figure 3 legends
+  (Lineage top left, Branch support top right). The release README describes Figure 3 by this page's settings.
   (`src/app/superfamily-trees/page.tsx`, `src/components/superfamily-trees/SuperfamilyTreeViewer.tsx`,
   `src/lib/superfamily-trees/draw.ts`, `src/types/superfamily-trees.ts`, data `public/superfamily-trees/` from
   `release/.../09_superfamily_phylogeny/website/build_superfamily_trees_data.py --out <public/superfamily-trees>`).
