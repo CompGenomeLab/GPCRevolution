@@ -181,7 +181,8 @@ export function SuperfamilyTreeViewer() {
     if (!rawTree || labels === 'trees') return rawTree;
     return { ...rawTree, nodes: rawTree.nodes.map(d => (d.fam2 ? { ...d, fam: d.fam2, famTree: d.fam } : d)) };
   }, [rawTree, labels]);
-  const drawn = useMemo(() => (tree ? drawTree(tree, view, palette(dark), measure) : null), [tree, view, dark]);
+  const drawn = useMemo(() => (tree ? drawTree(tree, view, palette(dark), measure, labels === 'final') : null),
+    [tree, view, dark, labels]);
 
   const families = useMemo(() => {
     if (!tree) return [];

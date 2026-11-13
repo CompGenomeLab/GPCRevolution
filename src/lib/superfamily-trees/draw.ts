@@ -85,8 +85,9 @@ function starPath(cx: number, cy: number, r: number) {
   return 'M' + p.join(' L') + ' Z';
 }
 
+/** gpr1Clade: name the mixed GPR1 / Class A run of the cladogram view GPR1 (the final assignment) */
 export function drawTree(T: TreeData, view: TreeView, pal: Palette,
-                         measure: (text: string, px: number) => number): DrawnTree {
+                         measure: (text: string, px: number) => number, gpr1Clade = false): DrawnTree {
   const D: TreeNode[] = T.nodes, n = D.length, SIMPLE = view === 'families', CLADO = view === 'clado';
   const DETAILED = view === 'detailed';
   const kids: number[][] = D.map(() => []);
@@ -229,9 +230,10 @@ export function drawTree(T: TreeData, view: TreeView, pal: Palette,
       let len = 1;
       while (k + len < NL && famKey((s0 + k + len) % NL) === famKey((s0 + k) % NL)) len++;
       const js = [...Array(len).keys()].map(jj => (s0 + k + jj) % NL), fs = [...new Set(js.map(j => fams[j]))];
-      // the GPR1 clade is named GPR1 alone: its Class A sequences are reassigned to GPR1 (Figure 3 in the
-      // manuscript keeps "GPR1 / Class A")
-      const label = fs.length > 1 && MIXED.every(f => fs.includes(f)) ? familyName('GPR1')
+      // with the final assignment the GPR1 clade is named GPR1 alone, its Class A sequences being reassigned
+      // to GPR1; as labelled in the trees it is "GPR1 / Class A" (as in Figure 3 of the manuscript)
+      const label = fs.length > 1 && MIXED.every(f => fs.includes(f))
+        ? (gpr1Clade ? familyName('GPR1') : MIXED.map(familyName).join(' / '))
         : RING_NAMES[fs[0]] || familyLabel(fs[0]);
       runs.push({ first: s0 + k, len, label, fam: fs.length === 1 ? fs[0] : null,
                   fit: Math.min(CFS, (CFS * (rm * len * step - RGAP)) / measure(label, CFS)) });

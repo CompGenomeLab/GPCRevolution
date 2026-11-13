@@ -73,7 +73,8 @@ items follow.
   of the archive.
 - [ ] **ML trees page: live (pushed), not in the menu.** `/superfamily-trees`. 2026-11-13: third view
   "Circular (Simplified)" = the Figure 3 drawing (cladogram, flipped leaf order, lineage ring + grey family ring
-  with names; the GPR1 clade is named GPR1 here, "GPR1 / Class A" only in the manuscript figure); a run's ring
+  with names; the GPR1 clade is named GPR1 with the final assignment and "GPR1 / Class A" as labelled in the trees,
+  as in the manuscript figure); a run's ring
   blocks and name fade only when all its sequences are unstable; its SVG export adds the Figure 3 legends
   (Lineage top left, Branch support top right). The release README describes Figure 3 by this page's settings.
   (`src/app/superfamily-trees/page.tsx`, `src/components/superfamily-trees/SuperfamilyTreeViewer.tsx`,
